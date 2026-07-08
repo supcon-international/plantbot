@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApp, api } from '../lib/store'
+import { useT } from '../lib/i18n'
 import type { Waypoint } from '../lib/types'
 import { SEVERITY_COLOR } from '../lib/types'
 
@@ -131,6 +132,7 @@ export function OpsMap({
   const zones = useApp((s) => s.zones)
   const events = useApp((s) => s.events)
   const [gotoMenu, setGotoMenu] = useState<Waypoint | null>(null)
+  const t = useT()
 
   const pins = useMemo(
     () => (showEvents ? events.filter((e) => !e.acked && Date.now() - e.ts < 45 * 60_000).slice(0, 10) : []),
@@ -312,7 +314,7 @@ export function OpsMap({
             <span className="mono text-[11px] text-ink">{gotoMenu.id}</span>
             <span className="text-[11px] text-ink-3">{gotoMenu.name}</span>
             <span className="mx-1 h-4 w-px bg-line-2" />
-            <span className="microlabel">send</span>
+            <span className="microlabel">{t('c.send')}</span>
             {robots.map((r) => (
               <button
                 key={r.id}

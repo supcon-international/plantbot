@@ -85,6 +85,11 @@ body::before {
   color: var(--color-ink-3);
   font-weight: 500;
 }
+/* CJK: no uppercase concept, tighter tracking reads better */
+:lang(zh) .microlabel {
+  letter-spacing: 0.08em;
+  font-size: 10.5px;
+}
 
 .mono {
   font-family: var(--font-mono);

@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { Crosshair, ArrowUpRight, Map as MapIcon, Box } from 'lucide-react'
 import { useApp } from '../lib/store'
+import { useT, useAgo } from '../lib/i18n'
 import { SceneMap } from '../three/SceneMap'
 import { OpsMap, type MapSel } from '../components/OpsMap'
 import { BatteryBar, SevTag, Panel, ModeChip } from '../components/ui'
-import { ago } from '../lib/format'
 
 function LoaderChip() {
   const [ready, setReady] = useState(false)
@@ -19,12 +19,17 @@ function LoaderChip() {
     }
   }, [])
   if (ready) return null
+  return <LoaderChipInner />
+}
+
+function LoaderChipInner() {
+  const t = useT()
   return (
     <div className="pointer-events-none absolute bottom-16 left-1/2 z-10 -translate-x-1/2 md:bottom-auto md:top-3">
       <div className="panel flex items-center gap-2 px-3 py-1.5">
         <span className="live-dot" />
         <span className="mono whitespace-nowrap text-[10px] tracking-[0.1em] text-ink-2">
-          STREAMING GAUSSIAN SPLATS
+          {t('map.streaming')}
         </span>
       </div>
     </div>
@@ -38,6 +43,8 @@ function SelectionCard({ sel, onFollow, follow, mode3d }: { sel: MapSel; onFollo
   const waypoints = useApp((s) => s.waypoints)
   const missions = useApp((s) => s.missions)
   const clock = useApp((s) => s.clock)
+  const t = useT()
+  const ago = useAgo()
   if (!sel) return null
 
   if (sel.kind === 'robot') {
@@ -61,20 +68,20 @@ function SelectionCard({ sel, onFollow, follow, mode3d }: { sel: MapSel; onFollo
                   follow ? 'border-ink/40 bg-ink/10 text-ink' : 'border-line-2 text-ink-3 hover:text-ink-2'
                 }`}
               >
-                <Crosshair size={11} /> FOLLOW
+                <Crosshair size={11} /> {t('c.follow')}
               </button>
             )}
             <Link
               to={`/robots/${r.id}`}
               className="mono flex items-center gap-1 border border-line-2 px-1.5 py-1 text-[9px] tracking-[0.1em] text-ink-3 transition-colors hover:text-ink-2"
             >
-              DETAIL <ArrowUpRight size={10} />
+              {t('c.detail')} <ArrowUpRight size={10} />
             </Link>
           </div>
         </div>
         {m && (
           <div className="mt-2.5 flex items-center gap-2 border-t border-line/70 pt-2.5">
-            <span className="microlabel shrink-0">Mission</span>
+            <span className="microlabel shrink-0">{t('c.mission')}</span>
             <span className="truncate text-[12px] text-ink-2">{m.name}</span>
             <span className="mono ml-auto shrink-0 text-[10px] text-ink-3">
               {m.currentStep}/{m.steps.length} · {Math.round(m.progress * 100)}%
@@ -104,7 +111,7 @@ function SelectionCard({ sel, onFollow, follow, mode3d }: { sel: MapSel; onFollo
           <span className="microlabel ml-auto">{wp.kind}</span>
         </div>
         <div className="mono mt-1.5 text-[10.5px] text-ink-3">
-          x {wp.x.toFixed(1)} · z {wp.z.toFixed(1)} — select a unit above to dispatch
+          x {wp.x.toFixed(1)} · z {wp.z.toFixed(1)} — {t('map.wpDispatch')}
         </div>
       </Panel>
     )
@@ -134,6 +141,7 @@ function SelectionCard({ sel, onFollow, follow, mode3d }: { sel: MapSel; onFollo
 export function MapPage() {
   const robots = useApp((s) => s.robots)
   const site = useApp((s) => s.site)
+  const t = useT()
   const [sel, setSel] = useState<MapSel>(null)
   const [follow, setFollow] = useState(false)
   const [mode, setMode] = useState<'ops' | 'splat'>(() =>
@@ -163,7 +171,7 @@ export function MapPage() {
       {/* top-left: site + fleet chips */}
       <div className="pointer-events-none absolute left-3 top-3 z-10 space-y-2">
         <div>
-          <div className="microlabel">{mode === 'ops' ? 'Operations map · occupancy + vector layers' : '3D capture · gaussian splats'}</div>
+          <div className="microlabel">{mode === 'ops' ? t('map.ops.title') : t('map.splat.title')}</div>
           <div className="mt-0.5 text-[13px] font-medium text-ink">{site?.name ?? '—'}</div>
         </div>
         <div className="pointer-events-auto flex flex-wrap gap-1.5">
@@ -189,8 +197,8 @@ export function MapPage() {
       <div className="absolute right-3 top-3 z-10 flex overflow-hidden border border-line bg-bg/70 backdrop-blur">
         {(
           [
-            ['ops', MapIcon, 'OPS MAP'],
-            ['splat', Box, '3D SCAN'],
+            ['ops', MapIcon, t('map.opsMap')],
+            ['splat', Box, t('map.3dScan')],
           ] as const
         ).map(([m, Icon, label]) => (
           <button

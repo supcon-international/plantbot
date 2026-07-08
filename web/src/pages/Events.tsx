@@ -1,21 +1,13 @@
 import { useMemo, useState } from 'react'
 import { Check, X, Plus, Trash2, Columns3, Table2, SlidersHorizontal } from 'lucide-react'
 import { useApp, api } from '../lib/store'
-import { ago, timeShort } from '../lib/format'
+import { useT, useAgo } from '../lib/i18n'
+import { timeShort } from '../lib/format'
 import { Panel, SevTag, SevDot, EmptyNote, Modal } from '../components/ui'
 import type { DetectionEvent, DetectionModel, DetectionRule, Severity } from '../lib/types'
 import { SEVERITY_COLOR } from '../lib/types'
 
-const MODELS: { id: DetectionModel; label: string }[] = [
-  { id: 'person', label: 'Person / intrusion' },
-  { id: 'smoking', label: 'Smoking behavior' },
-  { id: 'thermal', label: 'Thermal anomaly' },
-  { id: 'ogi', label: 'OGI emission' },
-  { id: 'gauge', label: 'Gauge OCR' },
-  { id: 'ppe', label: 'PPE compliance' },
-  { id: 'motion', label: 'Motion' },
-  { id: 'acoustic', label: 'Acoustic signature' },
-]
+const MODEL_IDS: DetectionModel[] = ['person', 'smoking', 'thermal', 'ogi', 'gauge', 'ppe', 'motion', 'acoustic']
 
 function Snapshot({ ev, size = 'sm' }: { ev: DetectionEvent; size?: 'sm' | 'lg' }) {
   if (!ev.snapshot) return <div className={`skeleton ${size === 'sm' ? 'h-12 w-20' : 'h-40 w-full'} opacity-30`} />
@@ -31,6 +23,8 @@ function Snapshot({ ev, size = 'sm' }: { ev: DetectionEvent; size?: 'sm' | 'lg' 
 
 function DetailModal({ ev, onClose }: { ev: DetectionEvent; onClose: () => void }) {
   const ack = useApp((s) => s.ack)
+  const t = useT()
+  const ago = useAgo()
   return (
     <Modal onClose={onClose}>
       <div className="flex items-center justify-between border-b border-line px-4 py-3">
@@ -50,12 +44,12 @@ function DetailModal({ ev, onClose }: { ev: DetectionEvent; onClose: () => void 
         <Snapshot ev={ev} size="lg" />
         <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-3">
           {[
-            ['Time', `${timeShort(ev.ts)} · ${ago(ev.ts)}`],
-            ['Zone', ev.zone],
-            ['Source', ev.sourceName],
-            ['Rule', ev.ruleId],
-            ['Confidence', `${Math.round(ev.confidence * 100)}%`],
-            ['Status', ev.acked ? 'Acknowledged' : 'Open'],
+            [t('c.time'), `${timeShort(ev.ts)} · ${ago(ev.ts)}`],
+            [t('c.zone'), ev.zone],
+            [t('c.source'), ev.sourceName],
+            [t('ev.rule'), ev.ruleId],
+            [t('c.confidence'), `${Math.round(ev.confidence * 100)}%`],
+            [t('c.status'), ev.acked ? t('ev.acked') : t('ev.open')],
           ].map(([k, v]) => (
             <div key={k}>
               <div className="microlabel mb-0.5">{k}</div>
@@ -71,7 +65,7 @@ function DetailModal({ ev, onClose }: { ev: DetectionEvent; onClose: () => void 
             }}
             className="mono flex w-full items-center justify-center gap-2 border border-ink/30 bg-ink/10 px-3 py-2 text-[11px] tracking-[0.1em] text-ink transition-colors hover:bg-ink/15"
           >
-            <Check size={13} /> ACKNOWLEDGE
+            <Check size={13} /> {t('c.acknowledge')}
           </button>
         )}
       </div>
@@ -84,6 +78,8 @@ function DetailModal({ ev, onClose }: { ev: DetectionEvent; onClose: () => void 
 function BoardCard({ e, onOpen }: { e: DetectionEvent; onOpen: () => void }) {
   const ack = useApp((s) => s.ack)
   const clock = useApp((s) => s.clock)
+  const t = useT()
+  const ago = useAgo()
   return (
     <div
       onClick={onOpen}
@@ -107,7 +103,7 @@ function BoardCard({ e, onOpen }: { e: DetectionEvent; onOpen: () => void }) {
           }}
           className="mono mt-2 w-full border border-line-2 px-2 py-1 text-[9.5px] tracking-[0.1em] text-ink-3 opacity-0 transition-all hover:border-ink-3 hover:text-ink group-hover:opacity-100 max-md:opacity-100"
         >
-          ACK
+          {t('c.ack')}
         </button>
       )}
     </div>
@@ -115,10 +111,11 @@ function BoardCard({ e, onOpen }: { e: DetectionEvent; onOpen: () => void }) {
 }
 
 function Board({ events, onOpen }: { events: DetectionEvent[]; onOpen: (e: DetectionEvent) => void }) {
+  const t = useT()
   const cols: { key: string; label: string; sevs: Severity[]; tone: string }[] = [
-    { key: 'crit', label: 'Critical', sevs: ['critical'], tone: SEVERITY_COLOR.critical },
-    { key: 'high', label: 'High', sevs: ['high'], tone: SEVERITY_COLOR.high },
-    { key: 'routine', label: 'Routine', sevs: ['info', 'low'], tone: 'var(--color-ink-3)' },
+    { key: 'crit', label: t('ev.col.critical'), sevs: ['critical'], tone: SEVERITY_COLOR.critical },
+    { key: 'high', label: t('ev.col.high'), sevs: ['high'], tone: SEVERITY_COLOR.high },
+    { key: 'routine', label: t('ev.col.routine'), sevs: ['info', 'low'], tone: 'var(--color-ink-3)' },
   ]
   return (
     <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -133,13 +130,13 @@ function Board({ events, onOpen }: { events: DetectionEvent[]; onOpen: (e: Detec
                 {c.label}
               </span>
               <span className="mono ml-auto text-[10px] text-ink-3">
-                {open} open · {list.length}
+                {open} {t('c.open')} · {list.length}
               </span>
             </div>
             <div className="flex-1 space-y-2 overflow-y-auto p-2.5 md:max-h-[calc(100vh-260px)]">
               {list.length === 0 && (
                 <div className="flex h-24 items-center justify-center">
-                  <span className="microlabel">clear</span>
+                  <span className="microlabel">{t('ev.clear')}</span>
                 </div>
               )}
               {list.map((e) => (
@@ -156,7 +153,7 @@ function Board({ events, onOpen }: { events: DetectionEvent[]; onOpen: (e: Detec
 // ---------- rules ----------
 
 function RuleRow({ r }: { r: DetectionRule }) {
-  const model = MODELS.find((m) => m.id === r.model)
+  const t = useT()
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line/70 px-3.5 py-3">
       <button
@@ -173,10 +170,10 @@ function RuleRow({ r }: { r: DetectionRule }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className={`truncate text-[12.5px] ${r.enabled ? 'text-ink' : 'text-ink-3'}`}>{r.name}</span>
-          {!r.builtin && <span className="mono border border-line px-1 text-[8.5px] tracking-[0.1em] text-ink-3">CUSTOM</span>}
+          {!r.builtin && <span className="mono border border-line px-1 text-[8.5px] tracking-[0.1em] text-ink-3">{t('ev.custom')}</span>}
         </div>
         <div className="microlabel mt-0.5 truncate">
-          {model?.label ?? r.model} · {r.sourceName}
+          {t(`ev.m.${r.model}`)} · {r.sourceName}
         </div>
       </div>
       <div className="flex items-center gap-2">
@@ -193,7 +190,9 @@ function RuleRow({ r }: { r: DetectionRule }) {
         <span className="mono w-8 text-[10.5px] text-ink-2">{Math.round(r.threshold * 100)}%</span>
       </div>
       <SevTag sev={r.severity} />
-      <span className="mono w-14 text-right text-[10px] text-ink-3">{r.firedCount}× fired</span>
+      <span className="mono w-16 text-right text-[10px] text-ink-3">
+        {r.firedCount}× {t('ev.fired')}
+      </span>
       {!r.builtin && (
         <button onClick={() => api.deleteRule(r.id)} className="text-ink-3 transition-colors hover:text-crit" title="delete">
           <Trash2 size={13} />
@@ -206,6 +205,7 @@ function RuleRow({ r }: { r: DetectionRule }) {
 function NewRuleModal({ onClose }: { onClose: () => void }) {
   const robots = useApp((s) => s.robots)
   const cameras = useApp((s) => s.cameras)
+  const t = useT()
   const [name, setName] = useState('')
   const [model, setModel] = useState<DetectionModel>('person')
   const [source, setSource] = useState('')
@@ -231,36 +231,36 @@ function NewRuleModal({ onClose }: { onClose: () => void }) {
   return (
     <Modal onClose={onClose}>
       <div className="flex items-center justify-between border-b border-line px-4 py-3">
-        <span className="microlabel">Define detection rule</span>
+        <span className="microlabel">{t('ev.defineRule')}</span>
         <button onClick={onClose} className="text-ink-3 hover:text-ink" aria-label="close">
           <X size={16} />
         </button>
       </div>
       <div className="space-y-3.5 p-4">
         <div>
-          <div className="microlabel mb-1.5">Rule name</div>
+          <div className="microlabel mb-1.5">{t('ev.ruleName')}</div>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Forklift in walkway"
+            placeholder={t('ev.ruleNamePh')}
             className="mono w-full border border-line-2 bg-surface-2 px-2.5 py-2 text-[12px] text-ink outline-none focus:border-ink-3"
           />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <div className="microlabel mb-1.5">Detection model</div>
+            <div className="microlabel mb-1.5">{t('ev.model')}</div>
             <select value={model} onChange={(e) => setModel(e.target.value as DetectionModel)} className="mono w-full border border-line-2 bg-surface-2 px-2 py-2 text-[11px] text-ink outline-none">
-              {MODELS.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
+              {MODEL_IDS.map((m) => (
+                <option key={m} value={m}>
+                  {t(`ev.m.${m}`)}
                 </option>
               ))}
             </select>
           </div>
           <div>
-            <div className="microlabel mb-1.5">Video source</div>
+            <div className="microlabel mb-1.5">{t('ev.videoSource')}</div>
             <select value={source} onChange={(e) => setSource(e.target.value)} className="mono w-full border border-line-2 bg-surface-2 px-2 py-2 text-[11px] text-ink outline-none">
-              <option value="">select…</option>
+              <option value="">{t('ev.select')}</option>
               {sources.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.label}
@@ -270,21 +270,23 @@ function NewRuleModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
         <div>
-          <div className="microlabel mb-1.5">Zone label (optional)</div>
+          <div className="microlabel mb-1.5">{t('ev.zoneLabel')}</div>
           <input
             value={zone}
             onChange={(e) => setZone(e.target.value)}
-            placeholder="e.g. Loading dock D-1"
+            placeholder={t('ev.zonePh')}
             className="mono w-full border border-line-2 bg-surface-2 px-2.5 py-2 text-[12px] text-ink outline-none focus:border-ink-3"
           />
         </div>
         <div className="grid grid-cols-2 items-end gap-3">
           <div>
-            <div className="microlabel mb-1.5">Min confidence · {Math.round(threshold * 100)}%</div>
+            <div className="microlabel mb-1.5">
+              {t('ev.minConf')} · {Math.round(threshold * 100)}%
+            </div>
             <input type="range" min={0.3} max={0.95} step={0.05} value={threshold} onChange={(e) => setThreshold(Number(e.target.value))} className="h-[3px] w-full cursor-pointer appearance-none bg-line-2 accent-white" />
           </div>
           <div>
-            <div className="microlabel mb-1.5">Severity</div>
+            <div className="microlabel mb-1.5">{t('ev.severity')}</div>
             <div className="flex overflow-hidden border border-line">
               {(['critical', 'high', 'info', 'low'] as Severity[]).map((s) => (
                 <button
@@ -293,7 +295,7 @@ function NewRuleModal({ onClose }: { onClose: () => void }) {
                   className={`mono flex-1 px-1 py-1.5 text-[9px] uppercase tracking-[0.06em] transition-colors ${severity === s ? 'bg-surface-3' : 'hover:bg-surface-2'}`}
                   style={{ color: severity === s ? SEVERITY_COLOR[s] : 'var(--color-ink-3)' }}
                 >
-                  {s}
+                  {t(`sev.${s}`)}
                 </button>
               ))}
             </div>
@@ -304,7 +306,7 @@ function NewRuleModal({ onClose }: { onClose: () => void }) {
           onClick={submit}
           className="mono w-full border border-ink/30 bg-ink/10 px-3 py-2.5 text-[11px] tracking-[0.12em] text-ink transition-colors hover:bg-ink/15 disabled:opacity-30"
         >
-          ACTIVATE RULE
+          {t('ev.activate')}
         </button>
       </div>
     </Modal>
@@ -320,6 +322,8 @@ export function Events() {
   const rules = useApp((s) => s.rules)
   const ack = useApp((s) => s.ack)
   const clock = useApp((s) => s.clock)
+  const t = useT()
+  const ago = useAgo()
   const [view, setView] = useState<View>('board')
   const [sel, setSel] = useState<DetectionEvent | null>(null)
   const [newRule, setNewRule] = useState(false)
@@ -330,9 +334,9 @@ export function Events() {
     <div className="mx-auto max-w-[1400px] space-y-3 p-3 md:p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <div className="microlabel">Detection center</div>
+          <div className="microlabel">{t('ev.center')}</div>
           <div className="mono mt-0.5 text-[13px] text-ink-2">
-            {events.length} events · <span style={{ color: unacked ? 'var(--color-warn)' : 'var(--color-ok)' }}>{unacked} open</span> · {rules.filter((r) => r.enabled).length}/{rules.length} rules armed
+            {events.length} {t('c.events')} · <span style={{ color: unacked ? 'var(--color-warn)' : 'var(--color-ok)' }}>{unacked} {t('c.open')}</span> · {rules.filter((r) => r.enabled).length}/{rules.length} {t('ev.rulesArmed')}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -341,15 +345,15 @@ export function Events() {
               onClick={() => setNewRule(true)}
               className="mono flex items-center gap-1.5 border border-ink/30 bg-ink/10 px-2.5 py-1.5 text-[10.5px] tracking-[0.1em] text-ink transition-colors hover:bg-ink/15"
             >
-              <Plus size={13} /> NEW RULE
+              <Plus size={13} /> {t('ev.newRule')}
             </button>
           )}
           <div className="flex overflow-hidden border border-line">
             {(
               [
-                ['board', Columns3, 'Board'],
-                ['table', Table2, 'Table'],
-                ['rules', SlidersHorizontal, 'Rules'],
+                ['board', Columns3, t('ev.board')],
+                ['table', Table2, t('ev.table')],
+                ['rules', SlidersHorizontal, t('ev.rules')],
               ] as const
             ).map(([v, Icon, label]) => (
               <button
@@ -372,8 +376,8 @@ export function Events() {
           <table className="w-full min-w-[820px] border-collapse text-left">
             <thead>
               <tr className="border-b border-line">
-                {['Time', 'Severity', 'Event', 'Zone / Source', 'Conf', 'Frame', ''].map((h) => (
-                  <th key={h} className="microlabel px-3.5 py-2.5 font-medium">
+                {[t('c.time'), t('ev.severity'), t('ev.event'), t('ev.zoneSource'), t('ev.conf'), t('ev.frame'), ''].map((h, i) => (
+                  <th key={i} className="microlabel px-3.5 py-2.5 font-medium">
                     {h}
                   </th>
                 ))}
@@ -414,7 +418,7 @@ export function Events() {
                         }}
                         className="mono border border-line-2 px-2 py-1 text-[10px] tracking-[0.08em] text-ink-2 transition-colors hover:border-ink-3 hover:text-ink"
                       >
-                        ACK
+                        {t('c.ack')}
                       </button>
                     )}
                   </td>
@@ -422,15 +426,15 @@ export function Events() {
               ))}
             </tbody>
           </table>
-          {events.length === 0 && <EmptyNote>No events</EmptyNote>}
+          {events.length === 0 && <EmptyNote>{t('ev.noEvents')}</EmptyNote>}
         </Panel>
       )}
 
       {view === 'rules' && (
         <Panel className="rise">
           <div className="flex items-center justify-between border-b border-line px-3.5 py-2.5">
-            <span className="microlabel">Detection rules · edge inference</span>
-            <span className="mono text-[10px] text-ink-3">disabled rules stop matching detections</span>
+            <span className="microlabel">{t('ev.rulesTitle')}</span>
+            <span className="mono hidden text-[10px] text-ink-3 sm:block">{t('ev.rulesHint')}</span>
           </div>
           {rules.map((r) => (
             <RuleRow key={r.id} r={r} />

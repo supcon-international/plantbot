@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { Grid2X2, Focus, Radio } from 'lucide-react'
 import { useApp } from '../lib/store'
+import { useT } from '../lib/i18n'
 import { StreamPlayer, SnapshotImg } from '../components/StreamPlayer'
 import { Panel } from '../components/ui'
 import { utcClock } from '../lib/format'
@@ -63,6 +64,7 @@ function StreamMeta({ stream }: { stream: string }) {
 
 function PlayerOverlay({ feed }: { feed: Feed }) {
   const clock = useApp((s) => s.clock)
+  const t = useT()
   return (
     <>
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/55 to-transparent px-3 pb-6 pt-2.5">
@@ -71,7 +73,7 @@ function PlayerOverlay({ feed }: { feed: Feed }) {
           <span className="mono truncate text-[11px] font-medium tracking-[0.08em] text-white/90">{feed.name}</span>
           {feed.live && (
             <span className="mono shrink-0 whitespace-nowrap border border-ok/40 bg-ok/10 px-1 py-0.5 text-[9px] tracking-[0.12em] text-ok">
-              LIVE · PUBLIC RTSP
+              {t('live.publicRtsp')}
             </span>
           )}
         </div>
@@ -91,6 +93,7 @@ function PlayerOverlay({ feed }: { feed: Feed }) {
 
 export function Live() {
   const feeds = useFeeds()
+  const t = useT()
   const [params, setParams] = useSearchParams()
   const [mode, setMode] = useState<'focus' | 'grid'>('focus')
   const active = params.get('src') ?? feeds[0]?.stream
@@ -107,16 +110,16 @@ export function Live() {
     <div className="mx-auto max-w-[1400px] space-y-3 p-3 md:p-4">
       <div className="flex items-center justify-between">
         <div>
-          <div className="microlabel">Video wall</div>
+          <div className="microlabel">{t('live.videoWall')}</div>
           <div className="mt-0.5 text-[15px] font-medium text-ink">
-            {mode === 'focus' ? feed?.name : `All feeds · ${feeds.length} channels`}
+            {mode === 'focus' ? feed?.name : `${t('live.allFeeds')} · ${feeds.length} ${t('live.channels')}`}
           </div>
         </div>
         <div className="hidden overflow-hidden border border-line md:flex">
           {(
             [
-              ['focus', Focus, 'Focus'],
-              ['grid', Grid2X2, 'Wall'],
+              ['focus', Focus, t('live.focus')],
+              ['grid', Grid2X2, t('live.wall')],
             ] as const
           ).map(([m, Icon, label]) => (
             <button
@@ -170,7 +173,7 @@ export function Live() {
                     {f.live && (
                       <span className="absolute right-1 top-1 flex items-center gap-1 bg-black/60 px-1 py-0.5">
                         <Radio size={9} className="text-ok" />
-                        <span className="mono text-[8px] text-ok">LIVE</span>
+                        <span className="mono text-[8px] text-ok">{t('live.live')}</span>
                       </span>
                     )}
                     {sel && (

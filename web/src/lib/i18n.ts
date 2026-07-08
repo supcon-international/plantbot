@@ -1,0 +1,286 @@
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+
+export type Lang = 'en' | 'zh' | 'es'
+const IDX: Record<Lang, number> = { en: 0, zh: 1, es: 2 }
+
+interface LangState {
+  lang: Lang
+  setLang: (l: Lang) => void
+}
+
+export const useLang = create<LangState>()(
+  persist((set) => ({ lang: 'en', setLang: (lang) => set({ lang }) }), { name: 'aegis-lang' }),
+)
+
+/** [en, zh, es] */
+const D: Record<string, [string, string, string]> = {
+  // ---------- nav / shell ----------
+  'nav.ops': ['OPS', '总览', 'OPS'],
+  'nav.live': ['LIVE', '视频', 'VÍDEO'],
+  'nav.tasks': ['TASKS', '任务', 'MISIONES'],
+  'nav.fleet': ['FLEET', '机队', 'FLOTA'],
+  'nav.map': ['MAP', '地图', 'MAPA'],
+  'nav.events': ['EVENTS', '事件', 'EVENTOS'],
+  'shell.link': ['LINK', '在线', 'ENLACE'],
+  'shell.down': ['DOWN', '断开', 'CAÍDO'],
+  'shell.view': ['View', '查看', 'Ver'],
+  'shell.brand': ['Robotics Operations', '机器人运营中心', 'Operaciones Robóticas'],
+
+  // ---------- common ----------
+  'c.battery': ['Battery', '电量', 'Batería'],
+  'c.speed': ['Speed', '速度', 'Velocidad'],
+  'c.link': ['Link', '链路', 'Enlace'],
+  'c.mission': ['Mission', '任务', 'Misión'],
+  'c.ack': ['ACK', '确认', 'ACK'],
+  'c.acknowledge': ['ACKNOWLEDGE', '确认处理', 'CONFIRMAR'],
+  'c.time': ['Time', '时间', 'Hora'],
+  'c.zone': ['Zone', '区域', 'Zona'],
+  'c.source': ['Source', '来源', 'Fuente'],
+  'c.status': ['Status', '状态', 'Estado'],
+  'c.confidence': ['Confidence', '置信度', 'Confianza'],
+  'c.open': ['open', '待处理', 'abiertos'],
+  'c.events': ['events', '条事件', 'eventos'],
+  'c.noMission': ['no mission', '无任务', 'sin misión'],
+  'c.noData': ['no data', '无数据', 'sin datos'],
+  'c.send': ['send', '派遣', 'enviar'],
+  'c.detail': ['DETAIL', '详情', 'DETALLE'],
+  'c.follow': ['FOLLOW', '跟随', 'SEGUIR'],
+  'c.abort': ['ABORT', '中止', 'ABORTAR'],
+  'c.units': ['units', '台', 'unidades'],
+  'c.tasked': ['tasked', '执行中', 'asignadas'],
+  'c.ago.s': ['s ago', ' 秒前', ' s'],
+  'c.ago.m': ['m ago', ' 分钟前', ' min'],
+  'c.ago.h': ['h ago', ' 小时前', ' h'],
+  'c.ago.d': ['d ago', ' 天前', ' d'],
+
+  // ---------- robot modes ----------
+  'mode.idle': ['standby', '待命', 'en espera'],
+  'mode.navigating': ['navigating', '行进中', 'navegando'],
+  'mode.executing': ['inspecting', '巡检中', 'inspección'],
+  'mode.teleop': ['teleop', '遥操作', 'teleop'],
+  'mode.charging': ['charging', '充电中', 'cargando'],
+  'mode.offline': ['offline', '离线', 'fuera de línea'],
+
+  // ---------- mission status ----------
+  'ms.active': ['active', '执行中', 'activa'],
+  'ms.queued': ['queued', '排队中', 'en cola'],
+  'ms.done': ['done', '已完成', 'hecha'],
+  'ms.failed': ['failed', '失败', 'fallida'],
+  'ms.aborted': ['aborted', '已中止', 'abortada'],
+
+  // ---------- actions ----------
+  'act.capture_photo': ['Photo', '拍照', 'Foto'],
+  'act.thermal_scan': ['Thermal scan', '热成像扫描', 'Escaneo térmico'],
+  'act.ogi_scan': ['OGI scan', 'OGI 气体成像', 'Escaneo OGI'],
+  'act.gas_sample': ['Gas sample', '气体采样', 'Muestra de gas'],
+  'act.acoustic_scan': ['Acoustic scan', '声学扫描', 'Escaneo acústico'],
+  'act.gauge_read': ['Gauge read', '仪表读数', 'Lectura de manómetro'],
+  'act.wait': ['Hold', '停留', 'Espera'],
+
+  // ---------- severities ----------
+  'sev.critical': ['critical', '紧急', 'crítico'],
+  'sev.high': ['high', '高', 'alto'],
+  'sev.info': ['info', '信息', 'info'],
+  'sev.low': ['low', '低', 'bajo'],
+
+  // ---------- overview ----------
+  'ops.fleetReady': ['Fleet ready', '机队就绪', 'Flota lista'],
+  'ops.fleetReady.sub': ['battery > 20%', '电量 > 20%', 'batería > 20%'],
+  'ops.missions': ['Missions', '任务', 'Misiones'],
+  'ops.queuedN': ['queued', '排队', 'en cola'],
+  'ops.openAlerts': ['Open alerts', '待处理告警', 'Alertas abiertas'],
+  'ops.openAlerts.sub': ['crit + high', '紧急 + 高', 'crít. + alto'],
+  'ops.detections24h': ['Detections · 24h', '检测 · 24小时', 'Detecciones · 24h'],
+  'ops.detections24h.sub': ['all severities', '全部级别', 'todas las severidades'],
+  'ops.meanUplink': ['Mean uplink', '平均上行', 'Enlace medio'],
+  'ops.meanUplink.sub': ['dBm · fleet avg', 'dBm · 机队均值', 'dBm · media flota'],
+  'ops.liveOperations': ['Live operations · yard-07', '实时作业 · yard-07', 'Operaciones en vivo · yard-07'],
+  'ops.liveOperations.hint': [
+    'missions running · tap a waypoint to dispatch',
+    '个任务执行中 · 点击航点即可派遣',
+    'misiones activas · toca un waypoint para despachar',
+  ],
+  'ops.detections': ['Detections', '检测事件', 'Detecciones'],
+  'ops.all': ['All', '全部', 'Todo'],
+  'ops.missionOps': ['Mission ops', '任务动态', 'Misiones'],
+  'ops.control': ['Control', '控制台', 'Control'],
+  'ops.noActiveMissions': ['No active missions', '暂无执行中任务', 'Sin misiones activas'],
+  'ops.awaiting': ['Awaiting detections…', '等待检测事件…', 'Esperando detecciones…'],
+
+  // ---------- live ----------
+  'live.videoWall': ['Video wall', '视频墙', 'Muro de vídeo'],
+  'live.allFeeds': ['All feeds', '全部通道', 'Todas las señales'],
+  'live.channels': ['channels', '路通道', 'canales'],
+  'live.focus': ['Focus', '主视图', 'Foco'],
+  'live.wall': ['Wall', '全墙', 'Muro'],
+  'live.live': ['LIVE', '实时', 'EN VIVO'],
+  'live.publicRtsp': ['LIVE · PUBLIC RTSP', '实时 · 公网 RTSP', 'EN VIVO · RTSP PÚBLICO'],
+
+  // ---------- missions page ----------
+  'mi.missionControl': ['Mission control', '任务控制', 'Control de misiones'],
+  'mi.active': ['Active', '执行中', 'Activas'],
+  'mi.queued': ['Queued', '排队中', 'En cola'],
+  'mi.history': ['History', '历史', 'Historial'],
+  'mi.newMission': ['NEW MISSION', '新建任务', 'NUEVA MISIÓN'],
+  'mi.queueEmpty': ['Queue is empty', '队列为空', 'Cola vacía'],
+  'mi.noCompleted': ['No completed missions yet', '暂无已完成任务', 'Sin misiones completadas'],
+  'mi.selectMission': ['Select a mission', '选择一个任务', 'Selecciona una misión'],
+  'mi.plan': ['plan', '计划', 'plan'],
+  'mi.unit': ['Unit', '机器人', 'Unidad'],
+  'mi.priority': ['Priority', '优先级', 'Prioridad'],
+  'mi.stops': ['Stops', '站点', 'Paradas'],
+  'mi.findings': ['Findings', '发现', 'Hallazgos'],
+  'mi.clean': ['clean', '无异常', 'limpio'],
+  'mi.flagged': ['flagged', '项标记', 'marcados'],
+  'mi.stepTimeline': ['Step timeline', '步骤时间线', 'Cronología de pasos'],
+  'mi.wizTitle': ['New mission', '新建任务', 'Nueva misión'],
+  'mi.wizName': ['Mission name', '任务名称', 'Nombre de la misión'],
+  'mi.wizNamePh': ['e.g. Valve run — east manifolds', '例：东侧阀组巡检', 'p. ej. Ronda de válvulas — este'],
+  'mi.wizAssign': ['Assign', '指派', 'Asignar'],
+  'mi.wizAuto': ['AUTO · dispatcher', '自动 · 调度器', 'AUTO · despachador'],
+  'mi.wizRecurring': ['Recurring — requeue on completion', '循环任务 — 完成后自动重排', 'Recurrente — reencolar al terminar'],
+  'mi.wizTap': ['Tap waypoints on the map to build the sequence', '在地图上点击航点以构建序列', 'Toca waypoints en el mapa para crear la secuencia'],
+  'mi.wizSequence': ['Sequence', '序列', 'Secuencia'],
+  'mi.wizStops': ['stops', '站', 'paradas'],
+  'mi.wizNoStops': ['No stops yet', '尚未添加站点', 'Aún sin paradas'],
+  'mi.wizQueue': ['QUEUE MISSION', '任务入队', 'ENCOLAR MISIÓN'],
+  'mi.wizSubmitting': ['SUBMITTING…', '提交中…', 'ENVIANDO…'],
+
+  // ---------- fleet ----------
+  'fl.fleet': ['Fleet', '机队', 'Flota'],
+  'fl.connectRobot': ['CONNECT ROBOT', '接入机器人', 'CONECTAR ROBOT'],
+  'fl.quadruped': ['Quadruped units', '四足机器人', 'Cuadrúpedos'],
+  'fl.ugv': ['Wheeled UGV', '轮式 UGV', 'UGV con ruedas'],
+  'fl.provision': ['Provision unit', '接入新机', 'Aprovisionar unidad'],
+  'fl.matrix': ['Sensor coverage matrix', '传感器覆盖矩阵', 'Matriz de sensores'],
+  'fl.matrix.sub': ['payload × unit', '载荷 × 机型', 'carga × unidad'],
+  'fl.unit': ['Unit', '机器人', 'Unidad'],
+  'fl.payloads': ['payloads', '个载荷', 'cargas'],
+  'fl.streaming': ['◉ streaming payload', '◉ 视频载荷', '◉ carga con vídeo'],
+  'fl.telemetry': ['● telemetry payload', '● 遥测载荷', '● carga telemétrica'],
+  'fl.k.optical': ['Optical', '光学', 'Óptico'],
+  'fl.k.thermal': ['Thermal', '热成像', 'Térmico'],
+  'fl.k.ogi': ['OGI', 'OGI', 'OGI'],
+  'fl.k.gas': ['Gas', '气体', 'Gas'],
+  'fl.k.acoustic': ['Acoustic', '声学', 'Acústico'],
+  'fl.k.lidar': ['LiDAR', 'LiDAR', 'LiDAR'],
+  'fl.modal.title': ['Provision new robot', '接入新机器人', 'Aprovisionar nuevo robot'],
+  'fl.modal.adapter': ['Adapter', '适配器', 'Adaptador'],
+  'fl.modal.transport': ['Transport', '传输', 'Transporte'],
+  'fl.modal.video': ['Video', '视频', 'Vídeo'],
+  'fl.modal.mapShare': ['Map share', '地图共享', 'Mapa compartido'],
+  'fl.modal.addr': ['Robot address', '机器人地址', 'Dirección del robot'],
+  'fl.modal.token': ['Auth token', '认证令牌', 'Token de acceso'],
+  'fl.modal.start': ['START DISCOVERY', '开始发现', 'INICIAR DESCUBRIMIENTO'],
+  'fl.modal.queued': ['PROVISIONING QUEUED', '接入请求已排队', 'APROVISIONAMIENTO EN COLA'],
+  'fl.modal.queuedDesc': [
+    'Discovery broadcast sent on 10.7.31.0/24. The unit will appear in the fleet once its DDS participant answers.',
+    '已在 10.7.31.0/24 网段发送发现广播。DDS 节点应答后机器人将出现在机队中。',
+    'Difusión enviada en 10.7.31.0/24. La unidad aparecerá en la flota cuando su participante DDS responda.',
+  ],
+
+  // ---------- robot detail ----------
+  'rd.digitalTwin': ['Digital twin · URDF', '数字孪生 · URDF', 'Gemelo digital · URDF'],
+  'rd.status': ['Status', '状态', 'Estado'],
+  'rd.gait': ['Gait', '步态', 'Marcha'],
+  'rd.odom': ['Odom', '里程', 'Odóm.'],
+  'rd.speed40': ['Speed · 40 s', '速度 · 40 秒', 'Velocidad · 40 s'],
+  'rd.link40': ['Link · 40 s', '链路 · 40 秒', 'Enlace · 40 s'],
+  'rd.payloads': ['Payloads', '载荷', 'Cargas útiles'],
+  'rd.fitted': ['fitted', '个已装配', 'instaladas'],
+  'rd.jointThermals': ['Joint thermals', '关节温度', 'Térmica de articulaciones'],
+  'rd.driveThermals': ['Drive thermals', '驱动温度', 'Térmica de motores'],
+  'rd.identity': ['Identity', '标识信息', 'Identidad'],
+  'rd.serial': ['Serial', '序列号', 'N.º de serie'],
+  'rd.firmware': ['Firmware', '固件', 'Firmware'],
+  'rd.address': ['Address', '地址', 'Dirección'],
+  'rd.uplink': ['Uplink', '上行链路', 'Enlace asc.'],
+  'rd.mass': ['Mass', '重量', 'Masa'],
+  'rd.ingress': ['Ingress', '防护等级', 'Protección'],
+  'rd.maxSpeed': ['Max speed', '最高速度', 'Vel. máx.'],
+  'rd.endurance': ['Endurance', '续航', 'Autonomía'],
+  'rd.locate': ['Locate on map', '在地图上定位', 'Localizar en mapa'],
+  'rd.awaitingTel': ['Awaiting telemetry…', '等待遥测数据…', 'Esperando telemetría…'],
+  'rd.unknown': ['Unknown robot', '未知机器人', 'Robot desconocido'],
+  'rd.step': ['step', '步骤', 'paso'],
+  'rd.mLeft': ['m left', '米剩余', 'm restantes'],
+
+  // ---------- map ----------
+  'map.ops.title': ['Operations map · occupancy + vector layers', '作业地图 · 栅格 + 矢量图层', 'Mapa de operaciones · ocupación + vectores'],
+  'map.splat.title': ['3D capture · gaussian splats', '3D 采集 · 高斯泼溅', 'Captura 3D · gaussian splats'],
+  'map.opsMap': ['OPS MAP', '作业地图', 'MAPA OPS'],
+  'map.3dScan': ['3D SCAN', '3D 扫描', 'ESCANEO 3D'],
+  'map.streaming': ['STREAMING GAUSSIAN SPLATS', '高斯泼溅加载中', 'CARGANDO GAUSSIAN SPLATS'],
+  'map.wpDispatch': ['select a unit above to dispatch', '在上方选择机器人以派遣', 'elige una unidad arriba para despachar'],
+
+  // ---------- events ----------
+  'ev.center': ['Detection center', '检测中心', 'Centro de detección'],
+  'ev.rulesArmed': ['rules armed', '条规则启用', 'reglas activas'],
+  'ev.board': ['Board', '看板', 'Tablero'],
+  'ev.table': ['Table', '表格', 'Tabla'],
+  'ev.rules': ['Rules', '规则', 'Reglas'],
+  'ev.col.critical': ['Critical', '紧急', 'Crítico'],
+  'ev.col.high': ['High', '高优', 'Alto'],
+  'ev.col.routine': ['Routine', '常规', 'Rutina'],
+  'ev.clear': ['clear', '无事件', 'despejado'],
+  'ev.event': ['Event', '事件', 'Evento'],
+  'ev.zoneSource': ['Zone / Source', '区域 / 来源', 'Zona / Fuente'],
+  'ev.conf': ['Conf', '置信', 'Conf.'],
+  'ev.frame': ['Frame', '画面', 'Imagen'],
+  'ev.noEvents': ['No events', '暂无事件', 'Sin eventos'],
+  'ev.rule': ['Rule', '规则', 'Regla'],
+  'ev.open': ['Open', '待处理', 'Abierto'],
+  'ev.acked': ['Acknowledged', '已确认', 'Confirmado'],
+  'ev.rulesTitle': ['Detection rules · edge inference', '检测规则 · 边缘推理', 'Reglas de detección · inferencia en el borde'],
+  'ev.rulesHint': ['disabled rules stop matching detections', '停用的规则将不再产生检测', 'las reglas desactivadas dejan de detectar'],
+  'ev.fired': ['fired', '次触发', 'disparos'],
+  'ev.custom': ['CUSTOM', '自定义', 'PERSONAL'],
+  'ev.newRule': ['NEW RULE', '新建规则', 'NUEVA REGLA'],
+  'ev.defineRule': ['Define detection rule', '定义检测规则', 'Definir regla de detección'],
+  'ev.ruleName': ['Rule name', '规则名称', 'Nombre de la regla'],
+  'ev.ruleNamePh': ['e.g. Forklift in walkway', '例：叉车闯入人行通道', 'p. ej. Carretilla en pasillo'],
+  'ev.model': ['Detection model', '检测模型', 'Modelo de detección'],
+  'ev.videoSource': ['Video source', '视频源', 'Fuente de vídeo'],
+  'ev.select': ['select…', '请选择…', 'seleccionar…'],
+  'ev.zoneLabel': ['Zone label (optional)', '区域标签（可选）', 'Etiqueta de zona (opcional)'],
+  'ev.zonePh': ['e.g. Loading dock D-1', '例：装卸区 D-1', 'p. ej. Muelle D-1'],
+  'ev.minConf': ['Min confidence', '最低置信度', 'Confianza mín.'],
+  'ev.severity': ['Severity', '严重级别', 'Severidad'],
+  'ev.activate': ['ACTIVATE RULE', '启用规则', 'ACTIVAR REGLA'],
+  'ev.m.person': ['Person / intrusion', '人员 / 闯入', 'Persona / intrusión'],
+  'ev.m.smoking': ['Smoking behavior', '吸烟行为', 'Conducta de fumar'],
+  'ev.m.thermal': ['Thermal anomaly', '热异常', 'Anomalía térmica'],
+  'ev.m.ogi': ['OGI emission', 'OGI 气体泄漏', 'Emisión OGI'],
+  'ev.m.gauge': ['Gauge OCR', '仪表识别', 'OCR de manómetro'],
+  'ev.m.ppe': ['PPE compliance', 'PPE 合规', 'Cumplimiento EPI'],
+  'ev.m.motion': ['Motion', '移动侦测', 'Movimiento'],
+  'ev.m.acoustic': ['Acoustic signature', '声学特征', 'Firma acústica'],
+}
+
+export function translate(lang: Lang, key: string, params?: Record<string, string | number>): string {
+  const row = D[key]
+  let s = row ? row[IDX[lang]] : key
+  if (params) for (const [k, v] of Object.entries(params)) s = s.replace(`{${k}}`, String(v))
+  return s
+}
+
+export function useT() {
+  const lang = useLang((s) => s.lang)
+  return (key: string, params?: Record<string, string | number>) => translate(lang, key, params)
+}
+
+/** relative-time with localized suffixes */
+export function useAgo() {
+  const lang = useLang((s) => s.lang)
+  return (ts: number, now = Date.now()) => {
+    const s = Math.max(0, Math.floor((now - ts) / 1000))
+    const f = (n: number, unit: 's' | 'm' | 'h' | 'd') => `${n}${translate(lang, `c.ago.${unit}`)}`
+    if (s < 60) return f(s, 's')
+    const m = Math.floor(s / 60)
+    if (m < 60) return f(m, 'm')
+    const h = Math.floor(m / 60)
+    if (h < 24) return f(h, 'h')
+    return f(Math.floor(h / 24), 'd')
+  }
+}

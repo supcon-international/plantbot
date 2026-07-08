@@ -198,12 +198,12 @@ export const MODE_LABEL: Record<RobotMode, string> = {
   charging: 'charging',
 }
 
-export const ACTION_LABEL: Record<ActionType, string> = {
-  capture_photo: 'Photo',
-  thermal_scan: 'Thermal scan',
-  ogi_scan: 'OGI scan',
-  gas_sample: 'Gas sample',
-  acoustic_scan: 'Acoustic scan',
-  gauge_read: 'Gauge read',
-  wait: 'Hold',
-}
+export const ACTION_TYPES: ActionType[] = [
+  'capture_photo',
+  'thermal_scan',
+  'ogi_scan',
+  'gas_sample',
+  'acoustic_scan',
+  'gauge_read',
+  'wait',
+]

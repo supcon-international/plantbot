@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import type { MissionStatus, RobotMode, Severity } from '../lib/types'
-import { MODE_LABEL, SEVERITY_COLOR } from '../lib/types'
+import { SEVERITY_COLOR } from '../lib/types'
+import { useT } from '../lib/i18n'
 
 export function Panel({
   children,
@@ -54,6 +55,7 @@ export function SevDot({ sev, pulse = false }: { sev: Severity; pulse?: boolean 
 }
 
 export function SevTag({ sev }: { sev: Severity }) {
+  const t = useT()
   return (
     <span
       className="mono inline-flex items-center gap-1.5 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em]"
@@ -64,7 +66,7 @@ export function SevTag({ sev }: { sev: Severity }) {
       }}
     >
       <SevDot sev={sev} />
-      {sev}
+      {t(`sev.${sev}`)}
     </span>
   )
 }
@@ -78,13 +80,14 @@ const MODE_TONE: Record<RobotMode, string> = {
 }
 
 export function ModeChip({ mode }: { mode?: RobotMode }) {
+  const t = useT()
   const tone = mode ? MODE_TONE[mode] : 'var(--color-ink-3)'
   return (
     <span
       className="mono px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em]"
       style={{ color: tone, border: '1px solid var(--color-line-2)', background: 'var(--color-surface-2)' }}
     >
-      {mode ? MODE_LABEL[mode] : 'offline'}
+      {t(mode ? `mode.${mode}` : 'mode.offline')}
     </span>
   )
 }
@@ -98,6 +101,7 @@ export const MISSION_STATUS_TONE: Record<MissionStatus, string> = {
 }
 
 export function MissionStatusTag({ status }: { status: MissionStatus }) {
+  const t = useT()
   const tone = MISSION_STATUS_TONE[status]
   return (
     <span
@@ -105,7 +109,7 @@ export function MissionStatusTag({ status }: { status: MissionStatus }) {
       style={{ color: tone, border: '1px solid var(--color-line-2)', background: 'var(--color-surface-2)' }}
     >
       {status === 'active' && <span className="live-dot" style={{ width: 5, height: 5 }} />}
-      {status}
+      {t(`ms.${status}`)}
     </span>
   )
 }

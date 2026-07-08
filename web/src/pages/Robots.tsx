@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { Plus, X, Camera, Flame, Radar, Wind, AudioWaveform, Compass, ScanEye, Dog, Car } from 'lucide-react'
 import { useApp } from '../lib/store'
-import { Panel, PanelHead, Stat, BatteryBar, ModeChip } from '../components/ui'
+import { useT } from '../lib/i18n'
+import { Panel, PanelHead, BatteryBar, ModeChip } from '../components/ui'
 import { SnapshotImg } from '../components/StreamPlayer'
 import type { PayloadSpec, RobotSpec } from '../lib/types'
 
@@ -16,42 +17,39 @@ export const KIND_ICON: Record<PayloadSpec['kind'], any> = {
   imu: Compass,
 }
 
-const KIND_LABEL: Record<PayloadSpec['kind'], string> = {
-  camera: 'Optical',
-  thermal: 'Thermal',
-  ogi: 'OGI',
-  lidar: 'LiDAR',
-  gas: 'Gas',
-  acoustic: 'Acoustic',
-  imu: 'IMU',
+const KIND_KEY: Record<string, string> = {
+  camera: 'fl.k.optical',
+  thermal: 'fl.k.thermal',
+  ogi: 'fl.k.ogi',
+  gas: 'fl.k.gas',
+  acoustic: 'fl.k.acoustic',
+  lidar: 'fl.k.lidar',
 }
 
 function ConnectModal({ onClose }: { onClose: () => void }) {
   const [queued, setQueued] = useState(false)
+  const t = useT()
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/65 backdrop-blur-sm md:items-center" onClick={onClose}>
       <div className="panel w-full md:max-w-md" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-line px-4 py-3">
-          <span className="microlabel">Provision new robot</span>
+          <span className="microlabel">{t('fl.modal.title')}</span>
           <button onClick={onClose} className="text-ink-3 hover:text-ink" aria-label="close">
             <X size={16} />
           </button>
         </div>
         {queued ? (
           <div className="space-y-2 p-6 text-center">
-            <div className="mono text-[13px] text-ok">PROVISIONING QUEUED</div>
-            <div className="text-[12px] text-ink-2">
-              Discovery broadcast sent on 10.7.31.0/24. The unit will appear in the fleet once its DDS
-              participant answers.
-            </div>
+            <div className="mono text-[13px] text-ok">{t('fl.modal.queued')}</div>
+            <div className="text-[12px] text-ink-2">{t('fl.modal.queuedDesc')}</div>
           </div>
         ) : (
           <div className="space-y-3.5 p-4">
             {[
-              ['Adapter', 'DeepRobotics · Clearpath · generic ROS2'],
-              ['Transport', 'ROS2 / DDS discovery'],
-              ['Video', 'RTSP → go2rtc relay (auto)'],
-              ['Map share', 'align to yard-07 occupancy frame'],
+              [t('fl.modal.adapter'), 'DeepRobotics · Clearpath · generic ROS2'],
+              [t('fl.modal.transport'), 'ROS2 / DDS discovery'],
+              [t('fl.modal.video'), 'RTSP → go2rtc relay (auto)'],
+              [t('fl.modal.mapShare'), 'align to yard-07 occupancy frame'],
             ].map(([k, v]) => (
               <div key={k} className="flex items-center justify-between border-b border-line/60 pb-2.5">
                 <span className="microlabel">{k}</span>
@@ -59,7 +57,7 @@ function ConnectModal({ onClose }: { onClose: () => void }) {
               </div>
             ))}
             <div>
-              <div className="microlabel mb-1.5">Robot address</div>
+              <div className="microlabel mb-1.5">{t('fl.modal.addr')}</div>
               <input
                 className="mono w-full border border-line-2 bg-surface-2 px-2.5 py-2 text-[12px] text-ink outline-none transition-colors focus:border-ink-3"
                 placeholder="10.7.31.__"
@@ -67,7 +65,7 @@ function ConnectModal({ onClose }: { onClose: () => void }) {
               />
             </div>
             <div>
-              <div className="microlabel mb-1.5">Auth token</div>
+              <div className="microlabel mb-1.5">{t('fl.modal.token')}</div>
               <input
                 className="mono w-full border border-line-2 bg-surface-2 px-2.5 py-2 text-[12px] text-ink outline-none transition-colors focus:border-ink-3"
                 placeholder="drs_••••••••"
@@ -78,7 +76,7 @@ function ConnectModal({ onClose }: { onClose: () => void }) {
               onClick={() => setQueued(true)}
               className="mono w-full border border-ink/30 bg-ink/10 px-3 py-2 text-[11px] tracking-[0.12em] text-ink transition-colors hover:bg-ink/15"
             >
-              START DISCOVERY
+              {t('fl.modal.start')}
             </button>
           </div>
         )}
@@ -91,6 +89,7 @@ function RobotCard({ r }: { r: RobotSpec }) {
   const tel = useApp((s) => s.telemetry[r.id])
   const missions = useApp((s) => s.missions)
   const nav = useNavigate()
+  const t = useT()
   const cam = r.payloads.find((p) => p.stream)
   const m = tel?.missionId ? missions.find((x) => x.id === tel.missionId) : undefined
 
@@ -121,7 +120,7 @@ function RobotCard({ r }: { r: RobotSpec }) {
           <span className="mono text-[10px] text-ink-3">{tel?.speed.toFixed(2) ?? '—'} m/s</span>
         </div>
         <div className="flex items-center gap-2 border-t border-line/70 pt-2.5">
-          <span className="microlabel shrink-0">Mission</span>
+          <span className="microlabel shrink-0">{t('c.mission')}</span>
           {m ? (
             <>
               <span className="truncate text-[11.5px] text-ink-2">{m.name}</span>
@@ -157,14 +156,15 @@ function RobotCard({ r }: { r: RobotSpec }) {
 export function Robots() {
   const robots = useApp((s) => s.robots)
   const telemetry = useApp((s) => s.telemetry)
+  const t = useT()
   const [connect, setConnect] = useState(false)
 
   const groups = useMemo(
     () => [
-      { key: 'quadruped', label: 'Quadruped units', icon: Dog, list: robots.filter((r) => r.family === 'quadruped') },
-      { key: 'ugv', label: 'Wheeled UGV', icon: Car, list: robots.filter((r) => r.family === 'ugv') },
+      { key: 'quadruped', label: t('fl.quadruped'), icon: Dog, list: robots.filter((r) => r.family === 'quadruped') },
+      { key: 'ugv', label: t('fl.ugv'), icon: Car, list: robots.filter((r) => r.family === 'ugv') },
     ],
-    [robots],
+    [robots, t],
   )
 
   const kinds: PayloadSpec['kind'][] = ['camera', 'thermal', 'ogi', 'gas', 'acoustic', 'lidar']
@@ -173,16 +173,16 @@ export function Robots() {
     <div className="mx-auto max-w-[1300px] space-y-4 p-3 md:p-4">
       <div className="flex items-center justify-between">
         <div>
-          <div className="microlabel">Fleet</div>
+          <div className="microlabel">{t('fl.fleet')}</div>
           <div className="mono mt-0.5 text-[13px] text-ink-2">
-            {robots.length} units · {Object.values(telemetry).filter((t) => t.mode !== 'idle').length} tasked
+            {robots.length} {t('c.units')} · {Object.values(telemetry).filter((x) => x.mode !== 'idle').length} {t('c.tasked')}
           </div>
         </div>
         <button
           onClick={() => setConnect(true)}
           className="mono flex items-center gap-1.5 border border-line px-2.5 py-1.5 text-[10.5px] tracking-[0.1em] text-ink-2 transition-colors hover:border-ink-3 hover:text-ink"
         >
-          <Plus size={13} /> CONNECT ROBOT
+          <Plus size={13} /> {t('fl.connectRobot')}
         </button>
       </div>
 
@@ -204,7 +204,7 @@ export function Robots() {
                 className="flex min-h-[180px] flex-col items-center justify-center gap-2 border border-dashed border-line-2 text-ink-3 transition-colors hover:border-ink-3 hover:text-ink-2"
               >
                 <Plus size={18} strokeWidth={1.5} />
-                <span className="microlabel">Provision unit</span>
+                <span className="microlabel">{t('fl.provision')}</span>
               </button>
             )}
           </div>
@@ -213,19 +213,19 @@ export function Robots() {
 
       {/* sensor coverage matrix */}
       <Panel className="rise rise-3">
-        <PanelHead label="Sensor coverage matrix" right={<span className="mono text-[10px] text-ink-3">payload × unit</span>} />
+        <PanelHead label={t('fl.matrix')} right={<span className="mono text-[10px] text-ink-3">{t('fl.matrix.sub')}</span>} />
         <div className="overflow-x-auto">
           <table className="w-full min-w-[560px] border-collapse">
             <thead>
               <tr className="border-b border-line">
-                <th className="microlabel px-3.5 py-2 text-left font-medium">Unit</th>
+                <th className="microlabel px-3.5 py-2 text-left font-medium">{t('fl.unit')}</th>
                 {kinds.map((k) => {
                   const Icon = KIND_ICON[k]
                   return (
                     <th key={k} className="px-2 py-2">
                       <div className="flex flex-col items-center gap-1">
                         <Icon size={13} strokeWidth={1.5} className="text-ink-3" />
-                        <span className="microlabel">{KIND_LABEL[k]}</span>
+                        <span className="microlabel">{t(KIND_KEY[k])}</span>
                       </div>
                     </th>
                   )
@@ -262,8 +262,8 @@ export function Robots() {
           </table>
         </div>
         <div className="flex items-center gap-4 border-t border-line px-3.5 py-2">
-          <span className="mono text-[9.5px] text-ink-3">◉ streaming payload</span>
-          <span className="mono text-[9.5px] text-ink-3">● telemetry payload</span>
+          <span className="mono text-[9.5px] text-ink-3">{t('fl.streaming')}</span>
+          <span className="mono text-[9.5px] text-ink-3">{t('fl.telemetry')}</span>
         </div>
       </Panel>
 

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { ArrowLeft, ArrowUpRight } from 'lucide-react'
 import { useApp, useHistory } from '../lib/store'
+import { useT } from '../lib/i18n'
 import { Panel, PanelHead, Stat, Spark, BatteryBar, ModeChip } from '../components/ui'
 import { RobotViewer } from '../three/RobotViewer'
 import { KIND_ICON } from './Robots'
@@ -31,6 +32,7 @@ export function RobotDetail() {
   const missions = useApp((s) => s.missions)
   const waypoints = useApp((s) => s.waypoints)
   const history = useHistory(id)
+  const t = useT()
   const [payloadSel, setPayloadSel] = useState<string | null>(null)
 
   const mission = tel?.missionId ? missions.find((m) => m.id === tel.missionId) : undefined
@@ -39,24 +41,24 @@ export function RobotDetail() {
   const identity = useMemo(
     () =>
       robot
-        ? [
-            ['Serial', robot.serial],
-            ['Firmware', robot.firmware],
-            ['Address', robot.ip],
-            ['Uplink', robot.protocol],
-            ['Mass', `${robot.massKg} kg`],
-            ['Ingress', robot.ipRating],
-            ['Max speed', `${robot.maxSpeed} m/s`],
-            ['Endurance', `${robot.enduranceMin} min`],
-          ]
+        ? ([
+            [t('rd.serial'), robot.serial],
+            [t('rd.firmware'), robot.firmware],
+            [t('rd.address'), robot.ip],
+            [t('rd.uplink'), robot.protocol],
+            [t('rd.mass'), `${robot.massKg} kg`],
+            [t('rd.ingress'), robot.ipRating],
+            [t('rd.maxSpeed'), `${robot.maxSpeed} m/s`],
+            [t('rd.endurance'), `${robot.enduranceMin} min`],
+          ] as [string, string][])
         : [],
-    [robot],
+    [robot, t],
   )
 
   if (!robot)
     return (
       <div className="p-6">
-        <div className="microlabel">Unknown robot</div>
+        <div className="microlabel">{t('rd.unknown')}</div>
       </div>
     )
 
@@ -82,7 +84,7 @@ export function RobotDetail() {
           to="/map"
           className="microlabel hidden items-center gap-1 border border-line px-2.5 py-1.5 transition-colors hover:border-line-2 hover:text-ink-2 md:flex"
         >
-          Locate on map <ArrowUpRight size={11} />
+          {t('rd.locate')} <ArrowUpRight size={11} />
         </Link>
       </div>
 
@@ -101,14 +103,14 @@ export function RobotDetail() {
             />
           </div>
           <div className="pointer-events-none absolute left-3 top-3">
-            <span className="microlabel">Digital twin · URDF</span>
+            <span className="microlabel">{t('rd.digitalTwin')}</span>
           </div>
         </Panel>
 
         {/* right column */}
         <div className="space-y-3 lg:col-span-5">
           <Panel className="rise">
-            <PanelHead label="Status" right={<span className="mono text-[10px] text-ink-3">{tel ? '4 Hz' : 'no data'}</span>} />
+            <PanelHead label={t('rd.status')} right={<span className="mono text-[10px] text-ink-3">{tel ? '4 Hz' : t('c.noData')}</span>} />
             <div className="space-y-4 p-3.5">
               {mission && (
                 <div className="flex items-center gap-2 border border-line bg-surface-2 px-2.5 py-2">
@@ -116,8 +118,8 @@ export function RobotDetail() {
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[12px] text-ink">{mission.name}</div>
                     <div className="microlabel mt-0.5">
-                      {targetWp ? `→ ${targetWp.id} ${targetWp.name}` : `step ${mission.currentStep + 1}/${mission.steps.length}`}
-                      {tel?.pathRemaining ? ` · ${tel.pathRemaining} m left` : ''}
+                      {targetWp ? `→ ${targetWp.id} ${targetWp.name}` : `${t('rd.step')} ${mission.currentStep + 1}/${mission.steps.length}`}
+                      {tel?.pathRemaining ? ` · ${tel.pathRemaining} ${t('rd.mLeft')}` : ''}
                     </div>
                   </div>
                   <span className="mono shrink-0 text-[11px] text-ink-2">{Math.round(mission.progress * 100)}%</span>
@@ -125,24 +127,24 @@ export function RobotDetail() {
               )}
               <div className="flex items-end justify-between gap-4">
                 <div className="flex-1">
-                  <div className="microlabel mb-1.5">Battery</div>
+                  <div className="microlabel mb-1.5">{t('c.battery')}</div>
                   <BatteryBar value={tel?.battery ?? 0} w={150} />
                 </div>
-                <Stat label="Gait" value={tel?.gait ?? '—'} />
+                <Stat label={t('rd.gait')} value={tel?.gait ?? '—'} />
               </div>
               <div className="grid grid-cols-4 gap-3">
-                <Stat label="Speed" value={tel?.speed.toFixed(2) ?? '—'} unit="m/s" />
-                <Stat label="Link" value={tel?.rssi ?? '—'} unit="dBm" />
+                <Stat label={t('c.speed')} value={tel?.speed.toFixed(2) ?? '—'} unit="m/s" />
+                <Stat label={t('c.link')} value={tel?.rssi ?? '—'} unit="dBm" />
                 <Stat label="RTT" value={tel?.latency ?? '—'} unit="ms" />
-                <Stat label="Odom" value={tel?.odoKm.toFixed(1) ?? '—'} unit="km" />
+                <Stat label={t('rd.odom')} value={tel?.odoKm.toFixed(1) ?? '—'} unit="km" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <div className="microlabel mb-1">Speed · 40 s</div>
+                  <div className="microlabel mb-1">{t('rd.speed40')}</div>
                   <Spark points={history.slice(-80).map((h) => h.speed)} min={0} max={1.6} w={200} h={30} color="var(--color-ink-2)" />
                 </div>
                 <div>
-                  <div className="microlabel mb-1">Link · 40 s</div>
+                  <div className="microlabel mb-1">{t('rd.link40')}</div>
                   <Spark points={history.slice(-80).map((h) => h.rssi)} min={-70} max={-40} w={200} h={30} color="var(--color-ink-3)" />
                 </div>
               </div>
@@ -150,7 +152,7 @@ export function RobotDetail() {
           </Panel>
 
           <Panel className="rise rise-1">
-            <PanelHead label="Payloads" right={<span className="mono text-[10px] text-ink-3">{robot.payloads.length} fitted</span>} />
+            <PanelHead label={t('rd.payloads')} right={<span className="mono text-[10px] text-ink-3">{robot.payloads.length} {t('rd.fitted')}</span>} />
             {robot.payloads.map((p) => {
               const Icon = KIND_ICON[p.kind]
               const hot = payloadSel === p.id
@@ -174,7 +176,7 @@ export function RobotDetail() {
                           className="mono flex items-center gap-1 border border-ok/30 bg-ok/10 px-1 py-0.5 text-[8.5px] tracking-[0.12em] text-ok hover:bg-ok/20"
                         >
                           <span className="live-dot" style={{ width: 4, height: 4, background: 'var(--color-ok)' }} />
-                          LIVE
+                          {t('live.live')}
                         </Link>
                       )}
                     </div>
@@ -194,16 +196,16 @@ export function RobotDetail() {
 
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
             <Panel className="rise rise-2">
-              <PanelHead label={robot.family === 'ugv' ? 'Drive thermals' : 'Joint thermals'} />
+              <PanelHead label={robot.family === 'ugv' ? t('rd.driveThermals') : t('rd.jointThermals')} />
               <div className="py-1">
                 {(tel?.joints ?? []).map((j) => (
                   <JointRow key={j.name} name={j.name} c={j.c} />
                 ))}
-                {!tel && <div className="px-3.5 py-3 text-[11px] text-ink-3">Awaiting telemetry…</div>}
+                {!tel && <div className="px-3.5 py-3 text-[11px] text-ink-3">{t('rd.awaitingTel')}</div>}
               </div>
             </Panel>
             <Panel className="rise rise-3">
-              <PanelHead label="Identity" />
+              <PanelHead label={t('rd.identity')} />
               <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 p-3.5 xl:grid-cols-1 xl:gap-y-3">
                 {identity.map(([k, v]) => (
                   <div key={k}>

@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
 import { Plus, X, ChevronUp, ChevronDown, OctagonX, Camera, Flame, Wind, AudioWaveform, Gauge, Timer, ScanEye } from 'lucide-react'
 import { useApp, api } from '../lib/store'
+import { useT, useAgo } from '../lib/i18n'
 import { Panel, PanelHead, MissionStatusTag, EmptyNote, Modal } from '../components/ui'
 import { OpsMap } from '../components/OpsMap'
-import { ago, timeShort } from '../lib/format'
+import { timeShort } from '../lib/format'
 import type { ActionType, Mission, MissionStep, Waypoint } from '../lib/types'
-import { ACTION_LABEL } from '../lib/types'
+import { ACTION_TYPES } from '../lib/types'
 
 const ACTION_ICON: Record<ActionType, any> = {
   capture_photo: Camera,
@@ -36,6 +37,7 @@ function wpName(id: string, waypoints: Waypoint[]) {
 function CreateMission({ onClose }: { onClose: () => void }) {
   const robots = useApp((s) => s.robots)
   const waypoints = useApp((s) => s.waypoints)
+  const t = useT()
   const [name, setName] = useState('')
   const [priority, setPriority] = useState<1 | 2 | 3>(2)
   const [assignee, setAssignee] = useState('auto')
@@ -79,7 +81,7 @@ function CreateMission({ onClose }: { onClose: () => void }) {
   return (
     <Modal onClose={onClose} wide>
       <div className="flex items-center justify-between border-b border-line px-4 py-3">
-        <span className="microlabel">New mission</span>
+        <span className="microlabel">{t('mi.wizTitle')}</span>
         <button onClick={onClose} className="text-ink-3 hover:text-ink" aria-label="close">
           <X size={16} />
         </button>
@@ -88,17 +90,17 @@ function CreateMission({ onClose }: { onClose: () => void }) {
       <div className="grid gap-4 p-4 md:grid-cols-2">
         <div className="space-y-3.5">
           <div>
-            <div className="microlabel mb-1.5">Mission name</div>
+            <div className="microlabel mb-1.5">{t('mi.wizName')}</div>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Valve run — east manifolds"
+              placeholder={t('mi.wizNamePh')}
               className="mono w-full border border-line-2 bg-surface-2 px-2.5 py-2 text-[12px] text-ink outline-none transition-colors focus:border-ink-3"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <div className="microlabel mb-1.5">Priority</div>
+              <div className="microlabel mb-1.5">{t('mi.priority')}</div>
               <div className="flex overflow-hidden border border-line">
                 {([1, 2, 3] as const).map((p) => (
                   <button
@@ -112,13 +114,13 @@ function CreateMission({ onClose }: { onClose: () => void }) {
               </div>
             </div>
             <div>
-              <div className="microlabel mb-1.5">Assign</div>
+              <div className="microlabel mb-1.5">{t('mi.wizAssign')}</div>
               <select
                 value={assignee}
                 onChange={(e) => setAssignee(e.target.value)}
                 className="mono w-full border border-line-2 bg-surface-2 px-2 py-1.5 text-[11px] text-ink outline-none"
               >
-                <option value="auto">AUTO · dispatcher</option>
+                <option value="auto">{t('mi.wizAuto')}</option>
                 {robots.map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.callsign}
@@ -138,21 +140,23 @@ function CreateMission({ onClose }: { onClose: () => void }) {
                 style={{ left: recurring ? 18 : 3, background: recurring ? 'var(--color-ink)' : 'var(--color-ink-3)' }}
               />
             </button>
-            <span className="text-[12px] text-ink-2">Recurring — requeue on completion</span>
+            <span className="text-[12px] text-ink-2">{t('mi.wizRecurring')}</span>
           </label>
 
           <div>
-            <div className="microlabel mb-1.5">Tap waypoints on the map to build the sequence</div>
+            <div className="microlabel mb-1.5">{t('mi.wizTap')}</div>
             <OpsMap heightClass="h-[210px]" interactive={false} showEvents={false} labels={false} onWaypointClick={addWp} routePreview={steps.map((s) => s.waypointId)} className="border border-line" />
           </div>
         </div>
 
         <div className="flex min-h-[300px] flex-col">
-          <div className="microlabel mb-1.5">Sequence · {steps.length} stops</div>
+          <div className="microlabel mb-1.5">
+            {t('mi.wizSequence')} · {steps.length} {t('mi.wizStops')}
+          </div>
           <div className="flex-1 space-y-2 overflow-y-auto pr-1">
             {steps.length === 0 && (
               <div className="flex h-full items-center justify-center border border-dashed border-line-2">
-                <span className="text-[12px] text-ink-3">No stops yet</span>
+                <span className="text-[12px] text-ink-3">{t('mi.wizNoStops')}</span>
               </div>
             )}
             {steps.map((st, i) => (
@@ -168,19 +172,19 @@ function CreateMission({ onClose }: { onClose: () => void }) {
                   </span>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1">
-                  {(Object.keys(ACTION_LABEL) as ActionType[]).map((t) => {
-                    const on = st.actions.some((a) => a.type === t)
-                    const Icon = ACTION_ICON[t]
+                  {ACTION_TYPES.map((type) => {
+                    const on = st.actions.some((a) => a.type === type)
+                    const Icon = ACTION_ICON[type]
                     return (
                       <button
-                        key={t}
-                        onClick={() => toggleAction(i, t)}
+                        key={type}
+                        onClick={() => toggleAction(i, type)}
                         className={`mono flex items-center gap-1 border px-1.5 py-0.5 text-[9px] tracking-[0.04em] transition-colors ${
                           on ? 'border-ink/40 bg-ink/10 text-ink' : 'border-line text-ink-3 hover:text-ink-2'
                         }`}
                       >
                         <Icon size={10} />
-                        {ACTION_LABEL[t]}
+                        {t(`act.${type}`)}
                       </button>
                     )
                   })}
@@ -193,7 +197,7 @@ function CreateMission({ onClose }: { onClose: () => void }) {
             onClick={submit}
             className="mono mt-3 w-full border border-ink/30 bg-ink/10 px-3 py-2.5 text-[11px] tracking-[0.12em] text-ink transition-colors hover:bg-ink/15 disabled:opacity-30"
           >
-            {busy ? 'SUBMITTING…' : 'QUEUE MISSION'}
+            {busy ? t('mi.wizSubmitting') : t('mi.wizQueue')}
           </button>
         </div>
       </div>
@@ -206,6 +210,7 @@ function CreateMission({ onClose }: { onClose: () => void }) {
 function MissionDetail({ m }: { m: Mission }) {
   const waypoints = useApp((s) => s.waypoints)
   const robots = useApp((s) => s.robots)
+  const t = useT()
   const robot = robots.find((r) => r.id === m.robotId)
   const flagged = m.results.filter((r) => !r.ok).length
 
@@ -213,14 +218,14 @@ function MissionDetail({ m }: { m: Mission }) {
     <div className="space-y-3">
       <Panel>
         <PanelHead
-          label={`${m.id} · plan`}
+          label={`${m.id} · ${t('mi.plan')}`}
           right={
             (m.status === 'active' || m.status === 'queued') && (
               <button
                 onClick={() => api.abortMission(m.id)}
                 className="mono flex items-center gap-1 border border-line-2 px-1.5 py-0.5 text-[9px] tracking-[0.08em] text-ink-3 transition-colors hover:border-crit/50 hover:text-crit"
               >
-                <OctagonX size={11} /> ABORT
+                <OctagonX size={11} /> {t('c.abort')}
               </button>
             )
           }
@@ -229,15 +234,15 @@ function MissionDetail({ m }: { m: Mission }) {
           <OpsMap heightClass="h-[200px] md:h-[240px]" interactive={false} showEvents={false} labels={false} routePreview={m.steps.map((s) => s.waypointId)} className="border border-line" />
           <div className="mt-3 grid grid-cols-3 gap-3 md:grid-cols-5">
             {[
-              ['Status', m.status],
-              ['Unit', robot?.callsign ?? (m.requestedRobot === 'auto' ? 'AUTO' : m.requestedRobot)],
-              ['Priority', `P${m.priority}`],
-              ['Stops', m.steps.length],
-              ['Findings', flagged ? `${flagged} flagged` : 'clean'],
+              [t('c.status'), t(`ms.${m.status}`)],
+              [t('mi.unit'), robot?.callsign ?? (m.requestedRobot === 'auto' ? 'AUTO' : m.requestedRobot)],
+              [t('mi.priority'), `P${m.priority}`],
+              [t('mi.stops'), m.steps.length],
+              [t('mi.findings'), flagged ? `${flagged} ${t('mi.flagged')}` : t('mi.clean')],
             ].map(([k, v]) => (
               <div key={k as string}>
                 <div className="microlabel mb-0.5">{k}</div>
-                <div className="mono text-[11.5px]" style={{ color: k === 'Findings' && flagged ? 'var(--color-warn)' : 'var(--color-ink-2)' }}>
+                <div className="mono text-[11.5px]" style={{ color: k === t('mi.findings') && flagged ? 'var(--color-warn)' : 'var(--color-ink-2)' }}>
                   {v as string}
                 </div>
               </div>
@@ -247,7 +252,7 @@ function MissionDetail({ m }: { m: Mission }) {
       </Panel>
 
       <Panel>
-        <PanelHead label="Step timeline" />
+        <PanelHead label={t('mi.stepTimeline')} />
         <div className="p-3.5">
           {m.steps.map((st, i) => {
             const cur = m.status === 'active' && i === m.currentStep
@@ -268,7 +273,7 @@ function MissionDetail({ m }: { m: Mission }) {
                       {st.actions.map((a, k) => {
                         const Icon = ACTION_ICON[a.type]
                         return (
-                          <span key={k} title={ACTION_LABEL[a.type]} className="flex h-5 w-5 items-center justify-center border border-line text-ink-3">
+                          <span key={k} title={t(`act.${a.type}`)} className="flex h-5 w-5 items-center justify-center border border-line text-ink-3">
                             <Icon size={10} />
                           </span>
                         )
@@ -298,6 +303,7 @@ function MissionDetail({ m }: { m: Mission }) {
 function Row({ m, active, onClick }: { m: Mission; active: boolean; onClick: () => void }) {
   const robots = useApp((s) => s.robots)
   const clock = useApp((s) => s.clock)
+  const ago = useAgo()
   const robot = robots.find((r) => r.id === m.robotId)
   return (
     <button
@@ -335,6 +341,7 @@ function Row({ m, active, onClick }: { m: Mission; active: boolean; onClick: () 
 
 export function Missions() {
   const missions = useApp((s) => s.missions)
+  const t = useT()
   const [selId, setSelId] = useState<string | null>(null)
   const [create, setCreate] = useState(false)
 
@@ -354,46 +361,46 @@ export function Missions() {
     <div className="mx-auto max-w-[1400px] space-y-3 p-3 md:p-4">
       <div className="flex items-center justify-between">
         <div>
-          <div className="microlabel">Mission control</div>
+          <div className="microlabel">{t('mi.missionControl')}</div>
           <div className="mono mt-0.5 text-[13px] text-ink-2">
-            {groups.active.length} active · {groups.queued.length} queued
+            {groups.active.length} {t('ms.active')} · {groups.queued.length} {t('ms.queued')}
           </div>
         </div>
         <button
           onClick={() => setCreate(true)}
           className="mono flex items-center gap-1.5 border border-ink/30 bg-ink/10 px-2.5 py-1.5 text-[10.5px] tracking-[0.1em] text-ink transition-colors hover:bg-ink/15"
         >
-          <Plus size={13} /> NEW MISSION
+          <Plus size={13} /> {t('mi.newMission')}
         </button>
       </div>
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
         <div className="space-y-3 lg:col-span-5">
           <Panel className="rise">
-            <PanelHead label={`Active · ${groups.active.length}`} />
+            <PanelHead label={`${t('mi.active')} · ${groups.active.length}`} />
             {groups.active.map((m) => (
               <Row key={m.id} m={m} active={sel?.id === m.id} onClick={() => setSelId(m.id)} />
             ))}
-            {groups.active.length === 0 && <EmptyNote>No active missions</EmptyNote>}
+            {groups.active.length === 0 && <EmptyNote>{t('ops.noActiveMissions')}</EmptyNote>}
           </Panel>
           <Panel className="rise rise-1">
-            <PanelHead label={`Queued · ${groups.queued.length}`} />
+            <PanelHead label={`${t('mi.queued')} · ${groups.queued.length}`} />
             {groups.queued.map((m) => (
               <Row key={m.id} m={m} active={sel?.id === m.id} onClick={() => setSelId(m.id)} />
             ))}
-            {groups.queued.length === 0 && <EmptyNote>Queue is empty</EmptyNote>}
+            {groups.queued.length === 0 && <EmptyNote>{t('mi.queueEmpty')}</EmptyNote>}
           </Panel>
           <Panel className="rise rise-2">
-            <PanelHead label="History" />
+            <PanelHead label={t('mi.history')} />
             {groups.history.map((m) => (
               <Row key={m.id} m={m} active={sel?.id === m.id} onClick={() => setSelId(m.id)} />
             ))}
-            {groups.history.length === 0 && <EmptyNote>No completed missions yet</EmptyNote>}
+            {groups.history.length === 0 && <EmptyNote>{t('mi.noCompleted')}</EmptyNote>}
           </Panel>
         </div>
 
         <div className="lg:col-span-7">
-          {sel ? <MissionDetail m={sel} /> : <Panel><EmptyNote>Select a mission</EmptyNote></Panel>}
+          {sel ? <MissionDetail m={sel} /> : <Panel><EmptyNote>{t('mi.selectMission')}</EmptyNote></Panel>}
         </div>
       </div>
 

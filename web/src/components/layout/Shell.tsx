@@ -1,20 +1,21 @@
-import { NavLink, Outlet, useLocation } from 'react-router'
+import { NavLink, Outlet } from 'react-router'
 import { LayoutGrid, Cctv, Bot, Map as MapIcon, ShieldAlert, X, Route } from 'lucide-react'
 import { useApp } from '../../lib/store'
-import { utcClock, ago } from '../../lib/format'
+import { useT, useLang, type Lang } from '../../lib/i18n'
+import { utcClock } from '../../lib/format'
 import { SevDot } from '../ui'
 import { useEffect } from 'react'
 
 const NAV = [
-  { to: '/', label: 'OPS', title: 'Operations overview', icon: LayoutGrid },
-  { to: '/live', label: 'LIVE', title: 'Video wall', icon: Cctv },
-  { to: '/missions', label: 'TASKS', title: 'Mission control', icon: Route },
-  { to: '/robots', label: 'FLEET', title: 'Robots', icon: Bot },
-  { to: '/map', label: 'MAP', title: 'Site map', icon: MapIcon },
-  { to: '/events', label: 'EVENTS', title: 'Detections', icon: ShieldAlert },
+  { to: '/', key: 'nav.ops', icon: LayoutGrid },
+  { to: '/live', key: 'nav.live', icon: Cctv },
+  { to: '/missions', key: 'nav.tasks', icon: Route },
+  { to: '/robots', key: 'nav.fleet', icon: Bot },
+  { to: '/map', key: 'nav.map', icon: MapIcon },
+  { to: '/events', key: 'nav.events', icon: ShieldAlert },
 ]
 
-function NavItem({ to, label, icon: Icon, badge }: any) {
+function NavItem({ to, label, icon: Icon, badge }: { to: string; label: string; icon: any; badge: number }) {
   return (
     <NavLink
       to={to}
@@ -43,21 +44,46 @@ function NavItem({ to, label, icon: Icon, badge }: any) {
               </span>
             )}
           </span>
-          <span className="mono text-[9px] tracking-[0.12em]">{label}</span>
+          <span className="mono max-w-[64px] truncate text-[9px] tracking-[0.12em]">{label}</span>
         </>
       )}
     </NavLink>
   )
 }
 
+function LangSwitch() {
+  const lang = useLang((s) => s.lang)
+  const setLang = useLang((s) => s.setLang)
+  const langs: { id: Lang; label: string }[] = [
+    { id: 'en', label: 'EN' },
+    { id: 'zh', label: '中' },
+    { id: 'es', label: 'ES' },
+  ]
+  return (
+    <div className="flex overflow-hidden border border-line">
+      {langs.map((l) => (
+        <button
+          key={l.id}
+          onClick={() => setLang(l.id)}
+          className={`mono px-1.5 py-0.5 text-[10px] transition-colors ${
+            lang === l.id ? 'bg-surface-3 text-ink' : 'text-ink-3 hover:text-ink-2'
+          }`}
+        >
+          {l.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function Toast() {
   const toast = useApp((s) => s.toast)
   const dismiss = useApp((s) => s.dismissToast)
-  const location = useLocation()
+  const t = useT()
   useEffect(() => {
     if (!toast) return
-    const t = setTimeout(dismiss, 7000)
-    return () => clearTimeout(t)
+    const timer = setTimeout(dismiss, 7000)
+    return () => clearTimeout(timer)
   }, [toast, dismiss])
   if (!toast) return null
   return (
@@ -73,8 +99,8 @@ function Toast() {
             {toast.sourceName} · {toast.zone}
           </div>
         </div>
-        <NavLink to="/events" onClick={dismiss} className="microlabel shrink-0 text-accent! hover:underline">
-          View
+        <NavLink to="/events" onClick={dismiss} className="microlabel shrink-0 text-ink! hover:underline">
+          {t('shell.view')}
         </NavLink>
         <button onClick={dismiss} className="text-ink-3 hover:text-ink" aria-label="dismiss">
           <X size={14} />
@@ -88,9 +114,15 @@ export function Shell() {
   const connected = useApp((s) => s.connected)
   const site = useApp((s) => s.site)
   const clock = useApp((s) => s.clock)
+  const lang = useLang((s) => s.lang)
+  const t = useT()
   const critCount = useApp(
     (s) => s.events.filter((e) => !e.acked && (e.severity === 'critical' || e.severity === 'high')).length,
   )
+
+  useEffect(() => {
+    document.documentElement.lang = lang
+  }, [lang])
 
   return (
     <div className="relative z-10 h-full">
@@ -102,13 +134,14 @@ export function Shell() {
             <circle cx="16" cy="16" r="3.5" fill="var(--color-accent)" />
           </svg>
           <span className="text-[13px] font-semibold tracking-[0.02em] text-ink">AEGIS</span>
-          <span className="microlabel hidden sm:block">Robotics Operations</span>
+          <span className="microlabel hidden sm:block">{t('shell.brand')}</span>
         </div>
         <div className="mx-2 hidden h-4 w-px bg-line md:block" />
         <div className="microlabel hidden truncate md:block" style={{ color: 'var(--color-ink-2)' }}>
           {site?.name ?? '—'}
         </div>
         <div className="ml-auto flex items-center gap-3">
+          <LangSwitch />
           <span className="mono hidden text-[11px] text-ink-2 sm:block">{utcClock(clock)}</span>
           <span className="flex items-center gap-1.5">
             <span
@@ -121,7 +154,7 @@ export function Shell() {
               }}
             />
             <span className="microlabel" style={{ color: connected ? 'var(--color-ok)' : 'var(--color-crit)' }}>
-              {connected ? 'LINK' : 'DOWN'}
+              {connected ? t('shell.link') : t('shell.down')}
             </span>
           </span>
           <span className="mono hidden border border-line-2 bg-surface-2 px-1.5 py-0.5 text-[10px] text-ink-2 md:block">
@@ -133,7 +166,7 @@ export function Shell() {
       {/* desktop rail */}
       <nav className="fixed bottom-0 left-0 top-12 z-40 hidden w-14 flex-col border-r border-line bg-surface md:flex">
         {NAV.map((n) => (
-          <NavItem key={n.to} {...n} badge={n.to === '/events' ? critCount : 0} />
+          <NavItem key={n.to} to={n.to} label={t(n.key)} icon={n.icon} badge={n.to === '/events' ? critCount : 0} />
         ))}
         <div className="mt-auto mb-3 flex justify-center">
           <span className="microlabel rotate-180 [writing-mode:vertical-lr]">v0.1 · yard-07</span>
@@ -143,7 +176,7 @@ export function Shell() {
       {/* mobile bottom tab bar */}
       <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 flex h-[58px] border-t border-line bg-surface/95 backdrop-blur md:hidden">
         {NAV.map((n) => (
-          <NavItem key={n.to} {...n} badge={n.to === '/events' ? critCount : 0} />
+          <NavItem key={n.to} to={n.to} label={t(n.key)} icon={n.icon} badge={n.to === '/events' ? critCount : 0} />
         ))}
       </nav>
 

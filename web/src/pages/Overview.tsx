@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { ArrowUpRight, Radio } from 'lucide-react'
 import { useApp, useHistory } from '../lib/store'
-import { ago } from '../lib/format'
+import { useT, useAgo } from '../lib/i18n'
 import { Panel, PanelHead, Spark, BatteryBar, SevDot, ModeChip, EmptyNote } from '../components/ui'
 import { SnapshotImg } from '../components/StreamPlayer'
 import { OpsMap, type MapSel } from '../components/OpsMap'
@@ -13,36 +13,37 @@ function KpiRow() {
   const telemetry = useApp((s) => s.telemetry)
   const events = useApp((s) => s.events)
   const missions = useApp((s) => s.missions)
+  const t = useT()
 
-  const ready = Object.values(telemetry).filter((t) => t.battery > 20).length
+  const ready = Object.values(telemetry).filter((x) => x.battery > 20).length
   const activeMissions = missions.filter((m) => m.status === 'active').length
   const queued = missions.filter((m) => m.status === 'queued').length
   const open = events.filter((e) => !e.acked && (e.severity === 'critical' || e.severity === 'high')).length
   const detections24h = events.filter((e) => Date.now() - e.ts < 24 * 3600_000).length
   const tel = Object.values(telemetry)
-  const rssi = tel.length ? Math.round(tel.reduce((a, t) => a + t.rssi, 0) / tel.length) : null
+  const rssi = tel.length ? Math.round(tel.reduce((a, x) => a + x.rssi, 0) / tel.length) : null
 
   const tiles: { label: string; value: string | number; sub?: string; tone?: string }[] = [
-    { label: 'Fleet ready', value: `${ready}/${robots.length || '—'}`, sub: 'battery > 20%' },
-    { label: 'Missions', value: activeMissions, sub: `${queued} queued` },
+    { label: t('ops.fleetReady'), value: `${ready}/${robots.length || '—'}`, sub: t('ops.fleetReady.sub') },
+    { label: t('ops.missions'), value: activeMissions, sub: `${queued} ${t('ops.queuedN')}` },
     {
-      label: 'Open alerts',
+      label: t('ops.openAlerts'),
       value: open,
-      sub: 'crit + high',
+      sub: t('ops.openAlerts.sub'),
       tone: open > 0 ? 'var(--color-crit)' : 'var(--color-ink)',
     },
-    { label: 'Detections · 24h', value: detections24h, sub: 'all severities' },
-    { label: 'Mean uplink', value: rssi != null ? `${rssi}` : '—', sub: 'dBm · fleet avg' },
+    { label: t('ops.detections24h'), value: detections24h, sub: t('ops.detections24h.sub') },
+    { label: t('ops.meanUplink'), value: rssi != null ? `${rssi}` : '—', sub: t('ops.meanUplink.sub') },
   ]
   return (
     <div className="grid grid-cols-2 gap-2 md:grid-cols-5 md:gap-3">
-      {tiles.map((t, i) => (
-        <Panel key={t.label} className={`rise rise-${i + 1} px-3.5 py-3 ${i === 4 ? 'max-md:hidden' : ''}`}>
-          <div className="microlabel">{t.label}</div>
-          <div className="mono mt-1.5 text-[26px] leading-none md:text-[30px]" style={{ color: t.tone ?? 'var(--color-ink)' }}>
-            {t.value}
+      {tiles.map((tile, i) => (
+        <Panel key={tile.label} className={`rise rise-${i + 1} px-3.5 py-3 ${i === 4 ? 'max-md:hidden' : ''}`}>
+          <div className="microlabel">{tile.label}</div>
+          <div className="mono mt-1.5 text-[26px] leading-none md:text-[30px]" style={{ color: tile.tone ?? 'var(--color-ink)' }}>
+            {tile.value}
           </div>
-          {t.sub && <div className="mono mt-1 text-[9.5px] text-ink-3">{t.sub}</div>}
+          {tile.sub && <div className="mono mt-1 text-[9.5px] text-ink-3">{tile.sub}</div>}
         </Panel>
       ))}
     </div>
@@ -65,6 +66,7 @@ function FleetCell({ r }: { r: RobotSpec }) {
   const missions = useApp((s) => s.missions)
   const history = useHistory(r.id)
   const nav = useNavigate()
+  const t = useT()
   const m = tel?.missionId ? missions.find((x) => x.id === tel.missionId) : undefined
   return (
     <Panel className="panel-hover cursor-pointer p-3" onClick={() => nav(`/robots/${r.id}`)}>
@@ -86,7 +88,7 @@ function FleetCell({ r }: { r: RobotSpec }) {
             <span className="mono"> · {Math.round(m.progress * 100)}%</span>
           </>
         ) : (
-          'no mission'
+          t('c.noMission')
         )}
       </div>
       <div className="mt-2">
@@ -99,18 +101,20 @@ function FleetCell({ r }: { r: RobotSpec }) {
 function Feed() {
   const events = useApp((s) => s.events)
   const clock = useApp((s) => s.clock)
+  const t = useT()
+  const ago = useAgo()
   return (
     <Panel className="flex min-h-0 flex-col">
       <PanelHead
-        label="Detections"
+        label={t('ops.detections')}
         right={
           <Link to="/events" className="microlabel flex items-center gap-1 hover:text-ink-2">
-            All <ArrowUpRight size={11} />
+            {t('ops.all')} <ArrowUpRight size={11} />
           </Link>
         }
       />
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {events.length === 0 && <EmptyNote>Awaiting detections…</EmptyNote>}
+        {events.length === 0 && <EmptyNote>{t('ops.awaiting')}</EmptyNote>}
         {events.slice(0, 12).map((e) => (
           <div
             key={e.id}
@@ -121,7 +125,7 @@ function Feed() {
               <div className="truncate text-[12px] leading-snug text-ink">{e.label}</div>
               <div className="microlabel mt-0.5 truncate">{e.zone}</div>
             </div>
-            {e.snapshot && <img src={e.snapshot} alt="" loading="lazy" className="h-8 w-13 shrink-0 border border-line object-cover" style={{ width: 52 }} />}
+            {e.snapshot && <img src={e.snapshot} alt="" loading="lazy" className="h-8 shrink-0 border border-line object-cover" style={{ width: 52 }} />}
             <span className="mono w-12 shrink-0 text-right text-[9.5px] text-ink-3">{ago(e.ts, clock)}</span>
           </div>
         ))}
@@ -133,6 +137,8 @@ function Feed() {
 function MissionLog() {
   const missions = useApp((s) => s.missions)
   const robots = useApp((s) => s.robots)
+  const t = useT()
+  const ago = useAgo()
   const active = missions.filter((m) => m.status === 'active')
   const recentResults = useMemo(
     () =>
@@ -146,15 +152,15 @@ function MissionLog() {
   return (
     <Panel className="flex min-h-0 flex-col">
       <PanelHead
-        label="Mission ops"
+        label={t('ops.missionOps')}
         right={
           <Link to="/missions" className="microlabel flex items-center gap-1 hover:text-ink-2">
-            Control <ArrowUpRight size={11} />
+            {t('ops.control')} <ArrowUpRight size={11} />
           </Link>
         }
       />
       <div className="space-y-2.5 border-b border-line/70 p-3.5">
-        {active.length === 0 && <span className="text-[11.5px] text-ink-3">No active missions</span>}
+        {active.length === 0 && <span className="text-[11.5px] text-ink-3">{t('ops.noActiveMissions')}</span>}
         {active.map((m) => {
           const r = robots.find((x) => x.id === m.robotId)
           return (
@@ -209,6 +215,7 @@ function VideoQuick() {
 export function Overview() {
   const [sel, setSel] = useState<MapSel>(null)
   const missions = useApp((s) => s.missions)
+  const t = useT()
   const active = missions.filter((m) => m.status === 'active').length
 
   return (
@@ -218,10 +225,10 @@ export function Overview() {
         <div className="space-y-3 lg:col-span-8">
           <Panel className="rise rise-2">
             <PanelHead
-              label="Live operations · yard-07"
+              label={t('ops.liveOperations')}
               right={
                 <span className="mono hidden text-[10px] text-ink-3 sm:block">
-                  {active} missions running · tap a waypoint to dispatch
+                  {active} {t('ops.liveOperations.hint')}
                 </span>
               }
             />
