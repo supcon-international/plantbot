@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+
+# fetched by `pnpm setup`
+server/bin/go2rtc
+server/media/*.mp4
+server/data/snapshots/
+server/go2rtc.yaml
+web/public/assets/robots/lite3/
+web/public/assets/robots/x30/
+web/public/assets/robots/husky/meshes/
+web/public/assets/scenes/
+demos/

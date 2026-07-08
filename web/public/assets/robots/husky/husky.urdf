@@ -1,0 +1,99 @@
+<?xml version="1.0"?>
+<!-- Clearpath Husky A200 — flattened from husky_description xacro
+     (github.com/husky/husky, humble-devel). Meshes: official STL. -->
+<robot name="husky">
+  <link name="base_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="./meshes/base_link.stl"/></geometry>
+    </visual>
+  </link>
+
+  <link name="top_chassis_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="./meshes/top_chassis.stl"/></geometry>
+    </visual>
+  </link>
+  <joint name="top_chassis_joint" type="fixed">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="base_link"/>
+    <child link="top_chassis_link"/>
+  </joint>
+
+  <link name="user_rail_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="./meshes/user_rail.stl"/></geometry>
+    </visual>
+  </link>
+  <joint name="user_rail_joint" type="fixed">
+    <origin xyz="0.272 0 0.245" rpy="0 0 0"/>
+    <parent link="base_link"/>
+    <child link="user_rail_link"/>
+  </joint>
+
+  <link name="top_plate_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="./meshes/top_plate.stl"/></geometry>
+    </visual>
+  </link>
+  <joint name="top_plate_joint" type="fixed">
+    <origin xyz="0.0812 0 0.245" rpy="0 0 0"/>
+    <parent link="base_link"/>
+    <child link="top_plate_link"/>
+  </joint>
+
+  <link name="front_left_wheel_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="./meshes/wheel.stl"/></geometry>
+    </visual>
+  </link>
+  <joint name="front_left_wheel" type="continuous">
+    <origin xyz="0.256 0.2854 0.03282" rpy="0 0 0"/>
+    <parent link="base_link"/>
+    <child link="front_left_wheel_link"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+
+  <link name="front_right_wheel_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="./meshes/wheel.stl"/></geometry>
+    </visual>
+  </link>
+  <joint name="front_right_wheel" type="continuous">
+    <origin xyz="0.256 -0.2854 0.03282" rpy="0 0 0"/>
+    <parent link="base_link"/>
+    <child link="front_right_wheel_link"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+
+  <link name="rear_left_wheel_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="./meshes/wheel.stl"/></geometry>
+    </visual>
+  </link>
+  <joint name="rear_left_wheel" type="continuous">
+    <origin xyz="-0.256 0.2854 0.03282" rpy="0 0 0"/>
+    <parent link="base_link"/>
+    <child link="rear_left_wheel_link"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+
+  <link name="rear_right_wheel_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="./meshes/wheel.stl"/></geometry>
+    </visual>
+  </link>
+  <joint name="rear_right_wheel" type="continuous">
+    <origin xyz="-0.256 -0.2854 0.03282" rpy="0 0 0"/>
+    <parent link="base_link"/>
+    <child link="rear_right_wheel_link"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+</robot>

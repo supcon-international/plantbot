@@ -1,0 +1,13 @@
+{
+  "image": "yard-07.png",
+  "resolution": 0.05,
+  "width": 640,
+  "height": 360,
+  "origin": [
+    -16.0,
+    -9.0
+  ],
+  "free_thresh": 0.196,
+  "occupied_thresh": 0.65,
+  "source": "slam_toolbox \u00b7 JY-L3-01 mapping run 2026-06-30"
+}
