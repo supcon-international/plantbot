@@ -53,8 +53,7 @@ async function go2rtc() {
 // ---------- footage (Mixkit free license) ----------
 const FOOTAGE = {
   'switchgear.mp4': 'https://assets.mixkit.co/videos/23377/23377-720.mp4',
-  'worker.mp4': 'https://assets.mixkit.co/videos/23378/23378-720.mp4',
-  'workshop.mp4': 'https://assets.mixkit.co/videos/22032/22032-720.mp4',
+  'substation.mp4': 'https://assets.mixkit.co/videos/23107/23107-720.mp4',
   'plant_aerial.mp4': 'https://assets.mixkit.co/videos/14631/14631-720.mp4',
   'smokestack.mp4': 'https://assets.mixkit.co/videos/14051/14051-720.mp4',
   'pumpjack.mp4': 'https://assets.mixkit.co/videos/48884/48884-360.mp4', // OGI channel source
@@ -122,9 +121,38 @@ async function splatScene() {
 console.log('[1/4] go2rtc relay')
 await go2rtc()
 
-console.log('[2/4] camera footage (Mixkit free license)')
-for (const [name, url] of Object.entries(FOOTAGE))
-  await download(url, join(ROOT, 'server', 'media', name), name)
+// Mixkit clips ship with long GOPs; re-encode to keyint 15 so stream
+// switching starts in <1 s. Requires ffmpeg (the relay needs it anyway).
+const FFMPEG = process.env.FFMPEG_BIN ?? 'ffmpeg'
+async function footage(name, url) {
+  const dest = join(ROOT, 'server', 'media', name)
+  if (existsSync(dest) && statSync(dest).size > 1e5) return console.log(`  ✓ ${name} (cached)`)
+  const tmp = `${dest}.dl`
+  await download(url, tmp, name)
+  execSync(
+    `"${FFMPEG}" -y -loglevel error -i "${tmp}" -c:v libx264 -crf 20 -preset medium -g 15 -keyint_min 15 -pix_fmt yuv420p -an "${dest}" && rm "${tmp}"`,
+  )
+  console.log(`  ✓ ${name} transcoded (GOP 15)`)
+}
+
+async function stagingFeed() {
+  const dest = join(ROOT, 'server', 'media', 'staging.mp4')
+  if (existsSync(dest) && statSync(dest).size > 1e5) return console.log('  ✓ staging.mp4 (cached)')
+  const webm = `${dest}.webm`
+  await download(
+    'https://upload.wikimedia.org/wikipedia/commons/5/52/Spot_construction_robot.webm',
+    webm,
+    'Spot staging footage (Wikimedia Commons CC)',
+  )
+  execSync(
+    `"${FFMPEG}" -y -loglevel error -i "${webm}" -c:v libx264 -crf 20 -preset medium -g 15 -keyint_min 15 -pix_fmt yuv420p -vf "scale=1280:-2" -an "${dest}" && rm "${webm}"`,
+  )
+  console.log('  ✓ staging.mp4 transcoded')
+}
+
+console.log('[2/4] camera footage (Mixkit free license + Commons)')
+for (const [name, url] of Object.entries(FOOTAGE)) await footage(name, url)
+await stagingFeed()
 
 console.log('[3/4] DeepRobotics URDF models (DeepRoboticsLab/deep_robotics_model)')
 for (const [rel, url] of Object.entries(ROBOT_FILES))

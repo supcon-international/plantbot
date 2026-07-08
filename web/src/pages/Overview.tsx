@@ -232,7 +232,7 @@ export function Overview() {
                 </span>
               }
             />
-            <OpsMap selection={sel} onSelect={setSel} heightClass="h-[340px] md:h-[460px]" className="border-0" />
+            <OpsMap selection={sel} onSelect={setSel} heightClass="h-[340px] md:h-[460px]" className="border-0" wheelZoom={false} />
           </Panel>
           <FleetStrip />
         </div>

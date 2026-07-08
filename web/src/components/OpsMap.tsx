@@ -196,6 +196,7 @@ export function OpsMap({
   className = '',
   onWaypointClick,
   routePreview,
+  wheelZoom = true,
 }: {
   selection?: MapSel
   onSelect?: (s: MapSel) => void
@@ -206,6 +207,8 @@ export function OpsMap({
   className?: string
   onWaypointClick?: (wp: Waypoint) => void
   routePreview?: string[]
+  /** disable wheel-zoom for embedded maps so the page keeps scrolling */
+  wheelZoom?: boolean
 }) {
   const site = useApp((s) => s.site)
   const robots = useApp((s) => s.robots)
@@ -263,7 +266,7 @@ export function OpsMap({
 
   useEffect(() => {
     const el = svgRef.current
-    if (!el || !interactive) return
+    if (!el || !interactive || !wheelZoom) return
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
       zoomAt(e.clientX, e.clientY, e.deltaY > 0 ? 1.18 : 1 / 1.18)
@@ -271,7 +274,7 @@ export function OpsMap({
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
     // `site` gates the svg's existence — re-run once it mounts
-  }, [zoomAt, interactive, site])
+  }, [zoomAt, interactive, wheelZoom, site])
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (!interactive) return
