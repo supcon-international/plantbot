@@ -31,19 +31,19 @@ web/     Vite 7 · React 19 · TS · Tailwind v4 · zustand · react-router 7
            - urdf-loader        → Lite3 / X30（云深处官方）、Husky（官方 mesh + 扁平化 URDF）
            - gaussian-splats-3d → 3DGS 场景（mkkellogg）
          OpsMap：occupancy PNG → canvas 三值主题化（占据=白色激光线）
-                 + SVG 矢量层（waypoint/zone/位姿/A* 路径 dash 动画）
-         视频：go2rtc video-rtc.js（vendored）RTSP→fMP4 over WS (MSE)
+                 + SVG 单场景图（缩放/平移/marker/A* 路径 dash 动画）
+         视频（混合传输）：公网实况走 go2rtc video-rtc.js（RTSP→fMP4/MSE）；
+                 6 路巡检环路走原生 <video>（/media 静态直出，零掉帧）
 
-server/  Fastify 5 + ws
+server/  Fastify 5 + ws + @fastify/static（/media，Range）
            - /api/fleet /api/missions /api/rules /api/events WS /ws
            - mission 引擎：状态机（navigating→executing→next）、自动调度、
              teleop 抢占、低电返航充电、循环任务冷却复用
            - planner.ts：64×36 栅格 A*（对角+禁切角+共线简化）≈ 机器人端 Nav2
            - 事件生成由启用中的规则驱动，快照从对应流抓真实帧
 
-go2rtc   RTSP 汇聚层：公网实况 + 6 路 ffmpeg 环路
-           - 热成像：pseudocolor=inferno 实时伪彩
-           - OGI：gray + 高对比 + unsharp + 噪点（MWIR 风格）
+go2rtc   RTSP 汇聚层：公网实况 MSE 分发 + 各环路的快照抓帧源
+           - 热成像 inferno / OGI·MWIR 两路观感由 setup 预渲染成离线环路
 ```
 
 地图分层遵循行业惯例（InOrbit/Formant 同款）：机器人 SLAM 产出 OccupancyGrid（ROS map_server 三值规范，free=254/unknown=205/occupied=0），后端转 PNG 位图 + 元数据（resolution/origin），前端 canvas 做主题化渲染当底图；waypoint、zone、位姿、规划路径是独立矢量层随 WebSocket 实时更新。路径规划不暴露为可编辑对象——可编辑的只有 waypoint 和 action。

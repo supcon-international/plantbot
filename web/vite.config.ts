@@ -21,5 +21,13 @@ export default defineConfig({
   },
   build: {
     chunkSizeWarningLimit: 1600,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // heavy 3D stack loads on demand behind React.lazy
+          three: ['three', '@mkkellogg/gaussian-splats-3d', 'urdf-loader'],
+        },
+      },
+    },
   },
 })

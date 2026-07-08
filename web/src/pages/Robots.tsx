@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react'
+import { Suspense, lazy, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { Plus, X, Camera, Flame, Radar, Wind, AudioWaveform, Compass, ScanEye, Dog, Car } from 'lucide-react'
 import { useApp } from '../lib/store'
 import { useT } from '../lib/i18n'
 import { Panel, PanelHead, BatteryBar, ModeChip } from '../components/ui'
-import { RobotThumb } from '../three/RobotThumb'
+const RobotThumb = lazy(() => import('../three/RobotThumb').then((m) => ({ default: m.RobotThumb })))
 import type { PayloadSpec, RobotSpec } from '../lib/types'
 
 export const KIND_ICON: Record<PayloadSpec['kind'], any> = {
@@ -95,7 +95,9 @@ function RobotCard({ r }: { r: RobotSpec }) {
   return (
     <Panel className="panel-hover cursor-pointer" onClick={() => nav(`/robots/${r.id}`)}>
       <div className="relative h-44 overflow-hidden border-b border-line">
-        <RobotThumb urdf={r.urdf} className="absolute inset-0" />
+        <Suspense fallback={<div className="skeleton absolute inset-0 opacity-20" />}>
+          <RobotThumb urdf={r.urdf} className="absolute inset-0" />
+        </Suspense>
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-bg/85 to-transparent" />
         <div className="absolute bottom-2.5 left-3 flex items-center gap-2.5">
           <span className="live-dot" style={{ background: r.color }} />

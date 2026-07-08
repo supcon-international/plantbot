@@ -144,10 +144,11 @@ async function stagingFeed() {
     webm,
     'Spot staging footage (Wikimedia Commons CC)',
   )
+  // boomerang (forward + reversed) so the short clip loops seamlessly
   execSync(
-    `"${FFMPEG}" -y -loglevel error -i "${webm}" -c:v libx264 -crf 20 -preset medium -g 15 -keyint_min 15 -pix_fmt yuv420p -vf "scale=1280:-2" -an "${dest}" && rm "${webm}"`,
+    `"${FFMPEG}" -y -loglevel error -i "${webm}" -filter_complex "[0:v]scale=1280:-2,split[a][b];[b]reverse[r];[a][r]concat=n=2:v=1[out]" -map "[out]" -c:v libx264 -crf 20 -preset medium -g 15 -pix_fmt yuv420p -an "${dest}" && rm "${webm}"`,
   )
-  console.log('  ✓ staging.mp4 transcoded')
+  console.log('  ✓ staging.mp4 transcoded (seamless loop)')
 }
 
 /** Pre-render the thermal / OGI looks once — playback stays native & smooth. */

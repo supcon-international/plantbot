@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { Crosshair, ArrowUpRight, Map as MapIcon, Box } from 'lucide-react'
 import { useApp } from '../lib/store'
 import { useT, useAgo } from '../lib/i18n'
-import { SceneMap } from '../three/SceneMap'
+const SceneMap = lazy(() => import('../three/SceneMap').then((m) => ({ default: m.SceneMap })))
 import { OpsMap, type MapSel } from '../components/OpsMap'
 import { BatteryBar, SevTag, Panel, ModeChip } from '../components/ui'
 
@@ -155,7 +155,8 @@ export function MapPage() {
     <div className="relative h-full min-h-[420px]">
       <div className="absolute inset-0">
         {mode === 'splat' ? (
-          <SceneMap
+          <Suspense fallback={<div className="skeleton h-full w-full opacity-20" />}>
+            <SceneMap
             selection={sel}
             onSelect={(s) => {
               setSel(s)
@@ -163,7 +164,8 @@ export function MapPage() {
             }}
             follow={follow}
             quality="high"
-          />
+            />
+          </Suspense>
         ) : (
           <OpsMap selection={sel} onSelect={setSel} heightClass="h-full" className="border-0 bg-transparent" />
         )}

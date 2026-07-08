@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react'
+import { Suspense, lazy, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { ArrowLeft, ArrowUpRight } from 'lucide-react'
 import { useApp, useHistory } from '../lib/store'
 import { useT } from '../lib/i18n'
 import { Panel, PanelHead, Stat, Spark, BatteryBar, ModeChip } from '../components/ui'
-import { RobotViewer } from '../three/RobotViewer'
+const RobotViewer = lazy(() => import('../three/RobotViewer').then((m) => ({ default: m.RobotViewer })))
 import { KIND_ICON } from './Robots'
 
 function JointRow({ name, c }: { name: string; c: number }) {
@@ -92,7 +92,8 @@ export function RobotDetail() {
         {/* 3D viewer */}
         <Panel className="relative h-[44vh] min-h-[300px] overflow-hidden lg:col-span-7 lg:h-[calc(100vh-190px)] lg:max-h-[720px]">
           <div className="absolute inset-0">
-            <RobotViewer
+            <Suspense fallback={<div className="skeleton h-full w-full opacity-20" />}>
+              <RobotViewer
               urdf={robot.urdf}
               family={robot.family}
               gait={tel?.gait}
@@ -100,7 +101,8 @@ export function RobotDetail() {
               payloads={robot.payloads}
               highlight={payloadSel}
               onPick={setPayloadSel}
-            />
+              />
+            </Suspense>
           </div>
           <div className="pointer-events-none absolute left-3 top-3">
             <span className="microlabel">{t('rd.digitalTwin')}</span>
