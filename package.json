@@ -8,6 +8,7 @@
     "build": "pnpm --filter web build"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.1.2",
+    "playwright": "^1.61.1"
   }
 }
