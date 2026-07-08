@@ -428,7 +428,7 @@ export function seedMissions() {
       steps: [
         { waypointId: 'WP-05', actions: [A('acoustic_scan', 10), A('capture_photo', 3)] },
         { waypointId: 'WP-06', actions: [A('capture_photo', 3)] },
-        { waypointId: 'WP-12', actions: [A('gas_sample', 6)] },
+        { waypointId: 'WP-13', actions: [A('capture_photo', 4)] },
         { waypointId: 'WP-07', actions: [A('acoustic_scan', 8)] },
       ],
     },

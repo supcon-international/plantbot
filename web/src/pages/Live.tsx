@@ -3,12 +3,13 @@ import { useSearchParams } from 'react-router'
 import { Grid2X2, Focus, Radio } from 'lucide-react'
 import { useApp } from '../lib/store'
 import { useT } from '../lib/i18n'
-import { StreamPlayer, SnapshotImg } from '../components/StreamPlayer'
+import { FeedPlayer, SnapshotImg } from '../components/StreamPlayer'
 import { Panel } from '../components/ui'
 import { utcClock } from '../lib/format'
 
 interface Feed {
   stream: string
+  file?: string
   name: string
   origin: string
   live: boolean
@@ -25,20 +26,22 @@ function useFeeds(): Feed[] {
         if (p.stream)
           fs.push({
             stream: p.stream,
+            file: p.file,
             name: `${r.callsign} · ${p.name}`,
-            origin: `${r.model} — onboard RTSP`,
+            origin: `${r.model} — onboard camera`,
             live: false,
             robotId: r.id,
           })
     for (const c of cameras)
-      fs.push({ stream: c.stream, name: c.name, origin: c.source, live: c.live })
+      fs.push({ stream: c.stream, file: c.file, name: c.name, origin: c.source, live: c.live })
     return fs
   }, [robots, cameras])
 }
 
-function StreamMeta({ stream }: { stream: string }) {
+function StreamMeta({ stream, file }: { stream: string; file?: string }) {
   const [meta, setMeta] = useState<string>('')
   useEffect(() => {
+    if (file) return // local loop — static label, no probe
     let dead = false
     const load = async () => {
       try {
@@ -58,8 +61,9 @@ function StreamMeta({ stream }: { stream: string }) {
     return () => {
       dead = true
     }
-  }, [stream])
-  return meta ? <span className="mono text-[10px] text-ink-3">{meta} · RTSP</span> : null
+  }, [stream, file])
+  if (file) return <span className="mono text-[10px] text-white/45">H264 · LOOP</span>
+  return meta ? <span className="mono text-[10px] text-white/45">{meta} · RTSP</span> : null
 }
 
 function PlayerOverlay({ feed }: { feed: Feed }) {
@@ -81,7 +85,7 @@ function PlayerOverlay({ feed }: { feed: Feed }) {
       </div>
       <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/55 to-transparent px-3 pb-2.5 pt-6">
         <span className="mono text-[10px] text-white/55">{feed.origin}</span>
-        <StreamMeta stream={feed.stream} />
+        <StreamMeta stream={feed.stream} file={feed.file} />
       </div>
       <span className="pointer-events-none absolute left-2 top-2 h-3 w-3 border-l border-t border-white/25" />
       <span className="pointer-events-none absolute right-2 top-2 h-3 w-3 border-r border-t border-white/25" />
@@ -141,14 +145,14 @@ export function Live() {
           <Panel className="rise relative aspect-video max-h-[62vh] w-full overflow-hidden">
             {feed && (
               <>
-                <StreamPlayer src={feed.stream} />
+                <FeedPlayer stream={feed.stream} file={feed.file} />
                 <PlayerOverlay feed={feed} />
               </>
             )}
           </Panel>
 
           <div className="-mx-3 overflow-x-auto px-3 md:mx-0 md:px-0">
-            <div className="flex gap-2 md:grid md:grid-cols-6">
+            <div className="flex gap-2 md:grid md:grid-cols-7">
               {feeds.map((f) => {
                 const sel = f.stream === feed?.stream
                 return (
@@ -189,7 +193,7 @@ export function Live() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {feeds.map((f, i) => (
             <Panel key={f.stream} className={`rise rise-${(i % 5) + 1} relative aspect-video overflow-hidden`}>
-              <StreamPlayer src={f.stream} />
+              <FeedPlayer stream={f.stream} file={f.file} />
               <PlayerOverlay feed={f} />
             </Panel>
           ))}

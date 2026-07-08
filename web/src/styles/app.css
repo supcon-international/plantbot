@@ -25,6 +25,11 @@
   --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', monospace;
 }
 
+:root {
+  /* native controls (selects, scrollbars, autofill) follow the dark theme */
+  color-scheme: dark;
+}
+
 html,
 body,
 #root {
@@ -177,6 +182,34 @@ video-stream video {
 
 button {
   cursor: pointer;
+}
+
+/* keyboard affordance without mouse noise */
+:focus-visible {
+  outline: 1px solid var(--color-ink-3);
+  outline-offset: 2px;
+}
+input:focus-visible,
+select:focus-visible {
+  outline: none; /* these carry their own focus border */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise,
+  .rise-1,
+  .rise-2,
+  .rise-3,
+  .rise-4,
+  .rise-5,
+  .flash-new,
+  .path-march,
+  .live-dot,
+  .skeleton {
+    animation: none !important;
+  }
+  * {
+    transition-duration: 0.01ms !important;
+  }
 }
 
 @media (max-width: 767px) {

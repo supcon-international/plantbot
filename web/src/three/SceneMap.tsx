@@ -12,10 +12,12 @@ import type { MapSel } from '../components/OpsMap'
 
 // Calibration of the public "train" 3DGS capture into our site frame.
 // COLMAP y-down → y-up; 0.562 rad yaw from PCA of the hull point cloud.
+// tandt "truck" capture: COLMAP y-down, yaw 0.705 rad from hull PCA,
+// ground plane at y≈0.5 — open-yard footprint fills the site frame.
 export const SPLAT_CALIB = {
-  position: [-0.19, 1.19, 0.27] as [number, number, number],
-  rotation: [Math.PI, 0.562, 0] as [number, number, number],
-  scale: 1.7,
+  position: [2.5, 0.6, 1.5] as [number, number, number],
+  rotation: [Math.PI, 0.705, 0] as [number, number, number],
+  scale: 1.2,
 }
 
 function SplatStage() {
@@ -26,7 +28,7 @@ function SplatStage() {
       sharedMemoryForWorkers: false, // no COOP/COEP needed
       freeIntermediateSplatData: true,
     })
-    v.addSplatScene('/assets/scenes/train_yard.splat', {
+    v.addSplatScene('/assets/scenes/truck_yard.splat', {
       splatAlphaRemovalThreshold: 5,
       showLoadingUI: false,
       progressiveLoad: true,
@@ -206,7 +208,7 @@ export function SceneMap({
   return (
     <Canvas
       dpr={quality === 'high' ? [1, 1.75] : 1}
-      camera={{ position: [10, 7.5, 13.5], fov: 42, near: 0.1, far: 300 }}
+      camera={{ position: [13, 10.5, 16.5], fov: 42, near: 0.1, far: 300 }}
       gl={{ antialias: false, alpha: true, powerPreference: 'high-performance' }}
       style={{ touchAction: 'none' }}
       resize={{ polyfill: RafResizeObserver as any, scroll: false, debounce: 0 }}

@@ -4,6 +4,7 @@ export interface PayloadSpec {
   kind: 'camera' | 'thermal' | 'ogi' | 'lidar' | 'gas' | 'acoustic' | 'imu'
   model: string
   stream?: string
+  file?: string
   detail: string
 }
 
@@ -33,6 +34,7 @@ export interface SiteCamera {
   name: string
   place: string
   stream: string
+  file?: string
   live: boolean
   source: string
 }

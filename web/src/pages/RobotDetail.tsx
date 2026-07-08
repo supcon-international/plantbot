@@ -81,7 +81,7 @@ export function RobotDetail() {
           </div>
         </div>
         <Link
-          to="/map"
+          to={`/map?sel=${robot.id}`}
           className="microlabel hidden items-center gap-1 border border-line px-2.5 py-1.5 transition-colors hover:border-line-2 hover:text-ink-2 md:flex"
         >
           {t('rd.locate')} <ArrowUpRight size={11} />

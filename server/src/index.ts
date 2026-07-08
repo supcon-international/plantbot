@@ -1,8 +1,10 @@
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
+import fastifyStatic from '@fastify/static'
 import { WebSocketServer, WebSocket } from 'ws'
 import { readFileSync, existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { ROBOTS, SITE, SITE_CAMERAS, WAYPOINTS, ZONES } from './fleet.js'
 import { startGo2rtc, stopGo2rtc } from './go2rtc.js'
 import {
@@ -22,6 +24,14 @@ import { missions, createMission, abortMission, teleopGoto, seedMissions, grabSn
 
 const app = Fastify({ logger: false })
 await app.register(cors, { origin: true })
+// loop-demo footage served directly (Range-capable) — smooth playback,
+// no transcode hop; the public RTSP feed still rides go2rtc/MSE
+await app.register(fastifyStatic, {
+  root: join(dirname(fileURLToPath(import.meta.url)), '..', 'media'),
+  prefix: '/media/',
+  cacheControl: true,
+  maxAge: '1h',
+})
 
 app.get('/api/health', async () => ({ ok: true, ts: Date.now() }))
 

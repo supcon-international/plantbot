@@ -7,6 +7,8 @@ export interface PayloadSpec {
   kind: 'camera' | 'thermal' | 'ogi' | 'lidar' | 'gas' | 'acoustic' | 'imu'
   model: string
   stream?: string
+  /** loop-demo file served from /media — plays natively, zero transcode */
+  file?: string
   detail: string
 }
 
@@ -36,6 +38,7 @@ export interface SiteCamera {
   name: string
   place: string
   stream: string
+  file?: string
   live: boolean
   source: string
 }
@@ -83,18 +86,19 @@ export const WAYPOINTS: Waypoint[] = [
   { id: 'WP-10', name: 'Workshop ramp', x: 10.5, z: -4.8, kind: 'nav' },
   { id: 'WP-11', name: 'North fence mid', x: 0, z: -7.2, kind: 'nav' },
   { id: 'WP-12', name: 'South fence mid', x: 0, z: 7.2, kind: 'nav' },
+  { id: 'WP-13', name: 'Truck bay', x: 7.2, z: -1.2, kind: 'inspect' },
 ]
 
 export const ZONES: Zone[] = [
   {
     id: 'ZN-01',
-    name: 'Rolling stock exclusion',
+    name: 'Vehicle exclusion',
     kind: 'restricted',
     polygon: [
-      [-12.5, -3.4],
-      [12.5, -3.4],
-      [12.5, 3.4],
-      [-12.5, 3.4],
+      [-5.9, -3.7],
+      [5.9, -3.7],
+      [5.9, 1.3],
+      [-5.9, 1.3],
     ],
   },
   {
@@ -158,6 +162,7 @@ export const ROBOTS: RobotSpec[] = [
         kind: 'camera',
         model: '4MP · 25× optical zoom',
         stream: 'lite3-front',
+        file: '/media/switchgear.mp4',
         detail: 'H.264 1080p25 · gimbal-stabilized · IR-cut',
       },
       {
@@ -166,6 +171,7 @@ export const ROBOTS: RobotSpec[] = [
         kind: 'thermal',
         model: '640×512 radiometric · <40mK NETD',
         stream: 'lite3-thermal',
+        file: '/media/thermal.mp4',
         detail: 'Radiometric video, ΔT alarm thresholds',
       },
       {
@@ -209,6 +215,7 @@ export const ROBOTS: RobotSpec[] = [
         kind: 'camera',
         model: '4K · 30× hybrid zoom',
         stream: 'x30-optical',
+        file: '/media/substation.mp4',
         detail: 'Person / PPE / behavior analytics on-board',
       },
       {
@@ -259,6 +266,7 @@ export const ROBOTS: RobotSpec[] = [
         kind: 'ogi',
         model: 'MWIR 3.2–3.4 µm cooled',
         stream: 'agx-ogi',
+        file: '/media/ogi.mp4',
         detail: 'Fugitive CH₄/VOC plume visualization',
       },
       {
@@ -300,6 +308,7 @@ export const SITE_CAMERAS: SiteCamera[] = [
     name: 'Dock Camera',
     place: 'Robot staging area, fixed mount',
     stream: 'workshop-cam',
+    file: '/media/staging.mp4',
     live: false,
     source: 'RTSP loop · local relay',
   },
@@ -308,6 +317,7 @@ export const SITE_CAMERAS: SiteCamera[] = [
     name: 'Mast — Plant Overview',
     place: '30 m mast, wide sector',
     stream: 'mast-cam',
+    file: '/media/plant_aerial.mp4',
     live: false,
     source: 'RTSP loop · local relay',
   },

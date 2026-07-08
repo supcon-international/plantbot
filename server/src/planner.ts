@@ -11,7 +11,10 @@ const H = 36
 
 // obstacle set mirrors scripts/gen_occupancy.py
 const RECTS: [number, number, number, number][] = [
-  [-12.6, -3.6, 12.6, 3.6], // train corridor (+margin)
+  [-5.6, -3.5, 5.6, 1.1], // parked truck (+margin)
+  [-10.1, -1.4, -8.3, 0.7], // pallet stack W
+  [7.6, 1.2, 9.9, 3.3], // pallet stack E
+  [-3.1, 2.6, -0.8, 4.7], // pallet stack S
   [-14.8, 4.4, -10.2, 8.5], // substation
   [8.0, -8.4, 13.8, -4.9], // workshop
   [-15.4, -8.5, -12.4, -5.8], // charge depot walls (dock approach handled below)

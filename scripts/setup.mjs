@@ -4,8 +4,8 @@
  *  - go2rtc binary (RTSP → MSE/WebRTC relay)          → server/bin/
  *  - Mixkit stock footage (free license, loops)        → server/media/
  *  - DeepRobotics Lite3/X30 URDF + STL meshes          → web/public/assets/robots/
- *  - INRIA 3DGS "train" splat (via huggingface),
- *    cropped to the yard corridor                      → web/public/assets/scenes/
+ *  - tandt "truck" 3DGS splat (via huggingface),
+ *    cropped to an open yard footprint                 → web/public/assets/scenes/
  * Everything is skipped if already present. No dependencies.
  */
 import { mkdirSync, existsSync, writeFileSync, chmodSync, statSync } from 'node:fs'
@@ -77,11 +77,11 @@ for (const m of ['base_link', 'top_chassis', 'wheel', 'top_plate', 'user_rail'])
 
 // ---------- gaussian splat scene ----------
 function cropSplat(buf) {
-  // keep the train + track corridor, drop sky/background/floaters
-  const theta = 0.562
+  // open-yard footprint around the truck; drop sky, far shell and floaters
+  const theta = 0.705
   const c = Math.cos(theta)
   const s = Math.sin(theta)
-  const [cx, cz] = [0.11, 0.15]
+  const [cx, cz] = [0.9, 0.62]
   const n = Math.floor(buf.length / 32)
   const out = []
   for (let i = 0; i < n; i++) {
@@ -93,13 +93,13 @@ function cropSplat(buf) {
     const dz = z - cz
     const u = c * dx + s * dz
     const v = -s * dx + c * dz
-    if (!(Math.abs(u) < 8.6 && v > -2.2 && v < 2.0 && y < 0.92)) continue
-    const ceiling = u > -6.5 && u < 7.5 ? -1.72 : -1.15
-    if (y < ceiling) continue
+    if (!(Math.abs(u) < 13.5 && Math.abs(v) < 7.2 && y > -4.3 && y < 1.12)) continue
     const smax = Math.max(buf.readFloatLE(off + 12), buf.readFloatLE(off + 16), buf.readFloatLE(off + 20))
+    // blown-out white blobs (overexposed foliage)
+    if (buf[off + 24] > 225 && buf[off + 25] > 225 && buf[off + 26] > 225 && smax > 0.09) continue
     let limit
-    if (y < -1.15) limit = Math.abs(v) < 1.3 ? 0.045 : 0.03
-    else limit = Math.abs(v) < 1.85 && Math.abs(u) < 7.5 ? 0.3 : 0.06
+    if (y < -2.2) limit = 0.2
+    else limit = Math.abs(v) < 5.5 && Math.abs(u) < 11 ? 0.42 : 0.09
     if (smax > limit) continue
     out.push(buf.subarray(off, off + 32))
   }
@@ -107,11 +107,11 @@ function cropSplat(buf) {
 }
 
 async function splatScene() {
-  const dest = join(ROOT, 'web', 'public', 'assets', 'scenes', 'train_yard.splat')
-  if (existsSync(dest) && statSync(dest).size > 1e6) return console.log('  ✓ train_yard.splat (cached)')
+  const dest = join(ROOT, 'web', 'public', 'assets', 'scenes', 'truck_yard.splat')
+  if (existsSync(dest) && statSync(dest).size > 1e6) return console.log('  ✓ truck_yard.splat (cached)')
   mkdirSync(dirname(dest), { recursive: true })
-  process.stdout.write('  ↓ INRIA 3DGS "train" scene (33 MB) … ')
-  const raw = await fetchBuf('https://huggingface.co/cakewalk/splat-data/resolve/main/train.splat')
+  process.stdout.write('  ↓ tandt 3DGS "truck" scene (81 MB) … ')
+  const raw = await fetchBuf('https://huggingface.co/cakewalk/splat-data/resolve/main/truck.splat')
   console.log('done')
   process.stdout.write('  ✂ cropping to yard corridor … ')
   writeFileSync(dest, cropSplat(raw))
@@ -150,9 +150,23 @@ async function stagingFeed() {
   console.log('  ✓ staging.mp4 transcoded')
 }
 
+/** Pre-render the thermal / OGI looks once — playback stays native & smooth. */
+async function filteredFeed(name, srcName, vf) {
+  const dest = join(ROOT, 'server', 'media', name)
+  if (existsSync(dest) && statSync(dest).size > 1e5) return console.log(`  ✓ ${name} (cached)`)
+  const src = join(ROOT, 'server', 'media', srcName)
+  process.stdout.write(`  ⚙ rendering ${name} … `)
+  execSync(
+    `"${FFMPEG}" -y -loglevel error -i "${src}" -vf "${vf}" -r 25 -c:v libx264 -crf 20 -preset medium -g 15 -pix_fmt yuv420p -an "${dest}"`,
+  )
+  console.log('done')
+}
+
 console.log('[2/4] camera footage (Mixkit free license + Commons)')
 for (const [name, url] of Object.entries(FOOTAGE)) await footage(name, url)
 await stagingFeed()
+await filteredFeed('thermal.mp4', 'smokestack.mp4', 'format=gray,format=gbrp,pseudocolor=preset=inferno,scale=960:-2')
+await filteredFeed('ogi.mp4', 'pumpjack.mp4', 'format=gray,eq=contrast=1.55:brightness=-0.06,unsharp=5:5:0.8,noise=alls=5:allf=t,scale=960:-2')
 
 console.log('[3/4] DeepRobotics URDF models (DeepRoboticsLab/deep_robotics_model)')
 for (const [rel, url] of Object.entries(ROBOT_FILES))

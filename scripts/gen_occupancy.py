@@ -70,16 +70,22 @@ line(X0 + 0.5, Z1 - 0.5, X1 - 0.5, Z1 - 0.5, drop=0.18)
 line(X0 + 0.5, Z0 + 0.5, X0 + 0.5, Z1 - 0.5, drop=0.18)
 line(X1 - 0.5, Z0 + 0.5, X1 - 0.5, Z1 - 0.5, drop=0.18)
 
-# --- train + track corridor: hull outline, interior unseen ---
-fill_rect(-12.4, -3.3, 12.4, 3.3, UNKNOWN)
-line(-12.2, -3.2, 12.2, -3.2, thick=2, drop=0.04)
-line(-12.2, 3.2, 12.2, 3.2, thick=2, drop=0.04)
-line(-12.2, -3.2, -12.4, 3.2, thick=2, drop=0.1)
-line(12.2, -3.2, 12.4, 3.2, thick=2, drop=0.1)
-# bogie / coupler detail blips along the hull
-for x in (-9.5, -6.2, -2.8, 0.4, 3.8, 7.1, 10.2):
-    line(x, -3.2, x + 0.5, -3.55, thick=1, drop=0.3)
-    line(x, 3.2, x + 0.5, 3.55, thick=1, drop=0.3)
+# --- parked flatbed truck: hull outline, interior unseen (open yard) ---
+fill_rect(-5.1, -3.1, 5.1, 0.7, UNKNOWN)
+line(-5.0, -3.0, 5.0, -3.0, thick=2, drop=0.05)
+line(-5.0, 0.6, 5.0, 0.6, thick=2, drop=0.05)
+line(-5.0, -3.0, -5.0, 0.6, thick=2, drop=0.08)
+line(5.0, -3.0, 5.0, 0.6, thick=2, drop=0.08)
+# cab step + axle blips
+for x in (-3.6, -0.4, 2.6):
+    line(x, 0.6, x + 0.45, 0.95, thick=1, drop=0.3)
+# scattered pallet stacks in the open yard
+for bx, bz in ((-9.5, -0.8), (8.2, 1.8), (-2.5, 3.2)):
+    line(bx, bz, bx + 1.1, bz, thick=1, drop=0.15)
+    line(bx + 1.1, bz, bx + 1.1, bz + 0.9, thick=1, drop=0.15)
+    line(bx + 1.1, bz + 0.9, bx, bz + 0.9, thick=1, drop=0.15)
+    line(bx, bz + 0.9, bx, bz, thick=1, drop=0.15)
+    fill_rect(bx, bz, bx + 1.1, bz + 0.9, UNKNOWN)
 
 # --- buildings: outline + unknown interior ---
 def building(x0, z0, x1, z1):

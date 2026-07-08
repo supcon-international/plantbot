@@ -9,7 +9,7 @@
 | 模块 | 说明 |
 |---|---|
 | **OPS** 总览 | 大字 KPI、**实时 2D 作业地图**（占据主区）、fleet strip、检测流（带快照）、任务进度与最近巡检结果、视频快捷窗 |
-| **LIVE** 视频墙 | 7 路 RTSP 实时播放（Focus / Wall 布局），低延迟 MSE，含一路**公网实况 RTSP**（Štrbské Pleso 水库相机，实测连通）与 **OGI 气体成像通道**（MWIR 黑白高对比风格化） |
+| **LIVE** 视频墙 | 7 路视频（Focus / Wall 布局）：**公网实况 RTSP**（Štrbské Pleso 水库相机）走 go2rtc→MSE，6 路巡检画面为本地零掉帧环路（原生 video，含预渲染的**热成像 inferno** 与 **OGI/MWIR** 通道） |
 | **TASKS** 任务 | Mission = 航点 + 动作序列（拍照/热扫/OGI/气体采样/声学/读表）。创建向导在地图上点选航点、每站配动作；**调度器按优先级/电量/距离自动派单**；路径由机器人端 Nav 栈计算（服务端 A* 代演），操作员只管目标点。步骤时间线 + 巡检结果记录（真实快照） |
 | **FLEET** 机器人 | 四足（云深处 Lite3 / X30）+ 轮式 UGV（Clearpath Husky A200）分组管理；**传感器覆盖矩阵**（optical/thermal/OGI/gas/acoustic/LiDAR × 机型）；URDF 数字孪生（四足 trot 步态 / 轮式差速轮转动画）、payload 3D 标注联动 |
 | **MAP** 地图 | 双模式：**OPS MAP**（SLAM OccupancyGrid 栅格底图 → 主题化 canvas 渲染 + waypoint/zone/实时位姿/规划路径矢量层，点击航点即可 teleop 派遣）/ **3D SCAN**（高斯 splat 场景 + 实时 marker） |
@@ -54,7 +54,7 @@ go2rtc   RTSP 汇聚层：公网实况 + 6 路 ffmpeg 环路
 |---|---|---|
 | Lite3 / X30 URDF+STL | [DeepRoboticsLab/deep_robotics_model](https://github.com/DeepRoboticsLab/deep_robotics_model)（云深处官方） | 官方公开模型 |
 | Husky A200 meshes | [husky/husky](https://github.com/husky/husky)（Clearpath 官方 ROS 包） | BSD |
-| 3DGS 场景 "train" | [huggingface.co/cakewalk/splat-data](https://huggingface.co/cakewalk/splat-data)（INRIA 3DGS 论文数据集） | 研究公开数据 |
+| 3DGS 场景 "truck" | [huggingface.co/cakewalk/splat-data](https://huggingface.co/cakewalk/splat-data)（tandt 数据集，开阔场地） | 研究公开数据 |
 | 公网 RTSP 实况 | stream.strba.sk（Štrbské Pleso 公共气象相机） | 公开流 |
 | 巡检视频素材 | [Mixkit](https://mixkit.co/license/#videoFree)（配电室推进/变电站巡视/厂区航拍/烟囱/抽油机） | Mixkit Free License |
 | Spot 机器人整备区实拍 | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Spot_construction_robot.webm) | CC |

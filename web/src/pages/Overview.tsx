@@ -216,7 +216,15 @@ export function Overview() {
   const [sel, setSel] = useState<MapSel>(null)
   const missions = useApp((s) => s.missions)
   const t = useT()
+  const nav = useNavigate()
   const active = missions.filter((m) => m.status === 'active').length
+
+  // dashboard map is a launchpad: robots open their detail, events open the board
+  const onMapSelect = (s: MapSel) => {
+    if (s?.kind === 'robot') nav(`/robots/${s.id}`)
+    else if (s?.kind === 'event') nav('/events')
+    else setSel(s)
+  }
 
   return (
     <div className="mx-auto max-w-[1500px] space-y-3 p-3 md:p-4">
@@ -232,7 +240,7 @@ export function Overview() {
                 </span>
               }
             />
-            <OpsMap selection={sel} onSelect={setSel} heightClass="h-[340px] md:h-[460px]" className="border-0" wheelZoom={false} />
+            <OpsMap selection={sel} onSelect={onMapSelect} heightClass="h-[340px] md:h-[460px]" className="border-0" wheelZoom={false} />
           </Panel>
           <FleetStrip />
         </div>

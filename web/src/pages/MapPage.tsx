@@ -142,7 +142,10 @@ export function MapPage() {
   const robots = useApp((s) => s.robots)
   const site = useApp((s) => s.site)
   const t = useT()
-  const [sel, setSel] = useState<MapSel>(null)
+  const [sel, setSel] = useState<MapSel>(() => {
+    const id = new URLSearchParams(location.search).get('sel')
+    return id ? { kind: 'robot', id } : null
+  })
   const [follow, setFollow] = useState(false)
   const [mode, setMode] = useState<'ops' | 'splat'>(() =>
     new URLSearchParams(location.search).get('mode') === 'splat' ? 'splat' : 'ops',
