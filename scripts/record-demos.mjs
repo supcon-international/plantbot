@@ -74,7 +74,7 @@ const setLang = (page, l) =>
 // ---------- 01 · dashboard + trilingual ----------
 await record(
   '01-ops-dashboard',
-  titleCard('AEGIS · ROBOTICS OPERATIONS', 'Operations Dashboard', '实时作业总览 · 中英西三语', 'Panel de operaciones · trilingüe', true),
+  titleCard('PLANTBOT · ROBOTICS OPERATIONS', 'Operations Dashboard', '实时作业总览 · 中英西三语', 'Panel de operaciones · trilingüe', true),
   async (page) => {
     await page.goto(`${BASE}/`)
     await page.waitForSelector('canvas, svg', { timeout: 15000 })
@@ -141,21 +141,23 @@ await record(
       await rows.nth(1).click()
       await sleep(page, 3200)
     }
-    await page.locator('header ~ * button, main button').filter({ hasText: /NEW MISSION/i }).first().click()
-    await page.waitForSelector('div.fixed.z-50')
-    const modal = page.locator('div.fixed.z-50')
-    await sleep(page, 1200)
-    await modal.locator('input').first().fill('Demo — east gauge loop')
+    // open the full-page planner
+    await page.locator('button').filter({ hasText: /NEW MISSION/i }).first().click()
+    await page.waitForSelector('.touch-none svg')
+    await sleep(page, 1500)
+    await page.locator('input[placeholder]').first().fill('Demo — east gauge loop')
     await sleep(page, 700)
     for (const wp of ['W02', 'W03', 'W10']) {
-      await modal.locator(`svg text:text-is("${wp}")`).first().click({ force: true })
-      await sleep(page, 900)
+      await page.locator(`.touch-none svg text:text-is("${wp}")`).first().click({ force: true })
+      await sleep(page, 1000)
     }
-    await modal.locator('button').filter({ hasText: /Thermal|热成像|térmico/i }).nth(1).click()
-    await sleep(page, 800)
-    await modal.locator('button:text-is("P1")').click()
+    // add a thermal scan on stop 2
+    const stop2 = page.locator('.border.border-line.bg-surface-2').nth(1)
+    await stop2.locator('button').filter({ hasText: /Thermal|热成像|térmico/i }).click()
     await sleep(page, 900)
-    await modal.locator('button').filter({ hasText: /QUEUE|入队|ENCOLAR/i }).click()
+    await page.locator('button:text-is("P1")').click()
+    await sleep(page, 900)
+    await page.locator('button').filter({ hasText: /QUEUE|入队|ENCOLAR/i }).first().click()
     await sleep(page, 2800)
     await sleep(page, 6000)
   },

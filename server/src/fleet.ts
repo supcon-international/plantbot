@@ -56,9 +56,9 @@ export interface Zone {
 }
 
 export const SITE = {
-  id: 'yard-07',
-  name: 'Freight Yard 07 — Rail & Transfer Terminal',
-  operator: 'AEGIS Robotics Operations',
+  id: 'plant-07',
+  name: 'Plant 07',
+  operator: 'Plantbot Operations',
   bounds: { x: [-16, 16], z: [-9, 9] },
   map: {
     image: '/assets/maps/yard-07.png',
@@ -297,8 +297,8 @@ export const SITE_CAMERAS: SiteCamera[] = [
   },
   {
     id: 'workshop-cam',
-    name: 'Workshop Overhead',
-    place: 'Assembly bay B2, fixed mount',
+    name: 'Dock Camera',
+    place: 'Robot staging area, fixed mount',
     stream: 'workshop-cam',
     live: false,
     source: 'RTSP loop · local relay',
@@ -332,9 +332,9 @@ export function streamTable(mediaDir: string, ffmpeg: string) {
     'perimeter-cam': 'rtsp://stream.strba.sk:1935/strba/VYHLAD_JAZERO.stream',
     'lite3-front': loop('switchgear.mp4'),
     'lite3-thermal': thermal('smokestack.mp4'),
-    'x30-optical': loop('worker.mp4'),
+    'x30-optical': loop('substation.mp4'),
     'agx-ogi': ogi('pumpjack.mp4'),
-    'workshop-cam': loop('workshop.mp4'),
+    'workshop-cam': loop('staging.mp4'),
     'mast-cam': loop('plant_aerial.mp4'),
   } as Record<string, string>
 }

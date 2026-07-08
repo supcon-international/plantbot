@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
-import { Plus, X, ChevronUp, ChevronDown, OctagonX, Camera, Flame, Wind, AudioWaveform, Gauge, Timer, ScanEye } from 'lucide-react'
+import { ArrowLeft, Plus, X, ChevronUp, ChevronDown, OctagonX, Camera, Flame, Wind, AudioWaveform, Gauge, Timer, ScanEye } from 'lucide-react'
 import { useApp, api } from '../lib/store'
 import { useT, useAgo } from '../lib/i18n'
-import { Panel, PanelHead, MissionStatusTag, EmptyNote, Modal } from '../components/ui'
+import { Panel, PanelHead, MissionStatusTag, EmptyNote } from '../components/ui'
 import { OpsMap } from '../components/OpsMap'
 import { timeShort } from '../lib/format'
 import type { ActionType, Mission, MissionStep, Waypoint } from '../lib/types'
@@ -32,9 +32,9 @@ function wpName(id: string, waypoints: Waypoint[]) {
   return waypoints.find((w) => w.id === id)?.name ?? id
 }
 
-// ---------- create wizard ----------
+// ---------- full-page planner ----------
 
-function CreateMission({ onClose }: { onClose: () => void }) {
+function MissionPlanner({ onClose }: { onClose: () => void }) {
   const robots = useApp((s) => s.robots)
   const waypoints = useApp((s) => s.waypoints)
   const t = useT()
@@ -45,8 +45,12 @@ function CreateMission({ onClose }: { onClose: () => void }) {
   const [steps, setSteps] = useState<MissionStep[]>([])
   const [busy, setBusy] = useState(false)
 
-  const addWp = (wp: Waypoint) =>
-    setSteps((s) => [...s, { waypointId: wp.id, actions: [{ type: 'capture_photo', durationS: 3 }] }])
+  const toggleWp = (wp: Waypoint) =>
+    setSteps((s) => {
+      const idx = s.findIndex((st) => st.waypointId === wp.id)
+      if (idx >= 0) return s.filter((_, i) => i !== idx)
+      return [...s, { waypointId: wp.id, actions: [{ type: 'capture_photo', durationS: 3 }] }]
+    })
 
   const move = (i: number, dir: -1 | 1) =>
     setSteps((s) => {
@@ -59,14 +63,12 @@ function CreateMission({ onClose }: { onClose: () => void }) {
 
   const toggleAction = (i: number, type: ActionType) =>
     setSteps((s) =>
-      s.map((st, k) => {
-        if (k !== i) return st
+      s.map((st, idx) => {
+        if (idx !== i) return st
         const has = st.actions.some((a) => a.type === type)
         return {
           ...st,
-          actions: has
-            ? st.actions.filter((a) => a.type !== type)
-            : [...st.actions, { type, durationS: ACTION_DEFAULT_S[type] }],
+          actions: has ? st.actions.filter((a) => a.type !== type) : [...st.actions, { type, durationS: ACTION_DEFAULT_S[type] }],
         }
       }),
     )
@@ -79,99 +81,129 @@ function CreateMission({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Modal onClose={onClose} wide>
-      <div className="flex items-center justify-between border-b border-line px-4 py-3">
-        <span className="microlabel">{t('mi.wizTitle')}</span>
-        <button onClick={onClose} className="text-ink-3 hover:text-ink" aria-label="close">
-          <X size={16} />
+    <div className="flex h-full flex-col">
+      {/* header */}
+      <div className="flex shrink-0 items-center gap-3 border-b border-line px-3 py-2.5 md:px-4">
+        <button onClick={onClose} className="flex items-center gap-1.5 text-ink-3 transition-colors hover:text-ink">
+          <ArrowLeft size={15} />
+          <span className="mono text-[10.5px] tracking-[0.08em]">{t('mi.back')}</span>
+        </button>
+        <span className="h-4 w-px bg-line" />
+        <div>
+          <span className="text-[13.5px] font-medium text-ink">{t('mi.wizTitle')}</span>
+          <span className="microlabel ml-3 hidden lg:inline">{t('mi.plannerHint')}</span>
+        </div>
+        <button
+          disabled={!name.trim() || !steps.length || busy}
+          onClick={submit}
+          className="mono ml-auto border border-ink/30 bg-ink/10 px-3.5 py-1.5 text-[10.5px] tracking-[0.12em] text-ink transition-colors hover:bg-ink/15 disabled:opacity-30"
+        >
+          {busy ? t('mi.wizSubmitting') : t('mi.wizQueue')}
         </button>
       </div>
 
-      <div className="grid gap-4 p-4 md:grid-cols-2">
-        <div className="space-y-3.5">
-          <div>
-            <div className="microlabel mb-1.5">{t('mi.wizName')}</div>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={t('mi.wizNamePh')}
-              className="mono w-full border border-line-2 bg-surface-2 px-2.5 py-2 text-[12px] text-ink outline-none transition-colors focus:border-ink-3"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <div className="microlabel mb-1.5">{t('mi.priority')}</div>
-              <div className="flex overflow-hidden border border-line">
-                {([1, 2, 3] as const).map((p) => (
-                  <button
-                    key={p}
-                    onClick={() => setPriority(p)}
-                    className={`mono flex-1 px-2 py-1.5 text-[11px] transition-colors ${priority === p ? 'bg-surface-3 text-ink' : 'text-ink-3 hover:text-ink-2'}`}
-                  >
-                    P{p}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <div className="microlabel mb-1.5">{t('mi.wizAssign')}</div>
-              <select
-                value={assignee}
-                onChange={(e) => setAssignee(e.target.value)}
-                className="mono w-full border border-line-2 bg-surface-2 px-2 py-1.5 text-[11px] text-ink outline-none"
-              >
-                <option value="auto">{t('mi.wizAuto')}</option>
-                {robots.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.callsign}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <label className="flex cursor-pointer items-center gap-2.5">
-            <button
-              onClick={() => setRecurring(!recurring)}
-              className="relative h-4 w-8 border border-line-2 transition-colors"
-              style={{ background: recurring ? 'var(--color-surface-3)' : 'transparent' }}
-            >
-              <span
-                className="absolute top-0.5 h-2.5 w-2.5 transition-all"
-                style={{ left: recurring ? 18 : 3, background: recurring ? 'var(--color-ink)' : 'var(--color-ink-3)' }}
-              />
-            </button>
-            <span className="text-[12px] text-ink-2">{t('mi.wizRecurring')}</span>
-          </label>
-
-          <div>
-            <div className="microlabel mb-1.5">{t('mi.wizTap')}</div>
-            <OpsMap heightClass="h-[210px]" interactive={false} showEvents={false} labels={false} onWaypointClick={addWp} routePreview={steps.map((s) => s.waypointId)} className="border border-line" />
+      {/* body: map + config rail */}
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+        <div className="relative h-[42vh] shrink-0 md:h-auto md:flex-1">
+          <OpsMap
+            heightClass="h-full"
+            className="border-0 bg-transparent"
+            showEvents={false}
+            labels
+            onWaypointClick={toggleWp}
+            routePreview={steps.map((s) => s.waypointId)}
+          />
+          <div className="pointer-events-none absolute left-3 top-3 lg:hidden">
+            <span className="microlabel bg-bg/70 px-2 py-1 backdrop-blur">{t('mi.wizTap')}</span>
           </div>
         </div>
 
-        <div className="flex min-h-[300px] flex-col">
-          <div className="microlabel mb-1.5">
-            {t('mi.wizSequence')} · {steps.length} {t('mi.wizStops')}
+        <div className="flex min-h-0 flex-1 flex-col border-t border-line md:w-[400px] md:flex-none md:border-l md:border-t-0">
+          {/* mission meta */}
+          <div className="shrink-0 space-y-3 border-b border-line p-3.5">
+            <div>
+              <div className="microlabel mb-1.5">{t('mi.wizName')}</div>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={t('mi.wizNamePh')}
+                className="mono w-full border border-line-2 bg-surface-2 px-2.5 py-2 text-[12px] text-ink outline-none transition-colors focus:border-ink-3"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <div className="microlabel mb-1.5">{t('mi.priority')}</div>
+                <div className="flex overflow-hidden border border-line">
+                  {([1, 2, 3] as const).map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => setPriority(p)}
+                      className={`mono flex-1 px-2 py-1.5 text-[11px] transition-colors ${priority === p ? 'bg-surface-3 text-ink' : 'text-ink-3 hover:text-ink-2'}`}
+                    >
+                      P{p}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="microlabel mb-1.5">{t('mi.wizAssign')}</div>
+                <select
+                  value={assignee}
+                  onChange={(e) => setAssignee(e.target.value)}
+                  className="mono w-full border border-line-2 bg-surface-2 px-2 py-1.5 text-[11px] text-ink outline-none"
+                >
+                  <option value="auto">{t('mi.wizAuto')}</option>
+                  {robots.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.callsign}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <label className="flex cursor-pointer items-center gap-2.5">
+              <button
+                onClick={() => setRecurring(!recurring)}
+                className="relative h-4 w-8 border border-line-2 transition-colors"
+                style={{ background: recurring ? 'var(--color-surface-3)' : 'transparent' }}
+              >
+                <span
+                  className="absolute top-0.5 h-2.5 w-2.5 transition-all"
+                  style={{ left: recurring ? 18 : 3, background: recurring ? 'var(--color-ink)' : 'var(--color-ink-3)' }}
+                />
+              </button>
+              <span className="text-[12px] text-ink-2">{t('mi.wizRecurring')}</span>
+            </label>
           </div>
-          <div className="flex-1 space-y-2 overflow-y-auto pr-1">
+
+          {/* sequence */}
+          <div className="flex items-center justify-between px-3.5 pb-1 pt-3">
+            <span className="microlabel">
+              {t('mi.wizSequence')} · {steps.length} {t('mi.wizStops')}
+            </span>
+          </div>
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3.5 pb-4 pt-1">
             {steps.length === 0 && (
-              <div className="flex h-full items-center justify-center border border-dashed border-line-2">
-                <span className="text-[12px] text-ink-3">{t('mi.wizNoStops')}</span>
+              <div className="flex h-32 items-center justify-center border border-dashed border-line-2 px-6 text-center">
+                <span className="text-[12px] leading-relaxed text-ink-3">{t('mi.wizTap')}</span>
               </div>
             )}
             {steps.map((st, i) => (
-              <div key={i} className="border border-line bg-surface-2 p-2.5">
-                <div className="flex items-center gap-2">
-                  <span className="mono flex h-5 w-5 items-center justify-center bg-surface-3 text-[10px] text-ink">{i + 1}</span>
-                  <span className="mono text-[11px] text-ink">{st.waypointId}</span>
-                  <span className="truncate text-[11px] text-ink-3">{wpName(st.waypointId, waypoints)}</span>
-                  <span className="ml-auto flex shrink-0 items-center">
-                    <button onClick={() => move(i, -1)} className="p-0.5 text-ink-3 hover:text-ink"><ChevronUp size={13} /></button>
-                    <button onClick={() => move(i, 1)} className="p-0.5 text-ink-3 hover:text-ink"><ChevronDown size={13} /></button>
-                    <button onClick={() => setSteps((s) => s.filter((_, k) => k !== i))} className="p-0.5 text-ink-3 hover:text-crit"><X size={13} /></button>
+              <div key={`${st.waypointId}-${i}`} className="border border-line bg-surface-2 p-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="mono flex h-6 w-6 shrink-0 items-center justify-center bg-ink text-[11px] font-semibold text-bg">{i + 1}</span>
+                  <div className="min-w-0 flex-1">
+                    <span className="mono text-[11.5px] text-ink">{st.waypointId}</span>
+                    <span className="ml-2 truncate text-[11.5px] text-ink-3">{wpName(st.waypointId, waypoints)}</span>
+                  </div>
+                  <span className="flex shrink-0 items-center gap-0.5">
+                    <button onClick={() => move(i, -1)} disabled={i === 0} className="p-1 text-ink-3 hover:text-ink disabled:opacity-25"><ChevronUp size={14} /></button>
+                    <button onClick={() => move(i, 1)} disabled={i === steps.length - 1} className="p-1 text-ink-3 hover:text-ink disabled:opacity-25"><ChevronDown size={14} /></button>
+                    <button onClick={() => setSteps((s) => s.filter((_, idx) => idx !== i))} className="p-1 text-ink-3 hover:text-crit"><X size={14} /></button>
                   </span>
                 </div>
-                <div className="mt-2 flex flex-wrap gap-1">
+                <div className="microlabel mt-2.5 mb-1.5">{t('mi.actionsHint')}</div>
+                <div className="flex flex-wrap gap-1.5">
                   {ACTION_TYPES.map((type) => {
                     const on = st.actions.some((a) => a.type === type)
                     const Icon = ACTION_ICON[type]
@@ -179,11 +211,11 @@ function CreateMission({ onClose }: { onClose: () => void }) {
                       <button
                         key={type}
                         onClick={() => toggleAction(i, type)}
-                        className={`mono flex items-center gap-1 border px-1.5 py-0.5 text-[9px] tracking-[0.04em] transition-colors ${
-                          on ? 'border-ink/40 bg-ink/10 text-ink' : 'border-line text-ink-3 hover:text-ink-2'
+                        className={`mono flex items-center gap-1.5 border px-2 py-1.5 text-[10px] tracking-[0.04em] transition-colors ${
+                          on ? 'border-ink/40 bg-ink/10 text-ink' : 'border-line text-ink-3 hover:border-line-2 hover:text-ink-2'
                         }`}
                       >
-                        <Icon size={10} />
+                        <Icon size={11} />
                         {t(`act.${type}`)}
                       </button>
                     )
@@ -192,16 +224,20 @@ function CreateMission({ onClose }: { onClose: () => void }) {
               </div>
             ))}
           </div>
-          <button
-            disabled={!name.trim() || !steps.length || busy}
-            onClick={submit}
-            className="mono mt-3 w-full border border-ink/30 bg-ink/10 px-3 py-2.5 text-[11px] tracking-[0.12em] text-ink transition-colors hover:bg-ink/15 disabled:opacity-30"
-          >
-            {busy ? t('mi.wizSubmitting') : t('mi.wizQueue')}
-          </button>
+
+          {/* mobile submit */}
+          <div className="shrink-0 border-t border-line p-3 md:hidden">
+            <button
+              disabled={!name.trim() || !steps.length || busy}
+              onClick={submit}
+              className="mono w-full border border-ink/30 bg-ink/10 px-3 py-2.5 text-[11px] tracking-[0.12em] text-ink transition-colors hover:bg-ink/15 disabled:opacity-30"
+            >
+              {busy ? t('mi.wizSubmitting') : t('mi.wizQueue')}
+            </button>
+          </div>
         </div>
       </div>
-    </Modal>
+    </div>
   )
 }
 
@@ -231,7 +267,7 @@ function MissionDetail({ m }: { m: Mission }) {
           }
         />
         <div className="p-3.5">
-          <OpsMap heightClass="h-[200px] md:h-[240px]" interactive={false} showEvents={false} labels={false} routePreview={m.steps.map((s) => s.waypointId)} className="border border-line" />
+          <OpsMap heightClass="h-[220px] md:h-[260px]" interactive={false} showEvents={false} labels={false} routePreview={m.steps.map((s) => s.waypointId)} className="border border-line" />
           <div className="mt-3 grid grid-cols-3 gap-3 md:grid-cols-5">
             {[
               [t('c.status'), t(`ms.${m.status}`)],
@@ -239,10 +275,10 @@ function MissionDetail({ m }: { m: Mission }) {
               [t('mi.priority'), `P${m.priority}`],
               [t('mi.stops'), m.steps.length],
               [t('mi.findings'), flagged ? `${flagged} ${t('mi.flagged')}` : t('mi.clean')],
-            ].map(([k, v]) => (
-              <div key={k as string}>
-                <div className="microlabel mb-0.5">{k}</div>
-                <div className="mono text-[11.5px]" style={{ color: k === t('mi.findings') && flagged ? 'var(--color-warn)' : 'var(--color-ink-2)' }}>
+            ].map(([kk, v]) => (
+              <div key={kk as string}>
+                <div className="microlabel mb-0.5">{kk}</div>
+                <div className="mono text-[11.5px]" style={{ color: kk === t('mi.findings') && flagged ? 'var(--color-warn)' : 'var(--color-ink-2)' }}>
                   {v as string}
                 </div>
               </div>
@@ -261,27 +297,25 @@ function MissionDetail({ m }: { m: Mission }) {
             return (
               <div key={i} className="relative flex gap-3 pb-4 last:pb-0">
                 {i < m.steps.length - 1 && <span className="absolute left-[7px] top-5 h-full w-px bg-line" />}
-                <span
-                  className={`mt-1 h-[15px] w-[15px] shrink-0 rotate-45 border ${cur ? 'border-ink bg-ink/20' : past ? 'border-ink-3 bg-surface-3' : 'border-line-2'}`}
-                />
+                <span className={`mt-1 h-[15px] w-[15px] shrink-0 rotate-45 border ${cur ? 'border-ink bg-ink/20' : past ? 'border-ink-3 bg-surface-3' : 'border-line-2'}`} />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`mono text-[11.5px] ${cur ? 'text-ink' : 'text-ink-2'}`}>{st.waypointId}</span>
                     <span className="text-[11.5px] text-ink-3">{wpName(st.waypointId, waypoints)}</span>
                     {cur && <span className="live-dot" />}
                     <span className="ml-auto flex gap-1">
-                      {st.actions.map((a, k) => {
+                      {st.actions.map((a, kk) => {
                         const Icon = ACTION_ICON[a.type]
                         return (
-                          <span key={k} title={t(`act.${a.type}`)} className="flex h-5 w-5 items-center justify-center border border-line text-ink-3">
+                          <span key={kk} title={t(`act.${a.type}`)} className="flex h-5 w-5 items-center justify-center border border-line text-ink-3">
                             <Icon size={10} />
                           </span>
                         )
                       })}
                     </span>
                   </div>
-                  {results.map((r, k) => (
-                    <div key={k} className="mt-1.5 flex items-start gap-2">
+                  {results.map((r, kk) => (
+                    <div key={kk} className="mt-1.5 flex items-start gap-2">
                       <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: r.ok ? 'var(--color-ok)' : 'var(--color-warn)' }} />
                       <span className="mono text-[10px] text-ink-3">{timeShort(r.ts)}</span>
                       <span className="text-[11px] text-ink-2">{r.note}</span>
@@ -318,9 +352,7 @@ function Row({ m, active, onClick }: { m: Mission; active: boolean; onClick: () 
       </div>
       <div className="mt-1.5 flex items-center gap-2">
         <MissionStatusTag status={m.status} />
-        <span className="mono text-[10px] text-ink-3">
-          {robot?.callsign ?? (m.requestedRobot === 'auto' ? 'auto' : m.requestedRobot)}
-        </span>
+        <span className="mono text-[10px] text-ink-3">{robot?.callsign ?? (m.requestedRobot === 'auto' ? 'auto' : m.requestedRobot)}</span>
         {m.status === 'active' && (
           <div className="ml-auto flex w-24 items-center gap-1.5">
             <div className="h-[3px] flex-1 bg-surface-3">
@@ -330,9 +362,7 @@ function Row({ m, active, onClick }: { m: Mission; active: boolean; onClick: () 
           </div>
         )}
         {m.status !== 'active' && (
-          <span className="mono ml-auto text-[9.5px] text-ink-3">
-            {m.endedAt ? ago(m.endedAt, clock) : ago(m.createdAt, clock)}
-          </span>
+          <span className="mono ml-auto text-[9.5px] text-ink-3">{m.endedAt ? ago(m.endedAt, clock) : ago(m.createdAt, clock)}</span>
         )}
       </div>
     </button>
@@ -343,7 +373,7 @@ export function Missions() {
   const missions = useApp((s) => s.missions)
   const t = useT()
   const [selId, setSelId] = useState<string | null>(null)
-  const [create, setCreate] = useState(false)
+  const [planning, setPlanning] = useState(false)
 
   const groups = useMemo(() => {
     const by = (st: string[]) =>
@@ -357,6 +387,8 @@ export function Missions() {
 
   const sel = missions.find((m) => m.id === selId) ?? groups.active[0] ?? groups.queued[0] ?? groups.history[0]
 
+  if (planning) return <MissionPlanner onClose={() => setPlanning(false)} />
+
   return (
     <div className="mx-auto max-w-[1400px] space-y-3 p-3 md:p-4">
       <div className="flex items-center justify-between">
@@ -367,7 +399,7 @@ export function Missions() {
           </div>
         </div>
         <button
-          onClick={() => setCreate(true)}
+          onClick={() => setPlanning(true)}
           className="mono flex items-center gap-1.5 border border-ink/30 bg-ink/10 px-2.5 py-1.5 text-[10.5px] tracking-[0.1em] text-ink transition-colors hover:bg-ink/15"
         >
           <Plus size={13} /> {t('mi.newMission')}
@@ -403,8 +435,6 @@ export function Missions() {
           {sel ? <MissionDetail m={sel} /> : <Panel><EmptyNote>{t('mi.selectMission')}</EmptyNote></Panel>}
         </div>
       </div>
-
-      {create && <CreateMission onClose={() => setCreate(false)} />}
     </div>
   )
 }

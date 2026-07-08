@@ -112,7 +112,6 @@ function Toast() {
 
 export function Shell() {
   const connected = useApp((s) => s.connected)
-  const site = useApp((s) => s.site)
   const clock = useApp((s) => s.clock)
   const lang = useLang((s) => s.lang)
   const t = useT()
@@ -133,33 +132,20 @@ export function Shell() {
             <path d="M6 6h6v2H8v4H6V6zm20 0v6h-2V8h-4V6h6zM6 26v-6h2v4h4v2H6zm20 0h-6v-2h4v-4h2v6z" fill="var(--color-accent)" />
             <circle cx="16" cy="16" r="3.5" fill="var(--color-accent)" />
           </svg>
-          <span className="text-[13px] font-semibold tracking-[0.02em] text-ink">AEGIS</span>
+          <span className="text-[13px] font-semibold tracking-[0.02em] text-ink">Plantbot</span>
           <span className="microlabel hidden sm:block">{t('shell.brand')}</span>
-        </div>
-        <div className="mx-2 hidden h-4 w-px bg-line md:block" />
-        <div className="microlabel hidden truncate md:block" style={{ color: 'var(--color-ink-2)' }}>
-          {site?.name ?? '—'}
         </div>
         <div className="ml-auto flex items-center gap-3">
           <LangSwitch />
           <span className="mono hidden text-[11px] text-ink-2 sm:block">{utcClock(clock)}</span>
-          <span className="flex items-center gap-1.5">
-            <span
-              className={connected ? 'live-dot' : ''}
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: 99,
-                background: connected ? 'var(--color-ok)' : 'var(--color-crit)',
-              }}
-            />
-            <span className="microlabel" style={{ color: connected ? 'var(--color-ok)' : 'var(--color-crit)' }}>
-              {connected ? t('shell.link') : t('shell.down')}
+          {!connected && (
+            <span className="flex items-center gap-1.5">
+              <span style={{ width: 6, height: 6, borderRadius: 99, background: 'var(--color-crit)' }} />
+              <span className="microlabel" style={{ color: 'var(--color-crit)' }}>
+                {t('shell.down')}
+              </span>
             </span>
-          </span>
-          <span className="mono hidden border border-line-2 bg-surface-2 px-1.5 py-0.5 text-[10px] text-ink-2 md:block">
-            OP·ZHZ
-          </span>
+          )}
         </div>
       </header>
 
@@ -168,9 +154,6 @@ export function Shell() {
         {NAV.map((n) => (
           <NavItem key={n.to} to={n.to} label={t(n.key)} icon={n.icon} badge={n.to === '/events' ? critCount : 0} />
         ))}
-        <div className="mt-auto mb-3 flex justify-center">
-          <span className="microlabel rotate-180 [writing-mode:vertical-lr]">v0.1 · yard-07</span>
-        </div>
       </nav>
 
       {/* mobile bottom tab bar */}

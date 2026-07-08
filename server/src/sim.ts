@@ -124,12 +124,12 @@ function addRule(r: Omit<DetectionRule, 'id' | 'firedCount' | 'builtin'> & { bui
   return rule
 }
 
-addRule({ name: 'Person in restricted corridor', model: 'person', source: 'x30-optical', sourceName: 'X30-01 · Optical', zone: 'Switchgear corridor C-2', threshold: 0.7, severity: 'critical', enabled: true, robotId: 'x30-01' })
-addRule({ name: 'Smoking behavior', model: 'smoking', source: 'workshop-cam', sourceName: 'Workshop Overhead', zone: 'Assembly bay B2', threshold: 0.75, severity: 'critical', enabled: true })
+addRule({ name: 'Unbadged person in substation', model: 'person', source: 'x30-optical', sourceName: 'X30-01 · Optical', zone: 'Substation bay S-1', threshold: 0.7, severity: 'critical', enabled: true, robotId: 'x30-01' })
+addRule({ name: 'Smoking behavior', model: 'smoking', source: 'workshop-cam', sourceName: 'Dock Camera', zone: 'Robot staging area', threshold: 0.75, severity: 'critical', enabled: true })
 addRule({ name: 'Stack thermal anomaly', model: 'thermal', source: 'lite3-thermal', sourceName: 'Lite3-01 · Thermal', zone: 'Boiler stack, sector N', threshold: 0.65, severity: 'high', enabled: true, robotId: 'lite3-01' })
 addRule({ name: 'Fugitive emission (OGI)', model: 'ogi', source: 'agx-ogi', sourceName: 'HSK·W1 · OGI', zone: 'Tank farm — ATEX', threshold: 0.6, severity: 'high', enabled: true, robotId: 'agx-w1' })
 addRule({ name: 'Analog gauge OCR', model: 'gauge', source: 'lite3-front', sourceName: 'Lite3-01 · PTZ', zone: 'Valve manifold VM-4', threshold: 0.6, severity: 'info', enabled: true, robotId: 'lite3-01' })
-addRule({ name: 'PPE compliance', model: 'ppe', source: 'workshop-cam', sourceName: 'Workshop Overhead', zone: 'Assembly bay B2', threshold: 0.6, severity: 'info', enabled: true })
+addRule({ name: 'PPE compliance', model: 'ppe', source: 'workshop-cam', sourceName: 'Dock Camera', zone: 'Robot staging area', threshold: 0.6, severity: 'info', enabled: true })
 addRule({ name: 'Perimeter motion', model: 'motion', source: 'perimeter-cam', sourceName: 'Perimeter — Reservoir Gate', zone: 'North fence, waterline', threshold: 0.55, severity: 'low', enabled: true })
 addRule({ name: 'Partial discharge signature', model: 'acoustic', source: 'x30-optical', sourceName: 'X30-01 · Acoustic imager', zone: 'Transformer bay T-1', threshold: 0.7, severity: 'high', enabled: true, robotId: 'x30-01' })
 

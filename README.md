@@ -1,4 +1,4 @@
-# AEGIS · Robotics Operations
+# Plantbot · Robotics Operations
 
 工业巡检机器人管理平台。近黑科技灰 × 暖白的单色作战室美学（IBM Plex 字型体系），白色即强调色，语义色只出现在状态点上。桌面与移动端全适配。
 
@@ -56,7 +56,8 @@ go2rtc   RTSP 汇聚层：公网实况 + 6 路 ffmpeg 环路
 | Husky A200 meshes | [husky/husky](https://github.com/husky/husky)（Clearpath 官方 ROS 包） | BSD |
 | 3DGS 场景 "train" | [huggingface.co/cakewalk/splat-data](https://huggingface.co/cakewalk/splat-data)（INRIA 3DGS 论文数据集） | 研究公开数据 |
 | 公网 RTSP 实况 | stream.strba.sk（Štrbské Pleso 公共气象相机） | 公开流 |
-| 巡检视频素材 ×6 | [Mixkit](https://mixkit.co/license/#videoFree)（配电室/工人/车间/厂区/烟囱/抽油机） | Mixkit Free License |
+| 巡检视频素材 | [Mixkit](https://mixkit.co/license/#videoFree)（配电室推进/变电站巡视/厂区航拍/烟囱/抽油机） | Mixkit Free License |
+| Spot 机器人整备区实拍 | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Spot_construction_robot.webm) | CC |
 | OccupancyGrid 底图 | `scripts/gen_occupancy.py` 程序化生成（ROS map_server 规范 + SLAM 噪声风格） | — |
 | go2rtc | [AlexxIT/go2rtc](https://github.com/AlexxIT/go2rtc) | MIT |
 | 字体 IBM Plex | @fontsource | OFL |

@@ -95,7 +95,7 @@ const D: Record<string, [string, string, string]> = {
   'ops.detections24h.sub': ['all severities', '全部级别', 'todas las severidades'],
   'ops.meanUplink': ['Mean uplink', '平均上行', 'Enlace medio'],
   'ops.meanUplink.sub': ['dBm · fleet avg', 'dBm · 机队均值', 'dBm · media flota'],
-  'ops.liveOperations': ['Live operations · yard-07', '实时作业 · yard-07', 'Operaciones en vivo · yard-07'],
+  'ops.liveOperations': ['Live operations', '实时作业', 'Operaciones en vivo'],
   'ops.liveOperations.hint': [
     'missions running · tap a waypoint to dispatch',
     '个任务执行中 · 点击航点即可派遣',
@@ -141,6 +141,13 @@ const D: Record<string, [string, string, string]> = {
   'mi.wizAuto': ['AUTO · dispatcher', '自动 · 调度器', 'AUTO · despachador'],
   'mi.wizRecurring': ['Recurring — requeue on completion', '循环任务 — 完成后自动重排', 'Recurrente — reencolar al terminar'],
   'mi.wizTap': ['Tap waypoints on the map to build the sequence', '在地图上点击航点以构建序列', 'Toca waypoints en el mapa para crear la secuencia'],
+  'mi.back': ['Back', '返回', 'Volver'],
+  'mi.plannerHint': [
+    'Click a waypoint to add a stop · click again to remove · scroll to zoom',
+    '点击航点添加站点 · 再次点击移除 · 滚轮缩放地图',
+    'Clic en un waypoint para añadir · clic de nuevo para quitar · rueda para zoom',
+  ],
+  'mi.actionsHint': ['Actions at this stop', '本站执行动作', 'Acciones en esta parada'],
   'mi.wizSequence': ['Sequence', '序列', 'Secuencia'],
   'mi.wizStops': ['stops', '站', 'paradas'],
   'mi.wizNoStops': ['No stops yet', '尚未添加站点', 'Aún sin paradas'],
