@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 /**
  * One-shot asset bootstrap. Downloads every external resource the app needs:
- *  - Mixkit stock footage (free license, loops)        → server/media/
- *  - DeepRobotics Lite3/X30 URDF + STL meshes          → web/public/assets/robots/
- *  - tandt "truck" 3DGS splat (via huggingface),
- *    cropped to an open yard footprint                 → web/public/assets/scenes/
- * Everything is skipped if already present. No dependencies.
+ *  - Mixkit stock footage (free license) + Wikimedia Spot clip → server/media/
+ *  - URDF twins: DeepRobotics Lite3/X30, Unitree Go2,
+ *    ANYbotics ANYmal C, Clearpath Husky               → web/public/assets/robots/
+ *  - SKANOSFERA warehouse 3DGS scan (superspl.at), merged from SOG
+ *    chunks and leveled by scripts/level_splat.py      → web/public/assets/scenes/
+ * Everything is skipped if already present.
+ * Host requirements: node ≥ 20, ffmpeg on PATH, python3 with numpy.
  */
 import { mkdirSync, existsSync, readFileSync, writeFileSync, chmodSync, statSync } from 'node:fs'
 import { join, dirname } from 'node:path'
@@ -13,7 +15,6 @@ import { fileURLToPath } from 'node:url'
 import { execSync } from 'node:child_process'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
-const GO2RTC_VERSION = 'v1.9.14'
 
 async function fetchBuf(url) {
   const res = await fetch(url, { redirect: 'follow' })
@@ -28,9 +29,36 @@ async function download(url, dest, label) {
   }
   mkdirSync(dirname(dest), { recursive: true })
   process.stdout.write(`  ↓ ${label} … `)
-  writeFileSync(dest, await fetchBuf(url))
+  // GitHub raw / CDNs rate-limit bursts — retry with a pause before failing
+  for (let attempt = 1; ; attempt++) {
+    try {
+      writeFileSync(dest, await fetchBuf(url))
+      break
+    } catch (e) {
+      if (attempt >= 3) throw e
+      process.stdout.write(`retry ${attempt} … `)
+      await new Promise((r) => setTimeout(r, 2500 * attempt))
+    }
+  }
   console.log('done')
 }
+
+// ---------- host prerequisites ----------
+function preflight() {
+  try {
+    execSync('ffmpeg -version', { stdio: 'ignore' })
+  } catch {
+    console.error('✗ ffmpeg not found on PATH — install it (macOS: brew install ffmpeg) and rerun.')
+    process.exit(1)
+  }
+  try {
+    execSync('python3 -c "import numpy"', { stdio: 'ignore' })
+  } catch {
+    console.error('✗ python3 with numpy is required for the splat pipeline — `pip3 install numpy` and rerun.')
+    process.exit(1)
+  }
+}
+preflight()
 
 // ---------- footage (Mixkit free license) ----------
 const FOOTAGE = {

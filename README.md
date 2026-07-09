@@ -17,11 +17,16 @@
 
 ## 快速开始
 
+前置依赖:**Node ≥ 20**、**pnpm ≥ 9**、**ffmpeg**(素材转码与事件快照)、**python3 + numpy**(高斯场景调平烘焙)。
+
 ```bash
+git clone https://github.com/supcon-international/plantbot.git && cd plantbot
 pnpm install
-pnpm setup     # 下载巡检视频素材、URDF 模型（DEEP Robotics/Unitree/ANYbotics/Clearpath）、高斯 splat 场景
+pnpm setup     # 下载巡检视频素材、URDF 模型（DEEP Robotics/Unitree/ANYbotics/Clearpath）、高斯 splat 场景（全自动,约 200 MB）
 pnpm dev       # server :8787 + web :5173
 ```
+
+`pnpm setup` 幂等可重跑:资产已存在则跳过;网络抖动(CDN 限流)会自动重试。
 
 ## 架构
 
