@@ -5,6 +5,7 @@ dist/
 
 # fetched by `pnpm setup`
 server/media/*.mp4
+server/media/*.ply
 server/data/snapshots/
 server/go2rtc.yaml
 web/public/assets/robots/lite3/

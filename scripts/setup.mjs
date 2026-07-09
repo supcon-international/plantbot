@@ -75,46 +75,19 @@ for (const j of ['base', 'battery', 'bottom_shell', 'depth_camera', 'drive', 'fa
   ROBOT_FILES[`anymal/meshes/${j}.jpg`] = `${ANY}/meshes/${j}.jpg`
 
 // ---------- gaussian splat scene ----------
-function cropSplat(buf) {
-  // Mip-NeRF 360 "garden": keep the open plaza, thin the tree shell,
-  // drop sky/underground and blown-white floaters
-  const n = Math.floor(buf.length / 32)
-  const out = []
-  let nearI = 0
-  let farI = 0
-  for (let i = 0; i < n; i++) {
-    const off = i * 32
-    const x = buf.readFloatLE(off)
-    const y = buf.readFloatLE(off + 4)
-    const z = buf.readFloatLE(off + 8)
-    if (!(Math.abs(x) < 12.5 && Math.abs(z) < 10.5 && y > -5.2 && y < 3.5)) continue
-    const smax = Math.max(buf.readFloatLE(off + 12), buf.readFloatLE(off + 16), buf.readFloatLE(off + 20))
-    if (buf[off + 24] > 228 && buf[off + 25] > 228 && buf[off + 26] > 228 && smax > 0.1) continue
-    const near = Math.abs(x) < 9 && Math.abs(z) < 8
-    const limit = y < -3 ? 0.22 : near ? 0.45 : 0.1
-    if (smax > limit) continue
-    if (near) {
-      nearI++
-      if (nearI % 3 === 0) continue // keep 2/3 of the core
-    } else {
-      farI++
-      if (farI % 3 !== 0) continue // keep 1/3 of the shell
-    }
-    out.push(buf.subarray(off, off + 32))
-  }
-  return Buffer.concat(out)
-}
-
 async function splatScene() {
-  const dest = join(ROOT, 'web', 'public', 'assets', 'scenes', 'garden_yard.splat')
-  if (existsSync(dest) && statSync(dest).size > 1e6) return console.log('  ✓ garden_yard.splat (cached)')
+  const dest = join(ROOT, 'web', 'public', 'assets', 'scenes', 'building_yard.splat')
+  if (existsSync(dest) && statSync(dest).size > 1e6) return console.log('  ✓ building_yard.splat (cached)')
   mkdirSync(dirname(dest), { recursive: true })
-  process.stdout.write('  ↓ Mip-NeRF 360 3DGS "garden" scene (187 MB) … ')
-  const raw = await fetchBuf('https://huggingface.co/cakewalk/splat-data/resolve/main/garden.splat')
-  console.log('done')
-  process.stdout.write('  ✂ cropping to open plaza … ')
-  writeFileSync(dest, cropSplat(raw))
-  console.log(`done (${(statSync(dest).size / 1e6).toFixed(1)} MB)`)
+  const raw = join(ROOT, 'server', 'media', 'building_raw.ply')
+  if (!existsSync(raw) || statSync(raw).size < 3e8) {
+    process.stdout.write('  ↓ 3DGS "building" scene (326 MB) … ')
+    await download('https://huggingface.co/kishimisu/3d-gaussian-splatting-webgl/resolve/main/building.ply', raw, 'building.ply')
+    console.log('done')
+  }
+  // level + center + scale + crop, baked into the splat (needs python3 + numpy)
+  console.log('  ⟲ leveling & baking (scripts/level_splat.py) …')
+  execSync(`python3 "${join(ROOT, 'scripts', 'level_splat.py')}" "${raw}" "${dest}" --span 46`, { stdio: 'inherit' })
 }
 
 

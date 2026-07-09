@@ -223,7 +223,7 @@ export function MapPage() {
 
       {mode === 'splat' && (
         <div className="pointer-events-none absolute bottom-1 right-2 z-10">
-          <span className="mono text-[9.5px] text-ink-3/70">scene: Mip-NeRF 360 3DGS "garden" · huggingface/cakewalk</span>
+          <span className="mono text-[9.5px] text-ink-3/70">scene: 3DGS "building" · gsplat.js demo scene</span>
         </div>
       )}
     </div>

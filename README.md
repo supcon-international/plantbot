@@ -54,7 +54,7 @@ ffmpeg   快照抓帧：事件/任务快照直接从本地素材随机时间点�
 |---|---|---|
 | Lite3 / X30 URDF+STL | [DeepRoboticsLab/deep_robotics_model](https://github.com/DeepRoboticsLab/deep_robotics_model)（云深处官方） | 官方公开模型 |
 | Husky A200 meshes | [husky/husky](https://github.com/husky/husky)（Clearpath 官方 ROS 包） | BSD |
-| 3DGS 场景 "garden" | [huggingface.co/cakewalk/splat-data](https://huggingface.co/cakewalk/splat-data)（Mip-NeRF 360，大院场景） | 研究公开数据 |
+| 3DGS 场景 "building" | [huggingface.co/kishimisu/3d-gaussian-splatting-webgl](https://huggingface.co/kishimisu/3d-gaussian-splatting-webgl)（gsplat.js 演示场景，园区建筑航拍；`scripts/level_splat.py` 自动调平烘焙） | 研究公开数据 |
 | 巡检视频素材 | [Mixkit](https://mixkit.co/license/#videoFree)（配电室推进/变电站巡视/厂区航拍/烟囱/抽油机） | Mixkit Free License |
 | Spot 机器人整备区实拍 | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Spot_construction_robot.webm) | CC |
 | OccupancyGrid 底图 | `scripts/gen_occupancy.py` 程序化生成（ROS map_server 规范 + SLAM 噪声风格） | — |

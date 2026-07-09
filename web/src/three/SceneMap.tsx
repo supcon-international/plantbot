@@ -14,10 +14,12 @@ import type { MapSel } from '../components/OpsMap'
 // COLMAP y-down → y-up; 0.562 rad yaw from PCA of the hull point cloud.
 // tandt "truck" capture: COLMAP y-down, yaw 0.705 rad from hull PCA,
 // ground plane at y≈0.5 — open-yard footprint fills the site frame.
+// the scene file is pre-leveled and pre-scaled by scripts/level_splat.py —
+// identity here is the guarantee that nothing renders crooked
 export const SPLAT_CALIB = {
-  position: [1.5, 0.35, -0.8] as [number, number, number],
-  rotation: [Math.PI, 1.0, 0] as [number, number, number],
-  scale: 1.6,
+  position: [0, -0.03, 0] as [number, number, number],
+  rotation: [0, 0, 0] as [number, number, number],
+  scale: 1,
 }
 
 function SplatStage() {
@@ -28,7 +30,7 @@ function SplatStage() {
       sharedMemoryForWorkers: false, // no COOP/COEP needed
       freeIntermediateSplatData: true,
     })
-    v.addSplatScene('/assets/scenes/garden_yard.splat', {
+    v.addSplatScene('/assets/scenes/building_yard.splat', {
       splatAlphaRemovalThreshold: 5,
       showLoadingUI: false,
       progressiveLoad: true,
@@ -179,9 +181,9 @@ function CameraRig({ selection, follow }: { selection: MapSel; follow: boolean }
       ref={controls}
       makeDefault
       target={[0, 0.4, 0]}
-      minDistance={3}
+      minDistance={9}
       maxDistance={38}
-      maxPolarAngle={Math.PI * 0.49}
+      maxPolarAngle={Math.PI * 0.36}
       enableDamping
       dampingFactor={0.08}
     />
@@ -209,7 +211,7 @@ export function SceneMap({
     <Canvas
       eventPrefix="client"
       dpr={quality === 'high' ? [1, 1.75] : 1}
-      camera={{ position: [13, 10.5, 16.5], fov: 42, near: 0.1, far: 300 }}
+      camera={{ position: [10, 24, 15], fov: 42, near: 0.1, far: 300 }}
       gl={{ antialias: false, alpha: true, powerPreference: 'high-performance' }}
       style={{ touchAction: 'none' }}
       resize={{ polyfill: RafResizeObserver as any, scroll: false, debounce: 0 }}
