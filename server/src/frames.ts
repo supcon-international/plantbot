@@ -52,7 +52,8 @@ export async function grabFrame(stream: string, _timeoutMs = 8000): Promise<Buff
     await new Promise<void>((resolve, reject) => {
       execFile(
         FFMPEG,
-        ['-y', '-loglevel', 'error', '-ss', at, '-i', file, '-frames:v', '1', '-q:v', '4', out],
+        // 640w + q6 keeps snapshots ~25-35KB — kanban/table thumbs never show larger
+        ['-y', '-loglevel', 'error', '-ss', at, '-i', file, '-frames:v', '1', '-vf', 'scale=min(640\\,iw):-2', '-q:v', '6', out],
         (err) => (err ? reject(err) : resolve()),
       )
     })

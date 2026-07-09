@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router'
 import { LayoutGrid, Cctv, Bot, Map as MapIcon, ShieldAlert, X, Route } from 'lucide-react'
 import { useApp } from '../../lib/store'
+import { useDataSaver } from '../../lib/media'
 import { useT, useLang, type Lang } from '../../lib/i18n'
 import { utcClock } from '../../lib/format'
 import { SevDot } from '../ui'
@@ -76,6 +77,24 @@ function LangSwitch() {
   )
 }
 
+function EcoToggle() {
+  const on = useDataSaver((s) => s.on)
+  const toggle = useDataSaver((s) => s.toggle)
+  const t = useT()
+  return (
+    <button
+      onClick={toggle}
+      title={t('shell.ecoTitle')}
+      aria-pressed={on}
+      className={`mono border px-1.5 py-0.5 text-[11px] tracking-[0.08em] transition-colors ${
+        on ? 'border-accent/50 bg-accent/10 text-accent' : 'border-line text-ink-3 hover:text-ink-2'
+      }`}
+    >
+      {t('shell.eco')}
+    </button>
+  )
+}
+
 function Toast() {
   const toast = useApp((s) => s.toast)
   const dismiss = useApp((s) => s.dismissToast)
@@ -134,6 +153,7 @@ export function Shell() {
           <span className="text-[14px] font-semibold tracking-[0.02em] text-ink">Plantbot</span>
         </div>
         <div className="ml-auto flex items-center gap-3">
+          <EcoToggle />
           <LangSwitch />
           {!connected && (
             <span className="flex items-center gap-1.5">

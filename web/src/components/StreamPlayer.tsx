@@ -1,6 +1,20 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { BASE } from '../lib/base'
+import { useDataSaver, lowSrc } from '../lib/media'
 // vendored plain-JS module from go2rtc (MIT)
 import { VideoRTC } from './video-rtc.js'
+
+/** data-saver-aware source with graceful fallback if the .low variant is missing */
+function useVariantSrc(src: string) {
+  const saver = useDataSaver((s) => s.on)
+  const want = saver ? lowSrc(src) : src
+  const [actual, setActual] = useState(want)
+  useEffect(() => setActual(want), [want])
+  const onError = () => {
+    if (actual !== src) setActual(src)
+  }
+  return { actual, onError }
+}
 
 // register the custom element once
 if (!customElements.get('video-stream')) {
@@ -30,7 +44,7 @@ export function StreamPlayer({
     el.mode = 'mse'
     el.background = false
     if (el.ws || el.pc) el.ondisconnect?.() // drop previous stream before switching
-    el.src = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/stream/api/ws?src=${encodeURIComponent(src)}`
+    el.src = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${BASE}/stream/api/ws?src=${encodeURIComponent(src)}`
     if (el.video) {
       el.video.controls = false
       el.video.muted = muted
@@ -45,6 +59,7 @@ export function StreamPlayer({
 /** Native looped playback for local demo footage — no transcode hop, no dropped frames. */
 export function LoopPlayer({ src, className = '' }: { src: string; className?: string }) {
   const ref = useRef<HTMLVideoElement>(null)
+  const { actual, onError } = useVariantSrc(src)
   useEffect(() => {
     const v = ref.current
     if (!v) return
@@ -62,11 +77,12 @@ export function LoopPlayer({ src, className = '' }: { src: string; className?: s
       v.removeEventListener('loadeddata', kick)
       document.removeEventListener('pointerdown', kick)
     }
-  }, [src])
+  }, [actual])
   return (
     <video
       ref={ref}
-      src={src}
+      src={actual}
+      onError={onError}
       loop
       muted
       autoPlay
@@ -86,8 +102,9 @@ export function FeedPlayer({ stream, file, muted = true }: { stream: string; fil
 
 /** first-frame preview from a local loop file — no live snapshot service */
 export function VideoThumb({ file, className = '' }: { file?: string; className?: string }) {
+  const { actual, onError } = useVariantSrc(file ?? '')
   if (!file) return <div className={`skeleton ${className}`} />
-  return <video src={`${file}#t=0.6`} preload="metadata" muted playsInline className={className} />
+  return <video src={`${actual}#t=0.6`} preload="metadata" muted playsInline className={className} onError={onError} />
 }
 
 export function SnapshotImg({

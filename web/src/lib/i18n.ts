@@ -26,6 +26,12 @@ const D: Record<string, [string, string, string]> = {
   'shell.down': ['DOWN', '断开', 'CAÍDO'],
   'shell.view': ['View', '查看', 'Ver'],
   'shell.brand': ['Robotics Operations', '机器人运营中心', 'Operaciones Robóticas'],
+  'shell.eco': ['ECO', '省流', 'ECO'],
+  'shell.ecoTitle': [
+    'Data saver — 640p low-bitrate video for slow links',
+    '省流模式 — 慢速网络使用 640p 低码率视频',
+    'Ahorro de datos — vídeo 640p de bajo bitrate',
+  ],
 
   // ---------- common ----------
   'c.battery': ['Battery', '电量', 'Batería'],
