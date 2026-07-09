@@ -1,6 +1,9 @@
 // Fleet registry — robots, payloads, site cameras, waypoints, zones.
 // Scene frame: meters, origin at yard center, x → east, z → south.
 
+// sub-path deploys: URLs handed to the client get this prefix (e.g. /robots)
+const PUB = process.env.PUBLIC_BASE ?? ''
+
 export interface PayloadSpec {
   id: string
   name: string
@@ -71,7 +74,7 @@ export const SITE = {
   operator: 'Plantbot Operations',
   bounds: { x: [-16, 16], z: [-9, 9] },
   map: {
-    image: '/assets/maps/yard-07.png',
+    image: `${PUB}/assets/maps/yard-07.png`,
     resolution: 0.05,
     width: 640,
     height: 360,
@@ -188,7 +191,7 @@ export const ROBOTS: RobotSpec[] = [
         kind: 'camera',
         model: '4MP · 25× optical zoom',
         stream: 'lite3-front',
-        file: '/media/switchgear.mp4',
+        file: `${PUB}/media/switchgear.mp4`,
         detail: 'H.264 1080p25 · gimbal-stabilized · IR-cut',
       },
       {
@@ -197,7 +200,7 @@ export const ROBOTS: RobotSpec[] = [
         kind: 'thermal',
         model: '640×512 radiometric · <40mK NETD',
         stream: 'lite3-thermal',
-        file: '/media/thermal.mp4',
+        file: `${PUB}/media/thermal.mp4`,
         detail: 'Radiometric video, ΔT alarm thresholds',
       },
       {
@@ -241,7 +244,7 @@ export const ROBOTS: RobotSpec[] = [
         kind: 'camera',
         model: '4K · 30× hybrid zoom',
         stream: 'x30-optical',
-        file: '/media/substation.mp4',
+        file: `${PUB}/media/substation.mp4`,
         detail: 'Person / PPE / behavior analytics on-board',
       },
       {
@@ -292,7 +295,7 @@ export const ROBOTS: RobotSpec[] = [
         kind: 'ogi',
         model: 'MWIR 3.2–3.4 µm cooled',
         stream: 'agx-ogi',
-        file: '/media/ogi.mp4',
+        file: `${PUB}/media/ogi.mp4`,
         detail: 'Fugitive CH₄/VOC plume visualization',
       },
       {
@@ -343,7 +346,7 @@ export const ROBOTS: RobotSpec[] = [
         kind: 'camera',
         model: '2K · 120° FOV',
         stream: 'go2-front',
-        file: '/media/corridor.mp4',
+        file: `${PUB}/media/corridor.mp4`,
         detail: 'H.264 1440p30 · corridor sweep preset',
       },
       {
@@ -370,7 +373,7 @@ export const SITE_CAMERAS: SiteCamera[] = [
     name: 'Perimeter — Gate Yard',
     place: 'North fence, container sector',
     stream: 'perimeter-cam',
-    file: '/media/perimeter.mp4',
+    file: `${PUB}/media/perimeter.mp4`,
     live: false,
     source: 'NVR loop · demo footage',
   },
@@ -379,7 +382,7 @@ export const SITE_CAMERAS: SiteCamera[] = [
     name: 'Dock Camera',
     place: 'Robot staging area, fixed mount',
     stream: 'workshop-cam',
-    file: '/media/staging.mp4',
+    file: `${PUB}/media/staging.mp4`,
     live: false,
     source: 'NVR loop · demo footage',
   },
@@ -388,7 +391,7 @@ export const SITE_CAMERAS: SiteCamera[] = [
     name: 'Mast — Plant Overview',
     place: '30 m mast, wide sector',
     stream: 'mast-cam',
-    file: '/media/plant_aerial.mp4',
+    file: `${PUB}/media/plant_aerial.mp4`,
     live: false,
     source: 'NVR loop · demo footage',
   },
@@ -397,7 +400,7 @@ export const SITE_CAMERAS: SiteCamera[] = [
     name: 'Tank Farm — South Rack',
     place: 'ATEX zone pole mount',
     stream: 'tank-cam',
-    file: '/media/tanknight.mp4',
+    file: `${PUB}/media/tanknight.mp4`,
     live: false,
     source: 'NVR loop · demo footage',
   },
@@ -532,7 +535,7 @@ export const PAYLOAD_CATALOG: PayloadSpec[] = [
     name: 'Front PTZ Camera',
     kind: 'camera',
     model: '4MP · 25× optical zoom',
-    file: '/media/switchgear.mp4',
+    file: `${PUB}/media/switchgear.mp4`,
     detail: 'H.264 1080p25 · gimbal-stabilized · IR-cut',
   },
   {
@@ -540,7 +543,7 @@ export const PAYLOAD_CATALOG: PayloadSpec[] = [
     name: 'Optical Zoom Camera',
     kind: 'camera',
     model: '4K · 30× hybrid zoom',
-    file: '/media/substation.mp4',
+    file: `${PUB}/media/substation.mp4`,
     detail: 'Person / PPE / behavior analytics on-board',
   },
   {
@@ -548,7 +551,7 @@ export const PAYLOAD_CATALOG: PayloadSpec[] = [
     name: 'Thermal Imager',
     kind: 'thermal',
     model: '640×512 radiometric · <40mK NETD',
-    file: '/media/thermal.mp4',
+    file: `${PUB}/media/thermal.mp4`,
     detail: 'Radiometric video, ΔT alarm thresholds',
   },
   {
@@ -556,7 +559,7 @@ export const PAYLOAD_CATALOG: PayloadSpec[] = [
     name: 'OGI Gas Camera',
     kind: 'ogi',
     model: '320×240 cooled InSb · CH₄/VOC',
-    file: '/media/ogi.mp4',
+    file: `${PUB}/media/ogi.mp4`,
     detail: 'Optical gas imaging, ppm·m quantification',
   },
   {

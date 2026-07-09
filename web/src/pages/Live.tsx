@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { Grid2X2, Focus, Radio } from 'lucide-react'
 import { useApp } from '../lib/store'
+import { BASE } from '../lib/base'
 import { useT } from '../lib/i18n'
 import { FeedPlayer, VideoThumb } from '../components/StreamPlayer'
 import { Panel } from '../components/ui'
@@ -45,7 +46,7 @@ function StreamMeta({ stream, file }: { stream: string; file?: string }) {
     let dead = false
     const load = async () => {
       try {
-        const r = await fetch(`/stream/api/streams?src=${encodeURIComponent(stream)}`)
+        const r = await fetch(`${BASE}/stream/api/streams?src=${encodeURIComponent(stream)}`)
         const j = await r.json()
         const prod = j?.producers?.[0]?.medias as string[] | undefined
         const m = prod?.find((x: string) => x.includes('video'))

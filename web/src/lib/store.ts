@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { BASE } from './base'
 import type {
   Building,
   DetectionEvent,
@@ -39,6 +40,9 @@ interface AppState {
   dismissToast: () => void
 }
 
+/** fetch with the deploy prefix (sub-path hosting) applied */
+const apiFetch = (path: string, init?: RequestInit) => fetch(BASE + path, init)
+
 const EMPTY_HISTORY: HistoryPoint[] = []
 
 /** stable-reference history selector (avoids getSnapshot loops) */
@@ -62,7 +66,7 @@ export const useApp = create<AppState>((set) => ({
   ack: async (id: string) => {
     set((s) => ({ events: s.events.map((e) => (e.id === id ? { ...e, acked: true } : e)) }))
     try {
-      await fetch(`/api/events/${id}/ack`, { method: 'POST' })
+      await apiFetch(`/api/events/${id}/ack`, { method: 'POST' })
     } catch {
       /* optimistic */
     }
@@ -72,46 +76,46 @@ export const useApp = create<AppState>((set) => ({
 
 export const api = {
   createMission: (body: unknown) =>
-    fetch('/api/missions', {
+    apiFetch('/api/missions', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
     }).then((r) => r.json()),
-  abortMission: (id: string) => fetch(`/api/missions/${id}/abort`, { method: 'POST' }),
+  abortMission: (id: string) => apiFetch(`/api/missions/${id}/abort`, { method: 'POST' }),
   goto: (robotId: string, x: number, z: number) =>
-    fetch(`/api/robots/${robotId}/goto`, {
+    apiFetch(`/api/robots/${robotId}/goto`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ x, z }),
     }),
   createRule: (body: unknown) =>
-    fetch('/api/rules', {
+    apiFetch('/api/rules', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
     }).then((r) => r.json()),
   patchRule: (id: string, body: unknown) =>
-    fetch(`/api/rules/${id}`, {
+    apiFetch(`/api/rules/${id}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
     }).then((r) => r.json()),
-  deleteRule: (id: string) => fetch(`/api/rules/${id}`, { method: 'DELETE' }),
-  getCatalog: () => fetch('/api/catalog').then((r) => r.json()),
+  deleteRule: (id: string) => apiFetch(`/api/rules/${id}`, { method: 'DELETE' }),
+  getCatalog: () => apiFetch('/api/catalog').then((r) => r.json()),
   registerRobot: (body: unknown) =>
-    fetch('/api/robots', {
+    apiFetch('/api/robots', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
     }).then((r) => r.json()),
   installPayload: (robotId: string, payloadId: string) =>
-    fetch(`/api/robots/${robotId}/payloads`, {
+    apiFetch(`/api/robots/${robotId}/payloads`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ payloadId }),
     }).then((r) => r.json()),
   removePayload: (robotId: string, payloadId: string) =>
-    fetch(`/api/robots/${robotId}/payloads/${payloadId}`, { method: 'DELETE' }),
+    apiFetch(`/api/robots/${robotId}/payloads/${payloadId}`, { method: 'DELETE' }),
 }
 
 let ws: WebSocket | null = null
@@ -127,7 +131,7 @@ export function startRealtime() {
 
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-  ws = new WebSocket(`${proto}://${location.host}/ws`)
+  ws = new WebSocket(`${proto}://${location.host}${BASE}/ws`)
 
   ws.onopen = () => {
     retry = 0

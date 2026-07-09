@@ -250,7 +250,7 @@ function scheduleNextEvent() {
 
 
 const PORT = Number(process.env.API_PORT ?? 8787)
-await app.listen({ port: PORT, host: '0.0.0.0' })
+await app.listen({ port: PORT, host: process.env.API_HOST ?? '0.0.0.0' })
 console.log(`[api] listening on :${PORT}`)
 
 app.server.on('upgrade', (req, socket, head) => {

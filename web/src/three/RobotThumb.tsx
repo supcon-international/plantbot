@@ -3,6 +3,7 @@ import { Canvas, useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useUrdfRobot } from './UrdfRobot'
 import { RafResizeObserver } from './rafResizeObserver'
+import { BASE } from '../lib/base'
 
 const URDF_FILE: Record<string, string> = {
   lite3: 'Lite3.urdf',
@@ -16,7 +17,7 @@ const LIFT: Record<string, number> = { lite3: 0.3, x30: 0.47, husky: 0.132, go2:
 const CAM_DIST: Record<string, number> = { lite3: 1.25, x30: 1.8, husky: 1.4, go2: 1.35, anymal: 1.85 }
 
 function Turntable({ urdf, onReady }: { urdf: string; onReady?: () => void }) {
-  const url = `/assets/robots/${urdf}/${URDF_FILE[urdf] ?? `${urdf}.urdf`}`
+  const url = `${BASE}/assets/robots/${urdf}/${URDF_FILE[urdf] ?? `${urdf}.urdf`}`
   const { robot } = useUrdfRobot(url)
   const group = useRef<THREE.Group>(null)
   useFrame((_, dt) => {

@@ -6,6 +6,8 @@ import { grabFrame } from './frames.js'
 import { nav, missions, tickMissions } from './missions.js'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
+// sub-path deploys: URLs handed to the client get this prefix (e.g. /robots)
+const PUB = process.env.PUBLIC_BASE ?? ''
 export const SNAP_DIR = join(ROOT, 'data', 'snapshots')
 mkdirSync(SNAP_DIR, { recursive: true })
 
@@ -264,7 +266,7 @@ export async function generateEvent(rule?: DetectionRule, ts = Date.now()): Prom
   if (frame) {
     const file = `${id}-${ts.toString(36)}.jpg`
     writeFileSync(join(SNAP_DIR, file), frame)
-    ev.snapshot = `/api/snapshots/${file}`
+    ev.snapshot = `${PUB}/api/snapshots/${file}`
   }
 
   events.unshift(ev)
@@ -288,7 +290,7 @@ export async function missionSnapshot(stream: string, missionId: string): Promis
   if (!frame) return undefined
   const file = `${missionId}-${Date.now().toString(36)}.jpg`
   writeFileSync(join(SNAP_DIR, file), frame)
-  return `/api/snapshots/${file}`
+  return `${PUB}/api/snapshots/${file}`
 }
 
 /** Seed a believable history so the UI isn't empty on first load. */

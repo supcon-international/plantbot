@@ -4,6 +4,7 @@ import { OrbitControls, Grid, ContactShadows, Html } from '@react-three/drei'
 import * as THREE from 'three'
 import { RafResizeObserver } from './rafResizeObserver'
 import { useUrdfRobot, useLocomotion } from './UrdfRobot'
+import { BASE } from '../lib/base'
 import type { PayloadSpec } from '../lib/types'
 
 /** payload annotation anchors relative to root (post Z-up→Y-up rotation) */
@@ -55,7 +56,7 @@ function RobotScene({
   highlight?: string | null
   onPick?: (id: string | null) => void
 }) {
-  const url = `/assets/robots/${urdf}/${URDF_FILE[urdf] ?? `${urdf}.urdf`}`
+  const url = `${BASE}/assets/robots/${urdf}/${URDF_FILE[urdf] ?? `${urdf}.urdf`}`
   const { robot, robotRef } = useUrdfRobot(url)
   useLocomotion(robotRef, { family, gait, speed, urdf })
   const anchors = ANCHORS[urdf] ?? {}

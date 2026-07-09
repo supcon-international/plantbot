@@ -1,4 +1,5 @@
 import { BrowserRouter, Route, Routes } from 'react-router'
+import { BASE } from './lib/base'
 import { Shell } from './components/layout/Shell'
 import { Overview } from './pages/Overview'
 import { Live } from './pages/Live'
@@ -10,7 +11,7 @@ import { Events } from './pages/Events'
 
 export function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={BASE || '/'}>
       <Routes>
         <Route element={<Shell />}>
           <Route index element={<Overview />} />

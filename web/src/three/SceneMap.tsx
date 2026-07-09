@@ -6,6 +6,7 @@ import * as GaussianSplats3D from '@mkkellogg/gaussian-splats-3d'
 import * as THREE from 'three'
 import { RafResizeObserver } from './rafResizeObserver'
 import { useApp } from '../lib/store'
+import { BASE } from '../lib/base'
 import type { DetectionEvent, RobotSpec } from '../lib/types'
 // THREE.Color can't parse CSS var() — mirror the palette as literals
 const SEVERITY_COLOR: Record<string, string> = { critical: '#dd5648', high: '#c2a05a', info: '#9c9c98', low: '#6b6b6f' }
@@ -36,7 +37,7 @@ function SplatStage() {
       // the radial reveal animation stalls under our render loop — show all
       sceneRevealMode: GaussianSplats3D.SceneRevealMode.Instant,
     })
-    v.addSplatScene('/assets/scenes/plant_yard.splat?v=' + SCENE_REV, {
+    v.addSplatScene(BASE + '/assets/scenes/plant_yard.splat?v=' + SCENE_REV, {
       format: GaussianSplats3D.SceneFormat.Splat,
       splatAlphaRemovalThreshold: 5,
       showLoadingUI: false,
