@@ -1,0 +1,65 @@
+// Event/mission snapshots pulled straight from the local demo footage with
+// ffmpeg — no live-stream dependency. Each grab seeks to a random point so
+// consecutive detections show different frames.
+
+import { execFile } from 'node:child_process'
+import { readFile, unlink } from 'node:fs/promises'
+import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { tmpdir } from 'node:os'
+
+const MEDIA = join(dirname(fileURLToPath(import.meta.url)), '..', 'media')
+const FFMPEG = process.env.FFMPEG_BIN ?? 'ffmpeg'
+
+/** stream id → local footage backing that channel */
+const SOURCE: Record<string, string> = {
+  'lite3-front': 'switchgear.mp4',
+  'lite3-thermal': 'thermal.mp4',
+  'x30-optical': 'substation.mp4',
+  'agx-ogi': 'ogi.mp4',
+  'go2-front': 'corridor.mp4',
+  'perimeter-cam': 'perimeter.mp4',
+  'workshop-cam': 'staging.mp4',
+  'mast-cam': 'plant_aerial.mp4',
+  'tank-cam': 'tanknight.mp4',
+}
+
+const durCache = new Map<string, number>()
+
+function probeDuration(file: string): Promise<number> {
+  if (durCache.has(file)) return Promise.resolve(durCache.get(file)!)
+  return new Promise((resolve) => {
+    execFile(
+      FFMPEG,
+      ['-hide_banner', '-i', file],
+      (err, _out, stderr) => {
+        const m = /Duration: (\d+):(\d+):(\d+\.\d+)/.exec(stderr ?? '')
+        const dur = m ? Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]) : 10
+        durCache.set(file, dur)
+        resolve(dur)
+      },
+    )
+  })
+}
+
+export async function grabFrame(stream: string, _timeoutMs = 8000): Promise<Buffer | null> {
+  const name = SOURCE[stream] ?? SOURCE[stream.split(':')[0]] ?? 'plant_aerial.mp4'
+  const file = join(MEDIA, name)
+  try {
+    const dur = await probeDuration(file)
+    const at = (Math.random() * Math.max(0.5, dur - 1)).toFixed(2)
+    const out = join(tmpdir(), `pb-frame-${Date.now()}-${Math.floor(Math.random() * 1e6)}.jpg`)
+    await new Promise<void>((resolve, reject) => {
+      execFile(
+        FFMPEG,
+        ['-y', '-loglevel', 'error', '-ss', at, '-i', file, '-frames:v', '1', '-q:v', '4', out],
+        (err) => (err ? reject(err) : resolve()),
+      )
+    })
+    const buf = await readFile(out)
+    unlink(out).catch(() => {})
+    return buf.length > 1000 ? buf : null
+  } catch {
+    return null
+  }
+}

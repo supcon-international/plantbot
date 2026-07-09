@@ -37,14 +37,14 @@ function NavItem({ to, label, icon: Icon, badge }: { to: string; label: string; 
             <Icon size={18} strokeWidth={1.5} />
             {badge > 0 && (
               <span
-                className="mono absolute -right-2 -top-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-[9px] font-medium text-white"
+                className="mono absolute -right-2 -top-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-[10px] font-medium text-white"
                 style={{ background: 'var(--color-crit)' }}
               >
                 {badge > 9 ? '9+' : badge}
               </span>
             )}
           </span>
-          <span className="mono max-w-[64px] truncate text-[9px] tracking-[0.12em]">{label}</span>
+          <span className="mono max-w-[64px] truncate text-[10px] tracking-[0.12em]">{label}</span>
         </>
       )}
     </NavLink>
@@ -65,7 +65,7 @@ function LangSwitch() {
         <button
           key={l.id}
           onClick={() => setLang(l.id)}
-          className={`mono px-1.5 py-0.5 text-[10px] transition-colors ${
+          className={`mono px-1.5 py-0.5 text-[11px] transition-colors ${
             lang === l.id ? 'bg-surface-3 text-ink' : 'text-ink-3 hover:text-ink-2'
           }`}
         >
@@ -94,7 +94,7 @@ function Toast() {
       >
         <SevDot sev={toast.severity} pulse />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] text-ink">{toast.label}</div>
+          <div className="truncate text-[14px] text-ink">{toast.label}</div>
           <div className="microlabel mt-0.5">
             {toast.sourceName} · {toast.zone}
           </div>
@@ -112,7 +112,6 @@ function Toast() {
 
 export function Shell() {
   const connected = useApp((s) => s.connected)
-  const clock = useApp((s) => s.clock)
   const lang = useLang((s) => s.lang)
   const t = useT()
   const critCount = useApp(
@@ -132,11 +131,10 @@ export function Shell() {
             <path d="M6 6h6v2H8v4H6V6zm20 0v6h-2V8h-4V6h6zM6 26v-6h2v4h4v2H6zm20 0h-6v-2h4v-4h2v6z" fill="var(--color-accent)" />
             <circle cx="16" cy="16" r="3.5" fill="var(--color-accent)" />
           </svg>
-          <span className="text-[13px] font-semibold tracking-[0.02em] text-ink">Plantbot</span>
+          <span className="text-[14px] font-semibold tracking-[0.02em] text-ink">Plantbot</span>
         </div>
         <div className="ml-auto flex items-center gap-3">
           <LangSwitch />
-          <span className="mono hidden text-[11px] text-ink-2 sm:block">{utcClock(clock)}</span>
           {!connected && (
             <span className="flex items-center gap-1.5">
               <span style={{ width: 6, height: 6, borderRadius: 99, background: 'var(--color-crit)' }} />

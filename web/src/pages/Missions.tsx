@@ -86,7 +86,7 @@ function MissionPlanner({ onClose }: { onClose: () => void }) {
       <div className="flex shrink-0 items-center gap-3 border-b border-line px-3 py-2.5 md:px-4">
         <button onClick={onClose} className="flex items-center gap-1.5 text-ink-3 transition-colors hover:text-ink">
           <ArrowLeft size={15} />
-          <span className="mono text-[10.5px] tracking-[0.08em]">{t('mi.back')}</span>
+          <span className="mono text-[11.5px] tracking-[0.08em]">{t('mi.back')}</span>
         </button>
         <span className="h-4 w-px bg-line" />
         <div>
@@ -96,7 +96,7 @@ function MissionPlanner({ onClose }: { onClose: () => void }) {
         <button
           disabled={!name.trim() || !steps.length || busy}
           onClick={submit}
-          className="mono ml-auto border border-ink/30 bg-ink/10 px-3.5 py-1.5 text-[10.5px] tracking-[0.12em] text-ink transition-colors hover:bg-ink/15 disabled:opacity-30"
+          className="mono ml-auto border border-ink/30 bg-ink/10 px-3.5 py-1.5 text-[11.5px] tracking-[0.12em] text-ink transition-colors hover:bg-ink/15 disabled:opacity-30"
         >
           {busy ? t('mi.wizSubmitting') : t('mi.wizQueue')}
         </button>
@@ -127,7 +127,7 @@ function MissionPlanner({ onClose }: { onClose: () => void }) {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder={t('mi.wizNamePh')}
-                className="mono w-full border border-line-2 bg-surface-2 px-2.5 py-2 text-[12px] text-ink outline-none transition-colors focus:border-ink-3"
+                className="mono w-full border border-line-2 bg-surface-2 px-2.5 py-2 text-[13px] text-ink outline-none transition-colors focus:border-ink-3"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -138,7 +138,7 @@ function MissionPlanner({ onClose }: { onClose: () => void }) {
                     <button
                       key={p}
                       onClick={() => setPriority(p)}
-                      className={`mono flex-1 px-2 py-1.5 text-[11px] transition-colors ${priority === p ? 'bg-surface-3 text-ink' : 'text-ink-3 hover:text-ink-2'}`}
+                      className={`mono flex-1 px-2 py-1.5 text-[12px] transition-colors ${priority === p ? 'bg-surface-3 text-ink' : 'text-ink-3 hover:text-ink-2'}`}
                     >
                       P{p}
                     </button>
@@ -150,7 +150,7 @@ function MissionPlanner({ onClose }: { onClose: () => void }) {
                 <select
                   value={assignee}
                   onChange={(e) => setAssignee(e.target.value)}
-                  className="mono w-full border border-line-2 bg-surface-2 px-2 py-1.5 text-[11px] text-ink outline-none"
+                  className="mono w-full border border-line-2 bg-surface-2 px-2 py-1.5 text-[12px] text-ink outline-none"
                 >
                   <option value="auto">{t('mi.wizAuto')}</option>
                   {robots.map((r) => (
@@ -172,7 +172,7 @@ function MissionPlanner({ onClose }: { onClose: () => void }) {
                   style={{ left: recurring ? 18 : 3, background: recurring ? 'var(--color-ink)' : 'var(--color-ink-3)' }}
                 />
               </button>
-              <span className="text-[12px] text-ink-2">{t('mi.wizRecurring')}</span>
+              <span className="text-[13px] text-ink-2">{t('mi.wizRecurring')}</span>
             </label>
           </div>
 
@@ -185,16 +185,16 @@ function MissionPlanner({ onClose }: { onClose: () => void }) {
           <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3.5 pb-4 pt-1">
             {steps.length === 0 && (
               <div className="flex h-32 items-center justify-center border border-dashed border-line-2 px-6 text-center">
-                <span className="text-[12px] leading-relaxed text-ink-3">{t('mi.wizTap')}</span>
+                <span className="text-[13px] leading-relaxed text-ink-3">{t('mi.wizTap')}</span>
               </div>
             )}
             {steps.map((st, i) => (
               <div key={`${st.waypointId}-${i}`} className="border border-line bg-surface-2 p-3">
                 <div className="flex items-center gap-2.5">
-                  <span className="mono flex h-6 w-6 shrink-0 items-center justify-center bg-ink text-[11px] font-semibold text-bg">{i + 1}</span>
+                  <span className="mono flex h-6 w-6 shrink-0 items-center justify-center bg-ink text-[12px] font-semibold text-bg">{i + 1}</span>
                   <div className="min-w-0 flex-1">
-                    <span className="mono text-[11.5px] text-ink">{st.waypointId}</span>
-                    <span className="ml-2 truncate text-[11.5px] text-ink-3">{wpName(st.waypointId, waypoints)}</span>
+                    <span className="mono text-[12.5px] text-ink">{st.waypointId}</span>
+                    <span className="ml-2 truncate text-[12.5px] text-ink-3">{wpName(st.waypointId, waypoints)}</span>
                   </div>
                   <span className="flex shrink-0 items-center gap-0.5">
                     <button onClick={() => move(i, -1)} disabled={i === 0} className="p-1 text-ink-3 hover:text-ink disabled:opacity-25"><ChevronUp size={14} /></button>
@@ -211,7 +211,7 @@ function MissionPlanner({ onClose }: { onClose: () => void }) {
                       <button
                         key={type}
                         onClick={() => toggleAction(i, type)}
-                        className={`mono flex items-center gap-1.5 border px-2 py-1.5 text-[10px] tracking-[0.04em] transition-colors ${
+                        className={`mono flex items-center gap-1.5 border px-2 py-1.5 text-[11px] tracking-[0.04em] transition-colors ${
                           on ? 'border-ink/40 bg-ink/10 text-ink' : 'border-line text-ink-3 hover:border-line-2 hover:text-ink-2'
                         }`}
                       >
@@ -230,7 +230,7 @@ function MissionPlanner({ onClose }: { onClose: () => void }) {
             <button
               disabled={!name.trim() || !steps.length || busy}
               onClick={submit}
-              className="mono w-full border border-ink/30 bg-ink/10 px-3 py-2.5 text-[11px] tracking-[0.12em] text-ink transition-colors hover:bg-ink/15 disabled:opacity-30"
+              className="mono w-full border border-ink/30 bg-ink/10 px-3 py-2.5 text-[12px] tracking-[0.12em] text-ink transition-colors hover:bg-ink/15 disabled:opacity-30"
             >
               {busy ? t('mi.wizSubmitting') : t('mi.wizQueue')}
             </button>
@@ -259,7 +259,7 @@ function MissionDetail({ m }: { m: Mission }) {
             (m.status === 'active' || m.status === 'queued') && (
               <button
                 onClick={() => api.abortMission(m.id)}
-                className="mono flex items-center gap-1 border border-line-2 px-1.5 py-0.5 text-[9px] tracking-[0.08em] text-ink-3 transition-colors hover:border-crit/50 hover:text-crit"
+                className="mono flex items-center gap-1 border border-line-2 px-1.5 py-0.5 text-[10px] tracking-[0.08em] text-ink-3 transition-colors hover:border-crit/50 hover:text-crit"
               >
                 <OctagonX size={11} /> {t('c.abort')}
               </button>
@@ -278,7 +278,7 @@ function MissionDetail({ m }: { m: Mission }) {
             ].map(([kk, v]) => (
               <div key={kk as string}>
                 <div className="microlabel mb-0.5">{kk}</div>
-                <div className="mono text-[11.5px]" style={{ color: kk === t('mi.findings') && flagged ? 'var(--color-warn)' : 'var(--color-ink-2)' }}>
+                <div className="mono text-[12.5px]" style={{ color: kk === t('mi.findings') && flagged ? 'var(--color-warn)' : 'var(--color-ink-2)' }}>
                   {v as string}
                 </div>
               </div>
@@ -300,8 +300,8 @@ function MissionDetail({ m }: { m: Mission }) {
                 <span className={`mt-1 h-[15px] w-[15px] shrink-0 rotate-45 border ${cur ? 'border-ink bg-ink/20' : past ? 'border-ink-3 bg-surface-3' : 'border-line-2'}`} />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className={`mono text-[11.5px] ${cur ? 'text-ink' : 'text-ink-2'}`}>{st.waypointId}</span>
-                    <span className="text-[11.5px] text-ink-3">{wpName(st.waypointId, waypoints)}</span>
+                    <span className={`mono text-[12.5px] ${cur ? 'text-ink' : 'text-ink-2'}`}>{st.waypointId}</span>
+                    <span className="text-[12.5px] text-ink-3">{wpName(st.waypointId, waypoints)}</span>
                     {cur && <span className="live-dot" />}
                     <span className="ml-auto flex gap-1">
                       {st.actions.map((a, kk) => {
@@ -317,8 +317,8 @@ function MissionDetail({ m }: { m: Mission }) {
                   {results.map((r, kk) => (
                     <div key={kk} className="mt-1.5 flex items-start gap-2">
                       <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: r.ok ? 'var(--color-ok)' : 'var(--color-warn)' }} />
-                      <span className="mono text-[10px] text-ink-3">{timeShort(r.ts)}</span>
-                      <span className="text-[11px] text-ink-2">{r.note}</span>
+                      <span className="mono text-[11px] text-ink-3">{timeShort(r.ts)}</span>
+                      <span className="text-[12px] text-ink-2">{r.note}</span>
                       {r.snapshot && <img src={r.snapshot} alt="" className="ml-auto h-9 w-14 shrink-0 border border-line object-cover" />}
                     </div>
                   ))}
@@ -346,23 +346,23 @@ function Row({ m, active, onClick }: { m: Mission; active: boolean; onClick: () 
       style={active ? { boxShadow: 'inset 2px 0 0 var(--color-ink)' } : undefined}
     >
       <div className="flex items-center gap-2">
-        <span className="mono text-[10px] text-ink-3">{m.id}</span>
-        <span className="truncate text-[12.5px] text-ink">{m.name}</span>
-        <span className="mono ml-auto shrink-0 text-[9px] text-ink-3">P{m.priority}</span>
+        <span className="mono text-[11px] text-ink-3">{m.id}</span>
+        <span className="truncate text-[13.5px] text-ink">{m.name}</span>
+        <span className="mono ml-auto shrink-0 text-[10px] text-ink-3">P{m.priority}</span>
       </div>
       <div className="mt-1.5 flex items-center gap-2">
         <MissionStatusTag status={m.status} />
-        <span className="mono text-[10px] text-ink-3">{robot?.callsign ?? (m.requestedRobot === 'auto' ? 'auto' : m.requestedRobot)}</span>
+        <span className="mono text-[11px] text-ink-3">{robot?.callsign ?? (m.requestedRobot === 'auto' ? 'auto' : m.requestedRobot)}</span>
         {m.status === 'active' && (
           <div className="ml-auto flex w-24 items-center gap-1.5">
             <div className="h-[3px] flex-1 bg-surface-3">
               <div className="h-full bg-ink/70 transition-[width] duration-500" style={{ width: `${m.progress * 100}%` }} />
             </div>
-            <span className="mono text-[9px] text-ink-3">{Math.round(m.progress * 100)}%</span>
+            <span className="mono text-[10px] text-ink-3">{Math.round(m.progress * 100)}%</span>
           </div>
         )}
         {m.status !== 'active' && (
-          <span className="mono ml-auto text-[9.5px] text-ink-3">{m.endedAt ? ago(m.endedAt, clock) : ago(m.createdAt, clock)}</span>
+          <span className="mono ml-auto text-[10.5px] text-ink-3">{m.endedAt ? ago(m.endedAt, clock) : ago(m.createdAt, clock)}</span>
         )}
       </div>
     </button>
@@ -393,13 +393,13 @@ export function Missions() {
     <div className="mx-auto max-w-[1400px] space-y-3 p-3 md:p-4">
       <div className="flex items-center justify-between">
         <div>
-          <div className="mono text-[13px] text-ink-2">
+          <div className="mono text-[14px] text-ink-2">
             {groups.active.length} {t('ms.active')} · {groups.queued.length} {t('ms.queued')}
           </div>
         </div>
         <button
           onClick={() => setPlanning(true)}
-          className="mono flex items-center gap-1.5 border border-ink/30 bg-ink/10 px-2.5 py-1.5 text-[10.5px] tracking-[0.1em] text-ink transition-colors hover:bg-ink/15"
+          className="mono flex items-center gap-1.5 border border-ink/30 bg-ink/10 px-2.5 py-1.5 text-[11.5px] tracking-[0.1em] text-ink transition-colors hover:bg-ink/15"
         >
           <Plus size={13} /> {t('mi.newMission')}
         </button>

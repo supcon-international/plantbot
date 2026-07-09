@@ -15,9 +15,9 @@ import type { MapSel } from '../components/OpsMap'
 // tandt "truck" capture: COLMAP y-down, yaw 0.705 rad from hull PCA,
 // ground plane at y≈0.5 — open-yard footprint fills the site frame.
 export const SPLAT_CALIB = {
-  position: [2.5, 0.6, 1.5] as [number, number, number],
-  rotation: [Math.PI, 0.705, 0] as [number, number, number],
-  scale: 1.2,
+  position: [1.5, 0.35, -0.8] as [number, number, number],
+  rotation: [Math.PI, 1.0, 0] as [number, number, number],
+  scale: 1.6,
 }
 
 function SplatStage() {
@@ -28,7 +28,7 @@ function SplatStage() {
       sharedMemoryForWorkers: false, // no COOP/COEP needed
       freeIntermediateSplatData: true,
     })
-    v.addSplatScene('/assets/scenes/truck_yard.splat', {
+    v.addSplatScene('/assets/scenes/garden_yard.splat', {
       splatAlphaRemovalThreshold: 5,
       showLoadingUI: false,
       progressiveLoad: true,

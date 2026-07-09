@@ -2,7 +2,7 @@ import { writeFileSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ROBOTS } from './fleet.js'
-import { grabFrame } from './go2rtc.js'
+import { grabFrame } from './frames.js'
 import { nav, missions, tickMissions } from './missions.js'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')

@@ -31,7 +31,7 @@ function DetailModal({ ev, onClose, onRule }: { ev: DetectionEvent; onClose: () 
     <Modal onClose={onClose}>
       <div className="flex items-center justify-between border-b border-line px-4 py-3">
         <div className="flex items-center gap-2.5">
-          <span className="mono text-[11px] text-ink-3">{ev.id}</span>
+          <span className="mono text-[12px] text-ink-3">{ev.id}</span>
           <SevTag sev={ev.severity} />
         </div>
         <button onClick={onClose} className="text-ink-3 hover:text-ink" aria-label="close">
@@ -41,7 +41,7 @@ function DetailModal({ ev, onClose, onRule }: { ev: DetectionEvent; onClose: () 
       <div className="space-y-3 p-4">
         <div>
           <div className="text-[15px] font-medium text-ink">{ev.label}</div>
-          <div className="mt-1 text-[12.5px] text-ink-2">{ev.detail}</div>
+          <div className="mt-1 text-[13.5px] text-ink-2">{ev.detail}</div>
         </div>
         <Snapshot ev={ev} size="lg" />
         <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-3">
@@ -52,7 +52,7 @@ function DetailModal({ ev, onClose, onRule }: { ev: DetectionEvent; onClose: () 
             [
               t('ev.rule'),
               rule ? (
-                <button key="r" onClick={() => onRule(rule.id)} className="mono text-[11.5px] text-ink underline decoration-ink-3 underline-offset-2 hover:text-accent">
+                <button key="r" onClick={() => onRule(rule.id)} className="mono text-[12.5px] text-ink underline decoration-ink-3 underline-offset-2 hover:text-accent">
                   {rule.name}
                 </button>
               ) : (
@@ -65,7 +65,7 @@ function DetailModal({ ev, onClose, onRule }: { ev: DetectionEvent; onClose: () 
           ).map(([k, v]) => (
             <div key={k}>
               <div className="microlabel mb-0.5">{k}</div>
-              <div className="mono text-[11.5px] text-ink-2">{v}</div>
+              <div className="mono text-[12.5px] text-ink-2">{v}</div>
             </div>
           ))}
         </div>
@@ -75,7 +75,7 @@ function DetailModal({ ev, onClose, onRule }: { ev: DetectionEvent; onClose: () 
               ack(ev.id)
               onClose()
             }}
-            className="mono flex w-full items-center justify-center gap-2 border border-ink/30 bg-ink/10 px-3 py-2 text-[11px] tracking-[0.1em] text-ink transition-colors hover:bg-ink/15"
+            className="mono flex w-full items-center justify-center gap-2 border border-ink/30 bg-ink/10 px-3 py-2 text-[12px] tracking-[0.1em] text-ink transition-colors hover:bg-ink/15"
           >
             <Check size={13} /> {t('c.acknowledge')}
           </button>
@@ -101,10 +101,10 @@ function BoardCard({ e, onOpen }: { e: DetectionEvent; onOpen: () => void }) {
     >
       <div className="flex items-center gap-2">
         <SevDot sev={e.severity} pulse={!e.acked && e.severity === 'critical'} />
-        <span className="mono text-[10px] text-ink-3">{ago(e.ts, clock)}</span>
-        <span className="mono ml-auto text-[9px] text-ink-3">{Math.round(e.confidence * 100)}%</span>
+        <span className="mono text-[11px] text-ink-3">{ago(e.ts, clock)}</span>
+        <span className="mono ml-auto text-[10px] text-ink-3">{Math.round(e.confidence * 100)}%</span>
       </div>
-      <div className="mt-1.5 line-clamp-2 text-[12.5px] leading-snug text-ink">{e.label}</div>
+      <div className="mt-1.5 line-clamp-2 text-[13.5px] leading-snug text-ink">{e.label}</div>
       <div className="microlabel mt-1 truncate">{e.zone}</div>
       {e.snapshot && <img src={e.snapshot} alt="" loading="lazy" className="mt-2 h-20 w-full border border-line object-cover" />}
       {!e.acked && (
@@ -113,7 +113,7 @@ function BoardCard({ e, onOpen }: { e: DetectionEvent; onOpen: () => void }) {
             ev.stopPropagation()
             ack(e.id)
           }}
-          className="mono mt-2 w-full border border-line-2 px-2 py-1 text-[9.5px] tracking-[0.1em] text-ink-3 opacity-0 transition-all hover:border-ink-3 hover:text-ink group-hover:opacity-100 max-md:opacity-100"
+          className="mono mt-2 w-full border border-line-2 px-2 py-1 text-[10.5px] tracking-[0.1em] text-ink-3 opacity-0 transition-all hover:border-ink-3 hover:text-ink group-hover:opacity-100 max-md:opacity-100"
         >
           {t('c.ack')}
         </button>
@@ -141,7 +141,7 @@ function Board({ events, onOpen }: { events: DetectionEvent[]; onOpen: (e: Detec
               <span className="microlabel" style={{ color: 'var(--color-ink-2)' }}>
                 {c.label}
               </span>
-              <span className="mono ml-auto text-[10px] text-ink-3">
+              <span className="mono ml-auto text-[11px] text-ink-3">
                 {open} {t('c.open')} · {list.length}
               </span>
             </div>
@@ -185,8 +185,8 @@ function RuleRow({ r, hi, onViewEvents }: { r: DetectionRule; hi?: boolean; onVi
       </button>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className={`truncate text-[12.5px] ${r.enabled ? 'text-ink' : 'text-ink-3'}`}>{r.name}</span>
-          {!r.builtin && <span className="mono border border-line px-1 text-[8.5px] tracking-[0.1em] text-ink-3">{t('ev.custom')}</span>}
+          <span className={`truncate text-[13.5px] ${r.enabled ? 'text-ink' : 'text-ink-3'}`}>{r.name}</span>
+          {!r.builtin && <span className="mono border border-line px-1 text-[9.5px] tracking-[0.1em] text-ink-3">{t('ev.custom')}</span>}
         </div>
         <div className="microlabel mt-0.5 truncate">
           {t(`ev.m.${r.model}`)} · {r.sourceName}
@@ -203,16 +203,16 @@ function RuleRow({ r, hi, onViewEvents }: { r: DetectionRule; hi?: boolean; onVi
           onChange={(e) => api.patchRule(r.id, { threshold: Number(e.target.value) })}
           className="h-[3px] w-20 cursor-pointer appearance-none bg-line-2 accent-ink-2"
         />
-        <span className="mono w-8 text-[10.5px] text-ink-2">{Math.round(r.threshold * 100)}%</span>
+        <span className="mono w-8 text-[11.5px] text-ink-2">{Math.round(r.threshold * 100)}%</span>
       </div>
       <SevTag sev={r.severity} />
       <button
         onClick={() => onViewEvents(r.id)}
         title={t('ev.table')}
-        className="mono w-32 text-right text-[10px] text-ink-3 transition-colors hover:text-accent"
+        className="mono w-32 text-right text-[11px] text-ink-3 transition-colors hover:text-accent"
       >
         {r.firedCount}× {t('ev.fired')}
-        <span className="block text-[9px] opacity-80">{r.lastFiredAt ? ago(r.lastFiredAt) : '—'}</span>
+        <span className="block text-[10px] opacity-80">{r.lastFiredAt ? ago(r.lastFiredAt) : '—'}</span>
       </button>
       {!r.builtin && (
         <button onClick={() => api.deleteRule(r.id)} className="text-ink-3 transition-colors hover:text-crit" title="delete">
@@ -275,13 +275,13 @@ function NewRuleModal({ onClose }: { onClose: () => void }) {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={t('ev.ruleNamePh')}
-            className="mono w-full border border-line-2 bg-surface-2 px-2.5 py-2 text-[12px] text-ink outline-none focus:border-ink-3"
+            className="mono w-full border border-line-2 bg-surface-2 px-2.5 py-2 text-[13px] text-ink outline-none focus:border-ink-3"
           />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <div className="microlabel mb-1.5">{t('ev.model')}</div>
-            <select value={model} onChange={(e) => setModel(e.target.value as DetectionModel)} className="mono w-full border border-line-2 bg-surface-2 px-2 py-2 text-[11px] text-ink outline-none">
+            <select value={model} onChange={(e) => setModel(e.target.value as DetectionModel)} className="mono w-full border border-line-2 bg-surface-2 px-2 py-2 text-[12px] text-ink outline-none">
               {MODEL_IDS.map((m) => (
                 <option key={m} value={m}>
                   {t(`ev.m.${m}`)}
@@ -291,7 +291,7 @@ function NewRuleModal({ onClose }: { onClose: () => void }) {
           </div>
           <div>
             <div className="microlabel mb-1.5">{t('ev.videoSource')}</div>
-            <select value={source} onChange={(e) => setSource(e.target.value)} className="mono w-full border border-line-2 bg-surface-2 px-2 py-2 text-[11px] text-ink outline-none">
+            <select value={source} onChange={(e) => setSource(e.target.value)} className="mono w-full border border-line-2 bg-surface-2 px-2 py-2 text-[12px] text-ink outline-none">
               <option value="">{t('ev.select')}</option>
               {sources.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -303,7 +303,7 @@ function NewRuleModal({ onClose }: { onClose: () => void }) {
         </div>
         <div>
           <div className="microlabel mb-1.5">{t('ev.zoneLabel')}</div>
-          <select value={zone} onChange={(e) => setZone(e.target.value)} className="mono w-full border border-line-2 bg-surface-2 px-2 py-2 text-[11px] text-ink outline-none">
+          <select value={zone} onChange={(e) => setZone(e.target.value)} className="mono w-full border border-line-2 bg-surface-2 px-2 py-2 text-[12px] text-ink outline-none">
             <option value="">{t('ev.siteWide')}</option>
             {zonesList.map((z) => (
               <option key={z.id} value={z.name}>
@@ -326,7 +326,7 @@ function NewRuleModal({ onClose }: { onClose: () => void }) {
                 <button
                   key={s}
                   onClick={() => setSeverity(s)}
-                  className={`mono flex-1 px-1 py-1.5 text-[9px] uppercase tracking-[0.06em] transition-colors ${severity === s ? 'bg-surface-3' : 'hover:bg-surface-2'}`}
+                  className={`mono flex-1 px-1 py-1.5 text-[10px] uppercase tracking-[0.06em] transition-colors ${severity === s ? 'bg-surface-3' : 'hover:bg-surface-2'}`}
                   style={{ color: severity === s ? SEVERITY_COLOR[s] : 'var(--color-ink-3)' }}
                 >
                   {t(`sev.${s}`)}
@@ -338,7 +338,7 @@ function NewRuleModal({ onClose }: { onClose: () => void }) {
         <button
           disabled={!name.trim() || !source}
           onClick={submit}
-          className="mono w-full border border-ink/30 bg-ink/10 px-3 py-2.5 text-[11px] tracking-[0.12em] text-ink transition-colors hover:bg-ink/15 disabled:opacity-30"
+          className="mono w-full border border-ink/30 bg-ink/10 px-3 py-2.5 text-[12px] tracking-[0.12em] text-ink transition-colors hover:bg-ink/15 disabled:opacity-30"
         >
           {t('ev.activate')}
         </button>
@@ -375,13 +375,13 @@ export function Events() {
     <div className="mx-auto max-w-[1400px] space-y-3 p-3 md:p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <div className="mono text-[13px] text-ink-2">
+          <div className="mono text-[14px] text-ink-2">
             {events.length} {t('c.events')} · <span style={{ color: unacked ? 'var(--color-warn)' : 'var(--color-ok)' }}>{unacked} {t('c.open')}</span> · {rules.filter((r) => r.enabled).length}/{rules.length} {t('ev.rulesArmed')}
           </div>
           {filterRule && (
             <button
               onClick={() => setRuleFilter(null)}
-              className="mono mt-1 flex items-center gap-1.5 border border-accent/40 bg-accent/10 px-2 py-1 text-[10px] tracking-[0.06em] text-accent transition-colors hover:bg-accent/20"
+              className="mono mt-1 flex items-center gap-1.5 border border-accent/40 bg-accent/10 px-2 py-1 text-[11px] tracking-[0.06em] text-accent transition-colors hover:bg-accent/20"
             >
               {filterRule.name} <X size={11} />
             </button>
@@ -391,7 +391,7 @@ export function Events() {
           {view === 'rules' && (
             <button
               onClick={() => setNewRule(true)}
-              className="mono flex items-center gap-1.5 border border-ink/30 bg-ink/10 px-2.5 py-1.5 text-[10.5px] tracking-[0.1em] text-ink transition-colors hover:bg-ink/15"
+              className="mono flex items-center gap-1.5 border border-ink/30 bg-ink/10 px-2.5 py-1.5 text-[11.5px] tracking-[0.1em] text-ink transition-colors hover:bg-ink/15"
             >
               <Plus size={13} /> {t('ev.newRule')}
             </button>
@@ -407,10 +407,10 @@ export function Events() {
               <button
                 key={v}
                 onClick={() => setView(v)}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] transition-colors ${view === v ? 'bg-surface-2 text-ink' : 'text-ink-3 hover:text-ink-2'}`}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] transition-colors ${view === v ? 'bg-surface-2 text-ink' : 'text-ink-3 hover:text-ink-2'}`}
               >
                 <Icon size={13} strokeWidth={1.5} />
-                <span className="mono hidden text-[10px] tracking-[0.08em] sm:block">{label}</span>
+                <span className="mono hidden text-[11px] tracking-[0.08em] sm:block">{label}</span>
               </button>
             ))}
           </div>
@@ -438,22 +438,22 @@ export function Events() {
                   onClick={() => setSel(e)}
                   className={`cursor-pointer border-b border-line/60 transition-colors hover:bg-surface-2 ${Date.now() - e.ts < 8000 ? 'flash-new' : ''} ${e.acked ? 'opacity-50' : ''}`}
                 >
-                  <td className="mono whitespace-nowrap px-3.5 py-2.5 align-top text-[11px] text-ink-3">
+                  <td className="mono whitespace-nowrap px-3.5 py-2.5 align-top text-[12px] text-ink-3">
                     {timeShort(e.ts)}
-                    <div className="text-[10px] opacity-70">{ago(e.ts, clock)}</div>
+                    <div className="text-[11px] opacity-70">{ago(e.ts, clock)}</div>
                   </td>
                   <td className="px-3.5 py-2.5 align-top">
                     <SevTag sev={e.severity} />
                   </td>
                   <td className="max-w-[320px] px-3.5 py-2.5 align-top">
-                    <div className="truncate text-[12.5px] text-ink">{e.label}</div>
-                    <div className="truncate text-[11px] text-ink-3">{e.detail}</div>
+                    <div className="truncate text-[13.5px] text-ink">{e.label}</div>
+                    <div className="truncate text-[12px] text-ink-3">{e.detail}</div>
                   </td>
                   <td className="px-3.5 py-2.5 align-top">
-                    <div className="text-[11.5px] text-ink-2">{e.zone}</div>
+                    <div className="text-[12.5px] text-ink-2">{e.zone}</div>
                     <div className="microlabel mt-0.5">{e.sourceName}</div>
                   </td>
-                  <td className="mono px-3.5 py-2.5 align-top text-[11px] text-ink-2">{Math.round(e.confidence * 100)}%</td>
+                  <td className="mono px-3.5 py-2.5 align-top text-[12px] text-ink-2">{Math.round(e.confidence * 100)}%</td>
                   <td className="px-3.5 py-2.5 align-top">
                     <Snapshot ev={e} />
                   </td>
@@ -464,7 +464,7 @@ export function Events() {
                           ev.stopPropagation()
                           ack(e.id)
                         }}
-                        className="mono border border-line-2 px-2 py-1 text-[10px] tracking-[0.08em] text-ink-2 transition-colors hover:border-ink-3 hover:text-ink"
+                        className="mono border border-line-2 px-2 py-1 text-[11px] tracking-[0.08em] text-ink-2 transition-colors hover:border-ink-3 hover:text-ink"
                       >
                         {t('c.ack')}
                       </button>
@@ -482,7 +482,7 @@ export function Events() {
         <Panel className="rise">
           <div className="flex items-center justify-between border-b border-line px-3.5 py-2.5">
             <span className="microlabel">{t('ev.rulesTitle')}</span>
-            <span className="mono hidden text-[10px] text-ink-3 sm:block">{t('ev.rulesHint')}</span>
+            <span className="mono hidden text-[11px] text-ink-3 sm:block">{t('ev.rulesHint')}</span>
           </div>
           {rules.map((r) => (
             <RuleRow

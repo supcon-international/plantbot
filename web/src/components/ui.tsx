@@ -58,7 +58,7 @@ export function SevTag({ sev }: { sev: Severity }) {
   const t = useT()
   return (
     <span
-      className="mono inline-flex items-center gap-1.5 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em]"
+      className="mono inline-flex items-center gap-1.5 px-1.5 py-0.5 text-[11px] uppercase tracking-[0.1em]"
       style={{
         color: SEVERITY_COLOR[sev],
         border: `1px solid color-mix(in srgb, ${SEVERITY_COLOR[sev]} 30%, transparent)`,
@@ -84,7 +84,7 @@ export function ModeChip({ mode }: { mode?: RobotMode }) {
   const tone = mode ? MODE_TONE[mode] : 'var(--color-ink-3)'
   return (
     <span
-      className="mono px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em]"
+      className="mono px-1.5 py-0.5 text-[11px] uppercase tracking-[0.1em]"
       style={{ color: tone, border: '1px solid var(--color-line-2)', background: 'var(--color-surface-2)' }}
     >
       {t(mode ? `mode.${mode}` : 'mode.offline')}
@@ -105,7 +105,7 @@ export function MissionStatusTag({ status }: { status: MissionStatus }) {
   const tone = MISSION_STATUS_TONE[status]
   return (
     <span
-      className="mono inline-flex items-center gap-1.5 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em]"
+      className="mono inline-flex items-center gap-1.5 px-1.5 py-0.5 text-[11px] uppercase tracking-[0.1em]"
       style={{ color: tone, border: '1px solid var(--color-line-2)', background: 'var(--color-surface-2)' }}
     >
       {status === 'active' && <span className="live-dot" style={{ width: 5, height: 5 }} />}
@@ -133,7 +133,7 @@ export function Stat({
       <div className="microlabel mb-1">{label}</div>
       <div className={`mono ${fs} leading-none`} style={{ color: tone ?? 'var(--color-ink)' }}>
         {value}
-        {unit && <span className="ml-1 text-[11px] text-ink-3">{unit}</span>}
+        {unit && <span className="ml-1 text-[12px] text-ink-3">{unit}</span>}
       </div>
     </div>
   )
@@ -188,7 +188,7 @@ export function BatteryBar({ value, w = 64 }: { value: number; w?: number }) {
           style={{ width: `${value}%`, background: tone, opacity: 0.9 }}
         />
       </div>
-      <span className="mono text-[11px]" style={{ color: value > 20 ? 'var(--color-ink-2)' : tone }}>
+      <span className="mono text-[12px]" style={{ color: value > 20 ? 'var(--color-ink-2)' : tone }}>
         {Math.round(value)}%
       </span>
     </div>

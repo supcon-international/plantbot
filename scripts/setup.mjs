@@ -1,14 +1,13 @@
 #!/usr/bin/env node
 /**
  * One-shot asset bootstrap. Downloads every external resource the app needs:
- *  - go2rtc binary (RTSP → MSE/WebRTC relay)          → server/bin/
  *  - Mixkit stock footage (free license, loops)        → server/media/
  *  - DeepRobotics Lite3/X30 URDF + STL meshes          → web/public/assets/robots/
  *  - tandt "truck" 3DGS splat (via huggingface),
  *    cropped to an open yard footprint                 → web/public/assets/scenes/
  * Everything is skipped if already present. No dependencies.
  */
-import { mkdirSync, existsSync, writeFileSync, chmodSync, statSync } from 'node:fs'
+import { mkdirSync, existsSync, readFileSync, writeFileSync, chmodSync, statSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execSync } from 'node:child_process'
@@ -33,23 +32,6 @@ async function download(url, dest, label) {
   console.log('done')
 }
 
-// ---------- go2rtc ----------
-async function go2rtc() {
-  const bin = join(ROOT, 'server', 'bin', 'go2rtc')
-  if (existsSync(bin)) return console.log('  ✓ go2rtc (cached)')
-  const plat = process.platform === 'darwin' ? 'mac' : process.platform === 'win32' ? 'win' : 'linux'
-  const arch = process.arch === 'arm64' ? 'arm64' : 'amd64'
-  const zip = join(ROOT, 'server', 'bin', 'go2rtc.zip')
-  await download(
-    `https://github.com/AlexxIT/go2rtc/releases/download/${GO2RTC_VERSION}/go2rtc_${plat}_${arch}.zip`,
-    zip,
-    `go2rtc ${GO2RTC_VERSION} (${plat}/${arch})`,
-  )
-  execSync(`unzip -o go2rtc.zip && rm go2rtc.zip`, { cwd: join(ROOT, 'server', 'bin') })
-  chmodSync(bin, 0o755)
-  console.log('  ✓ go2rtc unpacked')
-}
-
 // ---------- footage (Mixkit free license) ----------
 const FOOTAGE = {
   'switchgear.mp4': 'https://assets.mixkit.co/videos/23377/23377-720.mp4',
@@ -57,6 +39,9 @@ const FOOTAGE = {
   'plant_aerial.mp4': 'https://assets.mixkit.co/videos/14631/14631-720.mp4',
   'smokestack.mp4': 'https://assets.mixkit.co/videos/14051/14051-720.mp4',
   'pumpjack.mp4': 'https://assets.mixkit.co/videos/48884/48884-360.mp4', // OGI channel source
+  'perimeter.mp4': 'https://assets.mixkit.co/videos/36318/36318-720.mp4', // night container yard — perimeter cam
+  'corridor.mp4': 'https://assets.mixkit.co/videos/23378/23378-720.mp4', // machine corridor walk-through
+  'tanknight.mp4': 'https://assets.mixkit.co/videos/4360/4360-720.mp4', // petrochemical plant at night
 }
 
 // ---------- robots (DeepRobotics official models + Clearpath Husky) ----------
@@ -75,51 +60,63 @@ const HUSKY = 'https://raw.githubusercontent.com/husky/husky/humble-devel/husky_
 for (const m of ['base_link', 'top_chassis', 'wheel', 'top_plate', 'user_rail'])
   ROBOT_FILES[`husky/meshes/${m}.stl`] = `${HUSKY}/${m}.stl`
 
+// Unitree Go2 (collada, self-contained materials)
+const GO2 = 'https://cdn.jsdelivr.net/gh/unitreerobotics/unitree_ros@master/robots/go2_description'
+ROBOT_FILES['go2/Go2.urdf'] = { url: `${GO2}/urdf/go2_description.urdf`, relativize: 'go2_description' }
+for (const m of ['base', 'calf', 'calf_mirror', 'foot', 'hip', 'thigh', 'thigh_mirror'])
+  ROBOT_FILES[`go2/dae/${m}.dae`] = `${GO2}/dae/${m}.dae`
+
+// ANYbotics ANYmal C (collada + jpg textures)
+const ANY = 'https://cdn.jsdelivr.net/gh/ANYbotics/anymal_c_simple_description@master'
+ROBOT_FILES['anymal/Anymal.urdf'] = { url: `${ANY}/urdf/anymal.urdf`, relativize: 'anymal_c_simple_description' }
+for (const m of ['base', 'battery', 'bottom_shell', 'depth_camera', 'drive', 'face', 'foot', 'handle', 'hatch', 'hip_l', 'hip_r', 'lidar', 'lidar_cage', 'remote', 'shank_l', 'shank_r', 'thigh', 'top_shell', 'wide_angle_camera'])
+  ROBOT_FILES[`anymal/meshes/${m}.dae`] = `${ANY}/meshes/${m}.dae`
+for (const j of ['base', 'battery', 'bottom_shell', 'depth_camera', 'drive', 'face', 'foot', 'handle', 'hatch', 'hip', 'lidar', 'lidar_cage', 'remote', 'shank', 'thigh', 'top_shell', 'wide_angle_camera'])
+  ROBOT_FILES[`anymal/meshes/${j}.jpg`] = `${ANY}/meshes/${j}.jpg`
+
 // ---------- gaussian splat scene ----------
 function cropSplat(buf) {
-  // open-yard footprint around the truck; drop sky, far shell and floaters
-  const theta = 0.705
-  const c = Math.cos(theta)
-  const s = Math.sin(theta)
-  const [cx, cz] = [0.9, 0.62]
+  // Mip-NeRF 360 "garden": keep the open plaza, thin the tree shell,
+  // drop sky/underground and blown-white floaters
   const n = Math.floor(buf.length / 32)
   const out = []
+  let nearI = 0
+  let farI = 0
   for (let i = 0; i < n; i++) {
     const off = i * 32
     const x = buf.readFloatLE(off)
     const y = buf.readFloatLE(off + 4)
     const z = buf.readFloatLE(off + 8)
-    const dx = x - cx
-    const dz = z - cz
-    const u = c * dx + s * dz
-    const v = -s * dx + c * dz
-    if (!(Math.abs(u) < 13.5 && Math.abs(v) < 7.2 && y > -4.3 && y < 1.12)) continue
+    if (!(Math.abs(x) < 12.5 && Math.abs(z) < 10.5 && y > -5.2 && y < 3.5)) continue
     const smax = Math.max(buf.readFloatLE(off + 12), buf.readFloatLE(off + 16), buf.readFloatLE(off + 20))
-    // blown-out white blobs (overexposed foliage)
-    if (buf[off + 24] > 225 && buf[off + 25] > 225 && buf[off + 26] > 225 && smax > 0.09) continue
-    let limit
-    if (y < -2.2) limit = 0.2
-    else limit = Math.abs(v) < 5.5 && Math.abs(u) < 11 ? 0.42 : 0.09
+    if (buf[off + 24] > 228 && buf[off + 25] > 228 && buf[off + 26] > 228 && smax > 0.1) continue
+    const near = Math.abs(x) < 9 && Math.abs(z) < 8
+    const limit = y < -3 ? 0.22 : near ? 0.45 : 0.1
     if (smax > limit) continue
+    if (near) {
+      nearI++
+      if (nearI % 3 === 0) continue // keep 2/3 of the core
+    } else {
+      farI++
+      if (farI % 3 !== 0) continue // keep 1/3 of the shell
+    }
     out.push(buf.subarray(off, off + 32))
   }
   return Buffer.concat(out)
 }
 
 async function splatScene() {
-  const dest = join(ROOT, 'web', 'public', 'assets', 'scenes', 'truck_yard.splat')
-  if (existsSync(dest) && statSync(dest).size > 1e6) return console.log('  ✓ truck_yard.splat (cached)')
+  const dest = join(ROOT, 'web', 'public', 'assets', 'scenes', 'garden_yard.splat')
+  if (existsSync(dest) && statSync(dest).size > 1e6) return console.log('  ✓ garden_yard.splat (cached)')
   mkdirSync(dirname(dest), { recursive: true })
-  process.stdout.write('  ↓ tandt 3DGS "truck" scene (81 MB) … ')
-  const raw = await fetchBuf('https://huggingface.co/cakewalk/splat-data/resolve/main/truck.splat')
+  process.stdout.write('  ↓ Mip-NeRF 360 3DGS "garden" scene (187 MB) … ')
+  const raw = await fetchBuf('https://huggingface.co/cakewalk/splat-data/resolve/main/garden.splat')
   console.log('done')
-  process.stdout.write('  ✂ cropping to yard corridor … ')
+  process.stdout.write('  ✂ cropping to open plaza … ')
   writeFileSync(dest, cropSplat(raw))
   console.log(`done (${(statSync(dest).size / 1e6).toFixed(1)} MB)`)
 }
 
-console.log('[1/4] go2rtc relay')
-await go2rtc()
 
 // Mixkit clips ship with long GOPs; re-encode to keyint 15 so stream
 // switching starts in <1 s. Requires ffmpeg (the relay needs it anyway).
@@ -163,17 +160,24 @@ async function filteredFeed(name, srcName, vf) {
   console.log('done')
 }
 
-console.log('[2/4] camera footage (Mixkit free license + Commons)')
+console.log('[1/3] camera footage (Mixkit free license + Commons)')
 for (const [name, url] of Object.entries(FOOTAGE)) await footage(name, url)
 await stagingFeed()
 await filteredFeed('thermal.mp4', 'smokestack.mp4', 'format=gray,format=gbrp,pseudocolor=preset=inferno,scale=960:-2')
 await filteredFeed('ogi.mp4', 'pumpjack.mp4', 'format=gray,eq=contrast=1.55:brightness=-0.06,unsharp=5:5:0.8,noise=alls=5:allf=t,scale=960:-2')
 
-console.log('[3/4] DeepRobotics URDF models (DeepRoboticsLab/deep_robotics_model)')
-for (const [rel, url] of Object.entries(ROBOT_FILES))
-  await download(url, join(ROOT, 'web', 'public', 'assets', 'robots', rel), rel)
+console.log('[2/3] DeepRobotics URDF models (DeepRoboticsLab/deep_robotics_model)')
+for (const [rel, spec] of Object.entries(ROBOT_FILES)) {
+  const dest = join(ROOT, 'web', 'public', 'assets', 'robots', rel)
+  const url = typeof spec === 'string' ? spec : spec.url
+  await download(url, dest, rel)
+  // vendor URDFs reference package:// — rewrite to relative so the web loader resolves
+  if (typeof spec === 'object' && spec.relativize && existsSync(dest)) {
+    writeFileSync(dest, readFileSync(dest, 'utf8').replaceAll(`package://${spec.relativize}/`, './'))
+  }
+}
 
-console.log('[4/4] gaussian splat scene (huggingface cakewalk/splat-data)')
+console.log('[3/3] gaussian splat scene (huggingface cakewalk/splat-data)')
 await splatScene()
 
 console.log('\nAll assets ready. Run: pnpm dev')

@@ -18,7 +18,6 @@ import {
   installPayload,
   removePayload,
 } from './fleet.js'
-import { startGo2rtc, stopGo2rtc } from './go2rtc.js'
 import {
   tick,
   listEvents,
@@ -45,8 +44,8 @@ import {
 
 const app = Fastify({ logger: false })
 await app.register(cors, { origin: true })
-// loop-demo footage served directly (Range-capable) — smooth playback,
-// no transcode hop; the public RTSP feed still rides go2rtc/MSE
+// demo footage served directly (Range-capable) — every channel plays a
+// local loop; snapshots are cut from the same files via ffmpeg
 await app.register(fastifyStatic, {
   root: join(dirname(fileURLToPath(import.meta.url)), '..', 'media'),
   prefix: '/media/',
@@ -249,7 +248,6 @@ function scheduleNextEvent() {
 
 // ---------- boot ----------
 
-startGo2rtc()
 
 const PORT = Number(process.env.API_PORT ?? 8787)
 await app.listen({ port: PORT, host: '0.0.0.0' })
@@ -263,7 +261,6 @@ app.server.on('upgrade', (req, socket, head) => {
   }
 })
 
-// go2rtc needs a few seconds before frame grabs succeed
 setTimeout(() => {
   seedEvents()
     .then(() => {
@@ -274,8 +271,5 @@ setTimeout(() => {
 }, 6000)
 
 for (const sig of ['SIGINT', 'SIGTERM'] as const) {
-  process.on(sig, () => {
-    stopGo2rtc()
-    process.exit(0)
-  })
+  process.on(sig, () => process.exit(0))
 }

@@ -32,7 +32,11 @@ const URDF_FILE: Record<string, string> = {
   lite3: 'Lite3.urdf',
   x30: 'X30.urdf',
   husky: 'husky.urdf',
+  go2: 'Go2.urdf',
+  anymal: 'Anymal.urdf',
 }
+
+const VIEW_LIFT: Record<string, number> = { lite3: 0.3, x30: 0.47, husky: 0.132, go2: 0.34, anymal: 0.5 }
 
 function RobotScene({
   urdf,
@@ -53,10 +57,10 @@ function RobotScene({
 }) {
   const url = `/assets/robots/${urdf}/${URDF_FILE[urdf] ?? `${urdf}.urdf`}`
   const { robot, robotRef } = useUrdfRobot(url)
-  useLocomotion(robotRef, { family, gait, speed })
+  useLocomotion(robotRef, { family, gait, speed, urdf })
   const anchors = ANCHORS[urdf] ?? {}
 
-  const lift = urdf === 'x30' ? 0.47 : urdf === 'husky' ? 0.132 : 0.3
+  const lift = VIEW_LIFT[urdf] ?? 0.3
 
   return (
     <group>

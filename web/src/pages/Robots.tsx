@@ -38,7 +38,7 @@ export function TwinPlaceholder({ family, label }: { family: 'quadruped' | 'ugv'
 }
 
 const input =
-  'mono w-full border border-line-2 bg-surface-2 px-2.5 py-2 text-[12px] text-ink outline-none transition-colors focus:border-ink-3'
+  'mono w-full border border-line-2 bg-surface-2 px-2.5 py-2 text-[13px] text-ink outline-none transition-colors focus:border-ink-3'
 
 function ProvisionWizard({ onClose }: { onClose: () => void }) {
   const t = useT()
@@ -98,7 +98,7 @@ function ProvisionWizard({ onClose }: { onClose: () => void }) {
         <div className="flex items-center justify-between border-b border-line px-4 py-3">
           <span className="microlabel">{t('fl.wiz.title')}</span>
           {!created && (
-            <div className="mono hidden items-center gap-2 text-[10px] tracking-[0.1em] text-ink-3 sm:flex">
+            <div className="mono hidden items-center gap-2 text-[11px] tracking-[0.1em] text-ink-3 sm:flex">
               {steps.map((s, i) => (
                 <span key={s} className="flex items-center gap-2">
                   {i > 0 && <span className="h-px w-4 bg-line-2" />}
@@ -116,12 +116,12 @@ function ProvisionWizard({ onClose }: { onClose: () => void }) {
 
         {created ? (
           <div className="space-y-4 p-8 text-center">
-            <div className="mono text-[13px] text-accent">{t('fl.wiz.done.title')}</div>
+            <div className="mono text-[14px] text-accent">{t('fl.wiz.done.title')}</div>
             <div className="mono text-[20px] text-ink">{created.callsign}</div>
-            <div className="mx-auto max-w-sm text-[12px] text-ink-2">{t('fl.wiz.done.desc')}</div>
+            <div className="mx-auto max-w-sm text-[13px] text-ink-2">{t('fl.wiz.done.desc')}</div>
             <button
               onClick={() => nav(`/robots/${created.id}`)}
-              className="mono border border-accent/40 bg-accent/10 px-4 py-2 text-[11px] tracking-[0.12em] text-accent transition-colors hover:bg-accent/15"
+              className="mono border border-accent/40 bg-accent/10 px-4 py-2 text-[12px] tracking-[0.12em] text-accent transition-colors hover:bg-accent/15"
             >
               {t('fl.wiz.viewUnit')}
             </button>
@@ -144,14 +144,14 @@ function ProvisionWizard({ onClose }: { onClose: () => void }) {
                         style={{ borderColor: sel ? 'var(--color-accent)' : 'var(--color-line)' }}
                       >
                         <div className="flex items-baseline justify-between gap-2">
-                          <span className="text-[13px] font-medium text-ink">{m.model}</span>
+                          <span className="text-[14px] font-medium text-ink">{m.model}</span>
                           {sel && <Check size={13} className="shrink-0 text-accent" />}
                         </div>
                         <div className="microlabel mt-0.5">{m.vendor}</div>
-                        <div className="mono mt-2 text-[10.5px] text-ink-2">
+                        <div className="mono mt-2 text-[11.5px] text-ink-2">
                           {m.massKg} kg · {m.ipRating} · {m.maxSpeed} m/s · {m.enduranceMin} min
                         </div>
-                        <div className="mt-1.5 text-[11px] leading-snug text-ink-3">{m.blurb[li]}</div>
+                        <div className="mt-1.5 text-[12px] leading-snug text-ink-3">{m.blurb[li]}</div>
                       </button>
                     )
                   })}
@@ -162,7 +162,7 @@ function ProvisionWizard({ onClose }: { onClose: () => void }) {
                 <div className="space-y-3.5">
                   <div className="flex items-center justify-between border-b border-line/60 pb-2.5">
                     <span className="microlabel">{t('fl.wiz.stepModel')}</span>
-                    <span className="mono text-[11px] text-ink-2">
+                    <span className="mono text-[12px] text-ink-2">
                       {model.model} · {model.firmware}
                     </span>
                   </div>
@@ -201,7 +201,7 @@ function ProvisionWizard({ onClose }: { onClose: () => void }) {
 
               {step === 2 && (
                 <div className="space-y-3">
-                  <div className="text-[11.5px] text-ink-3">{t('fl.wiz.payloadHint')}</div>
+                  <div className="text-[12.5px] text-ink-3">{t('fl.wiz.payloadHint')}</div>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {payloads.map((p) => {
                       const Icon = KIND_ICON[p.kind]
@@ -215,8 +215,8 @@ function ProvisionWizard({ onClose }: { onClose: () => void }) {
                         >
                           <Icon size={15} strokeWidth={1.5} className={sel ? 'mt-0.5 shrink-0 text-accent' : 'mt-0.5 shrink-0 text-ink-3'} />
                           <span className="min-w-0">
-                            <span className="block truncate text-[12px] text-ink">{p.name}</span>
-                            <span className="mono mt-0.5 block truncate text-[10px] text-ink-3">{p.model}</span>
+                            <span className="block truncate text-[13px] text-ink">{p.name}</span>
+                            <span className="mono mt-0.5 block truncate text-[11px] text-ink-3">{p.model}</span>
                           </span>
                         </button>
                       )
@@ -229,13 +229,13 @@ function ProvisionWizard({ onClose }: { onClose: () => void }) {
             <div className="flex items-center justify-between border-t border-line px-4 py-3">
               <button
                 onClick={() => (step === 0 ? onClose() : setStep(step - 1))}
-                className="mono px-2 py-1.5 text-[10.5px] tracking-[0.1em] text-ink-3 transition-colors hover:text-ink"
+                className="mono px-2 py-1.5 text-[11.5px] tracking-[0.1em] text-ink-3 transition-colors hover:text-ink"
               >
                 {step === 0 ? t('c.cancel') : t('fl.wiz.back')}
               </button>
               <div className="flex items-center gap-3">
                 {step === 2 && (
-                  <span className="mono text-[10px] text-ink-3">
+                  <span className="mono text-[11px] text-ink-3">
                     {picked.length} {t('fl.wiz.selected')}
                   </span>
                 )}
@@ -243,7 +243,7 @@ function ProvisionWizard({ onClose }: { onClose: () => void }) {
                   <button
                     disabled={!model}
                     onClick={() => setStep(step + 1)}
-                    className="mono border border-line-2 px-3.5 py-1.5 text-[10.5px] tracking-[0.12em] text-ink transition-colors hover:border-ink-3 disabled:opacity-40"
+                    className="mono border border-line-2 px-3.5 py-1.5 text-[11.5px] tracking-[0.12em] text-ink transition-colors hover:border-ink-3 disabled:opacity-40"
                   >
                     {t('fl.wiz.next')}
                   </button>
@@ -251,7 +251,7 @@ function ProvisionWizard({ onClose }: { onClose: () => void }) {
                   <button
                     onClick={submit}
                     disabled={busy}
-                    className="mono border border-accent/50 bg-accent/10 px-3.5 py-1.5 text-[10.5px] tracking-[0.12em] text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
+                    className="mono border border-accent/50 bg-accent/10 px-3.5 py-1.5 text-[11.5px] tracking-[0.12em] text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
                   >
                     {busy ? t('fl.wiz.connecting') : t('fl.wiz.connect')}
                   </button>
@@ -285,7 +285,7 @@ function RobotCard({ r }: { r: RobotSpec }) {
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-bg/85 to-transparent" />
         <div className="absolute bottom-2.5 left-3 flex items-center gap-2.5">
           <span className="live-dot" style={{ background: r.color }} />
-          <span className="mono text-[13px] font-medium tracking-[0.05em] text-ink">{r.callsign}</span>
+          <span className="mono text-[14px] font-medium tracking-[0.05em] text-ink">{r.callsign}</span>
           <span className="microlabel">{r.model}</span>
         </div>
         <div className="absolute right-2.5 top-2.5">
@@ -295,17 +295,17 @@ function RobotCard({ r }: { r: RobotSpec }) {
       <div className="space-y-3 p-3.5">
         <div className="flex items-center justify-between">
           <BatteryBar value={tel?.battery ?? 0} w={130} />
-          <span className="mono text-[10px] text-ink-3">{tel?.speed.toFixed(2) ?? '—'} m/s</span>
+          <span className="mono text-[11px] text-ink-3">{tel?.speed.toFixed(2) ?? '—'} m/s</span>
         </div>
         <div className="flex items-center gap-2 border-t border-line/70 pt-2.5">
           <span className="microlabel shrink-0">{t('c.mission')}</span>
           {m ? (
             <>
-              <span className="truncate text-[11.5px] text-ink-2">{m.name}</span>
-              <span className="mono ml-auto shrink-0 text-[10px] text-ink-3">{Math.round(m.progress * 100)}%</span>
+              <span className="truncate text-[12.5px] text-ink-2">{m.name}</span>
+              <span className="mono ml-auto shrink-0 text-[11px] text-ink-3">{Math.round(m.progress * 100)}%</span>
             </>
           ) : (
-            <span className="text-[11.5px] text-ink-3">—</span>
+            <span className="text-[12.5px] text-ink-3">—</span>
           )}
         </div>
         <div className="flex items-center gap-1.5 border-t border-line/70 pt-2.5">
@@ -322,7 +322,7 @@ function RobotCard({ r }: { r: RobotSpec }) {
               </span>
             )
           })}
-          <span className="mono ml-auto text-[9.5px] text-ink-3">
+          <span className="mono ml-auto text-[10.5px] text-ink-3">
             {r.ipRating} · {r.massKg} kg
           </span>
         </div>
@@ -350,12 +350,12 @@ export function Robots() {
   return (
     <div className="mx-auto max-w-[1300px] space-y-4 p-3 md:p-4">
       <div className="flex items-center justify-between">
-        <div className="mono text-[13px] text-ink-2">
+        <div className="mono text-[14px] text-ink-2">
           {robots.length} {t('c.units')} · {Object.values(telemetry).filter((x) => x.mode !== 'idle').length} {t('c.tasked')}
         </div>
         <button
           onClick={() => setConnect(true)}
-          className="mono flex items-center gap-1.5 border border-line px-2.5 py-1.5 text-[10.5px] tracking-[0.1em] text-ink-2 transition-colors hover:border-ink-3 hover:text-ink"
+          className="mono flex items-center gap-1.5 border border-line px-2.5 py-1.5 text-[11.5px] tracking-[0.1em] text-ink-2 transition-colors hover:border-ink-3 hover:text-ink"
         >
           <Plus size={13} /> {t('fl.connectRobot')}
         </button>
@@ -366,7 +366,7 @@ export function Robots() {
           <div className="mb-2 flex items-center gap-2">
             <g.icon size={13} strokeWidth={1.5} className="text-ink-3" />
             <span className="microlabel">{g.label}</span>
-            <span className="mono text-[10px] text-ink-3">{g.list.length}</span>
+            <span className="mono text-[11px] text-ink-3">{g.list.length}</span>
             <span className="h-px flex-1 bg-line" />
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -388,7 +388,7 @@ export function Robots() {
 
       {/* sensor coverage matrix */}
       <Panel className="rise rise-3">
-        <PanelHead label={t('fl.matrix')} right={<span className="mono text-[10px] text-ink-3">{t('fl.matrix.sub')}</span>} />
+        <PanelHead label={t('fl.matrix')} right={<span className="mono text-[11px] text-ink-3">{t('fl.matrix.sub')}</span>} />
         <div className="overflow-x-auto">
           <table className="w-full min-w-[560px] border-collapse">
             <thead>
@@ -413,7 +413,7 @@ export function Robots() {
                   <td className="px-3.5 py-2.5">
                     <div className="flex items-center gap-2">
                       <span style={{ width: 5, height: 5, borderRadius: r.family === 'ugv' ? 1 : 99, background: r.color, display: 'inline-block' }} />
-                      <span className="mono text-[11.5px] text-ink">{r.callsign}</span>
+                      <span className="mono text-[12.5px] text-ink">{r.callsign}</span>
                       <span className="microlabel hidden sm:inline">{r.family}</span>
                     </div>
                   </td>
@@ -422,11 +422,11 @@ export function Robots() {
                     return (
                       <td key={k} className="px-2 py-2.5 text-center">
                         {p ? (
-                          <span title={`${p.name} · ${p.model}`} className="mono text-[11px]" style={{ color: p.stream ? 'var(--color-ink)' : 'var(--color-ink-2)' }}>
+                          <span title={`${p.name} · ${p.model}`} className="mono text-[12px]" style={{ color: p.stream ? 'var(--color-ink)' : 'var(--color-ink-2)' }}>
                             {p.stream ? '◉' : '●'}
                           </span>
                         ) : (
-                          <span className="text-[11px] text-ink-3/40">—</span>
+                          <span className="text-[12px] text-ink-3/40">—</span>
                         )}
                       </td>
                     )
@@ -437,8 +437,8 @@ export function Robots() {
           </table>
         </div>
         <div className="flex items-center gap-4 border-t border-line px-3.5 py-2">
-          <span className="mono text-[9.5px] text-ink-3">{t('fl.streaming')}</span>
-          <span className="mono text-[9.5px] text-ink-3">{t('fl.telemetry')}</span>
+          <span className="mono text-[10.5px] text-ink-3">{t('fl.streaming')}</span>
+          <span className="mono text-[10.5px] text-ink-3">{t('fl.telemetry')}</span>
         </div>
       </Panel>
 

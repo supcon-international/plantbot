@@ -12,14 +12,14 @@ function JointRow({ name, c }: { name: string; c: number }) {
   const tone = c > 55 ? 'var(--color-crit)' : c > 50 ? 'var(--color-warn)' : 'var(--color-ink-2)'
   return (
     <div className="flex items-center gap-2.5 px-3.5 py-[7px]">
-      <span className="mono w-16 shrink-0 text-[10.5px] text-ink-3">{name}</span>
+      <span className="mono w-16 shrink-0 text-[11.5px] text-ink-3">{name}</span>
       <div className="h-[3px] flex-1 overflow-hidden bg-surface-3">
         <div
           className="h-full transition-[width] duration-500"
           style={{ width: `${Math.min(100, ((c - 30) / 40) * 100)}%`, background: tone, opacity: 0.7 }}
         />
       </div>
-      <span className="mono w-12 shrink-0 text-right text-[10.5px]" style={{ color: tone }}>
+      <span className="mono w-12 shrink-0 text-right text-[11.5px]" style={{ color: tone }}>
         {c.toFixed(1)}°C
       </span>
     </div>
@@ -121,19 +121,19 @@ export function RobotDetail() {
         {/* right column */}
         <div className="space-y-3 lg:col-span-5">
           <Panel className="rise">
-            <PanelHead label={t('rd.status')} right={<span className="mono text-[10px] text-ink-3">{tel ? '4 Hz' : t('c.noData')}</span>} />
+            <PanelHead label={t('rd.status')} right={<span className="mono text-[11px] text-ink-3">{tel ? '4 Hz' : t('c.noData')}</span>} />
             <div className="space-y-4 p-3.5">
               {mission && (
                 <div className="flex items-center gap-2 border border-line bg-surface-2 px-2.5 py-2">
                   <span className="live-dot shrink-0" />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-[12px] text-ink">{mission.name}</div>
+                    <div className="truncate text-[13px] text-ink">{mission.name}</div>
                     <div className="microlabel mt-0.5">
                       {targetWp ? `→ ${targetWp.id} ${targetWp.name}` : `${t('rd.step')} ${mission.currentStep + 1}/${mission.steps.length}`}
                       {tel?.pathRemaining ? ` · ${tel.pathRemaining} ${t('rd.mLeft')}` : ''}
                     </div>
                   </div>
-                  <span className="mono shrink-0 text-[11px] text-ink-2">{Math.round(mission.progress * 100)}%</span>
+                  <span className="mono shrink-0 text-[12px] text-ink-2">{Math.round(mission.progress * 100)}%</span>
                 </div>
               )}
               <div className="flex items-end justify-between gap-4">
@@ -167,12 +167,12 @@ export function RobotDetail() {
               label={t('rd.payloads')}
               right={
                 <span className="flex items-center gap-2.5">
-                  <span className="mono text-[10px] text-ink-3">
+                  <span className="mono text-[11px] text-ink-3">
                     {robot.payloads.length} {t('rd.fitted')}
                   </span>
                   <button
                     onClick={() => setAddOpen((v) => !v)}
-                    className="mono flex items-center gap-1 border border-line-2 px-1.5 py-0.5 text-[9px] tracking-[0.1em] text-ink-2 transition-colors hover:border-ink-3 hover:text-ink"
+                    className="mono flex items-center gap-1 border border-line-2 px-1.5 py-0.5 text-[10px] tracking-[0.1em] text-ink-2 transition-colors hover:border-ink-3 hover:text-ink"
                   >
                     <Plus size={10} /> {t('rd.addPayload')}
                   </button>
@@ -195,8 +195,8 @@ export function RobotDetail() {
                       >
                         <Icon size={13} strokeWidth={1.5} className="shrink-0 text-ink-3" />
                         <span className="min-w-0">
-                          <span className="block truncate text-[11.5px] text-ink">{p.name}</span>
-                          <span className="mono block truncate text-[9.5px] text-ink-3">{p.model}</span>
+                          <span className="block truncate text-[12.5px] text-ink">{p.name}</span>
+                          <span className="mono block truncate text-[10.5px] text-ink-3">{p.model}</span>
                         </span>
                       </button>
                     )
@@ -219,27 +219,27 @@ export function RobotDetail() {
                   <Icon size={15} strokeWidth={1.5} className="mt-0.5 shrink-0" style={{ color: hot ? 'var(--color-ink)' : 'var(--color-ink-3)' }} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-[12.5px] text-ink">{p.name}</span>
+                      <span className="text-[13.5px] text-ink">{p.name}</span>
                       {p.stream && (
                         <Link
                           to={`/live?src=${p.stream}`}
                           onClick={(e) => e.stopPropagation()}
-                          className="mono flex items-center gap-1 border border-ok/30 bg-ok/10 px-1 py-0.5 text-[8.5px] tracking-[0.12em] text-ok hover:bg-ok/20"
+                          className="mono flex items-center gap-1 border border-ok/30 bg-ok/10 px-1 py-0.5 text-[9.5px] tracking-[0.12em] text-ok hover:bg-ok/20"
                         >
                           <span className="live-dot" style={{ width: 4, height: 4, background: 'var(--color-ok)' }} />
                           {t('live.live')}
                         </Link>
                       )}
                     </div>
-                    <div className="mono mt-0.5 text-[10.5px] text-ink-3">{p.model}</div>
-                    <div className="mt-0.5 text-[11px] text-ink-2">{p.detail}</div>
+                    <div className="mono mt-0.5 text-[11.5px] text-ink-3">{p.model}</div>
+                    <div className="mt-0.5 text-[12px] text-ink-2">{p.detail}</div>
                     {(() => {
                       const armed = rules.filter((rl) => rl.enabled && (rl.source === p.stream || rl.source === `${robot.id}:${p.id}`)).length
                       return armed > 0 ? (
                         <Link
                           to="/events?view=rules"
                           onClick={(e) => e.stopPropagation()}
-                          className="mono mt-1 inline-flex items-center gap-1 text-[9.5px] tracking-[0.08em] text-ink-3 underline decoration-line-2 underline-offset-2 hover:text-accent"
+                          className="mono mt-1 inline-flex items-center gap-1 text-[10.5px] tracking-[0.08em] text-ink-3 underline decoration-line-2 underline-offset-2 hover:text-accent"
                         >
                           <ShieldCheck size={10} /> {armed} {t('ev.rulesArmed')}
                         </Link>
@@ -247,7 +247,7 @@ export function RobotDetail() {
                     })()}
                   </div>
                   <span
-                    className="mono mt-1 shrink-0 text-[9px] uppercase tracking-[0.1em]"
+                    className="mono mt-1 shrink-0 text-[10px] uppercase tracking-[0.1em]"
                     style={{ color: (tel?.payloadHealth[p.id] ?? 'ok') === 'ok' ? 'var(--color-ok)' : 'var(--color-warn)' }}
                   >
                     {tel?.payloadHealth[p.id] ?? 'ok'}
@@ -277,7 +277,7 @@ export function RobotDetail() {
                 {(tel?.joints ?? []).map((j) => (
                   <JointRow key={j.name} name={j.name} c={j.c} />
                 ))}
-                {!tel && <div className="px-3.5 py-3 text-[11px] text-ink-3">{t('rd.awaitingTel')}</div>}
+                {!tel && <div className="px-3.5 py-3 text-[12px] text-ink-3">{t('rd.awaitingTel')}</div>}
               </div>
             </Panel>
             <Panel className="rise rise-3">
@@ -286,7 +286,7 @@ export function RobotDetail() {
                 {identity.map(([k, v]) => (
                   <div key={k}>
                     <div className="microlabel mb-0.5">{k}</div>
-                    <div className="mono truncate text-[11px] text-ink-2">{v}</div>
+                    <div className="mono truncate text-[12px] text-ink-2">{v}</div>
                   </div>
                 ))}
               </div>

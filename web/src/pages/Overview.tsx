@@ -43,7 +43,7 @@ function KpiRow() {
           <div className="mono mt-1.5 text-[26px] leading-none md:text-[30px]" style={{ color: tile.tone ?? 'var(--color-ink)' }}>
             {tile.value}
           </div>
-          {tile.sub && <div className="mono mt-1 text-[9.5px] text-ink-3">{tile.sub}</div>}
+          {tile.sub && <div className="mono mt-1 text-[10.5px] text-ink-3">{tile.sub}</div>}
         </Panel>
       ))}
     </div>
@@ -72,16 +72,16 @@ function FleetCell({ r }: { r: RobotSpec }) {
     <Panel className="panel-hover cursor-pointer p-3" onClick={() => nav(`/robots/${r.id}`)}>
       <div className="flex items-center gap-2">
         <span className="live-dot" style={{ background: r.color }} />
-        <span className="mono text-[11.5px] font-medium tracking-[0.05em] text-ink">{r.callsign}</span>
+        <span className="mono text-[12.5px] font-medium tracking-[0.05em] text-ink">{r.callsign}</span>
         <span className="ml-auto">
           <ModeChip mode={tel?.mode} />
         </span>
       </div>
       <div className="mt-2.5 flex items-center justify-between gap-3">
         <BatteryBar value={tel?.battery ?? 0} w={90} />
-        <span className="mono text-[10px] text-ink-3">{tel?.speed?.toFixed(2) ?? '—'} m/s</span>
+        <span className="mono text-[11px] text-ink-3">{tel?.speed?.toFixed(2) ?? '—'} m/s</span>
       </div>
-      <div className="mt-2 truncate text-[11px] text-ink-3">
+      <div className="mt-2 truncate text-[12px] text-ink-3">
         {m ? (
           <>
             <span className="text-ink-2">{m.name}</span>
@@ -122,11 +122,11 @@ function Feed() {
           >
             <SevDot sev={e.severity} pulse={!e.acked && e.severity === 'critical'} />
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[12px] leading-snug text-ink">{e.label}</div>
+              <div className="truncate text-[13px] leading-snug text-ink">{e.label}</div>
               <div className="microlabel mt-0.5 truncate">{e.zone}</div>
             </div>
             {e.snapshot && <img src={e.snapshot} alt="" loading="lazy" className="h-8 shrink-0 border border-line object-cover" style={{ width: 52 }} />}
-            <span className="mono w-12 shrink-0 text-right text-[9.5px] text-ink-3">{ago(e.ts, clock)}</span>
+            <span className="mono w-12 shrink-0 text-right text-[10.5px] text-ink-3">{ago(e.ts, clock)}</span>
           </div>
         ))}
       </div>
@@ -160,15 +160,15 @@ function MissionLog() {
         }
       />
       <div className="space-y-2.5 border-b border-line/70 p-3.5">
-        {active.length === 0 && <span className="text-[11.5px] text-ink-3">{t('ops.noActiveMissions')}</span>}
+        {active.length === 0 && <span className="text-[12.5px] text-ink-3">{t('ops.noActiveMissions')}</span>}
         {active.map((m) => {
           const r = robots.find((x) => x.id === m.robotId)
           return (
             <div key={m.id}>
               <div className="flex items-center gap-2">
-                <span className="mono text-[10px] text-ink-3">{r?.callsign ?? '—'}</span>
-                <span className="truncate text-[11.5px] text-ink-2">{m.name}</span>
-                <span className="mono ml-auto text-[9.5px] text-ink-3">
+                <span className="mono text-[11px] text-ink-3">{r?.callsign ?? '—'}</span>
+                <span className="truncate text-[12.5px] text-ink-2">{m.name}</span>
+                <span className="mono ml-auto text-[10.5px] text-ink-3">
                   {m.currentStep}/{m.steps.length}
                 </span>
               </div>
@@ -183,9 +183,9 @@ function MissionLog() {
         {recentResults.map((r, i) => (
           <div key={`${r.mission.id}-${r.ts}-${i}`} className="flex items-center gap-2 border-b border-line/50 px-3.5 py-2">
             <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: r.ok ? 'var(--color-ok)' : 'var(--color-warn)' }} />
-            <span className="mono shrink-0 text-[9.5px] text-ink-3">{r.waypointId}</span>
-            <span className="truncate text-[11px] text-ink-2">{r.note}</span>
-            <span className="mono ml-auto w-10 shrink-0 text-right text-[9px] text-ink-3">{ago(r.ts, clock)}</span>
+            <span className="mono shrink-0 text-[10.5px] text-ink-3">{r.waypointId}</span>
+            <span className="truncate text-[12px] text-ink-2">{r.note}</span>
+            <span className="mono ml-auto w-10 shrink-0 text-right text-[10px] text-ink-3">{ago(r.ts, clock)}</span>
           </div>
         ))}
       </div>
@@ -204,7 +204,7 @@ function VideoQuick() {
           <SnapshotImg src={`/stream/api/frame.jpeg?src=${c.stream}`} refreshMs={20000} className="h-full w-full object-cover opacity-75 transition-opacity group-hover:opacity-100" alt={c.name} />
           <span className="absolute inset-x-0 bottom-0 flex items-center gap-1.5 bg-black/60 px-2 py-1">
             {c.live && <Radio size={9} className="text-ok" />}
-            <span className="mono truncate text-[9px] tracking-[0.06em] text-white/85">{c.name}</span>
+            <span className="mono truncate text-[10px] tracking-[0.06em] text-white/85">{c.name}</span>
           </span>
         </button>
       ))}

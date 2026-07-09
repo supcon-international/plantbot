@@ -62,8 +62,8 @@ function StreamMeta({ stream, file }: { stream: string; file?: string }) {
       dead = true
     }
   }, [stream, file])
-  if (file) return <span className="mono text-[10px] text-white/45">H264 · LOOP</span>
-  return meta ? <span className="mono text-[10px] text-white/45">{meta} · RTSP</span> : null
+  if (file) return <span className="mono text-[11px] text-white/45">H264 · LOOP</span>
+  return meta ? <span className="mono text-[11px] text-white/45">{meta} · RTSP</span> : null
 }
 
 function PlayerOverlay({ feed }: { feed: Feed }) {
@@ -74,17 +74,17 @@ function PlayerOverlay({ feed }: { feed: Feed }) {
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/55 to-transparent px-3 pb-6 pt-2.5">
         <div className="flex min-w-0 items-center gap-2">
           <span className="shrink-0 live-dot" style={{ background: feed.live ? 'var(--color-ok)' : 'var(--color-accent)' }} />
-          <span className="mono truncate text-[11px] font-medium tracking-[0.08em] text-white/90">{feed.name}</span>
+          <span className="mono truncate text-[12px] font-medium tracking-[0.08em] text-white/90">{feed.name}</span>
           {feed.live && (
-            <span className="mono shrink-0 whitespace-nowrap border border-ok/40 bg-ok/10 px-1 py-0.5 text-[9px] tracking-[0.12em] text-ok">
+            <span className="mono shrink-0 whitespace-nowrap border border-ok/40 bg-ok/10 px-1 py-0.5 text-[10px] tracking-[0.12em] text-ok">
               {t('live.publicRtsp')}
             </span>
           )}
         </div>
-        <span className="mono hidden text-[10px] text-white/60 sm:block">{utcClock(clock)}</span>
+        <span className="mono hidden text-[11px] text-white/60 sm:block">{utcClock(clock)}</span>
       </div>
       <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/55 to-transparent px-3 pb-2.5 pt-6">
-        <span className="mono text-[10px] text-white/55">{feed.origin}</span>
+        <span className="mono text-[11px] text-white/55">{feed.origin}</span>
         <StreamMeta stream={feed.stream} file={feed.file} />
       </div>
       <span className="pointer-events-none absolute left-2 top-2 h-3 w-3 border-l border-t border-white/25" />
@@ -128,7 +128,7 @@ export function Live() {
             <button
               key={m}
               onClick={() => setMode(m)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] transition-colors ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] transition-colors ${
                 mode === m ? 'bg-surface-2 text-ink' : 'text-ink-3 hover:text-ink-2'
               }`}
             >
@@ -169,7 +169,7 @@ export function Live() {
                       alt={f.name}
                     />
                     <span className="absolute inset-x-0 bottom-0 truncate bg-black/60 px-1.5 py-1 text-left">
-                      <span className="mono block truncate text-[9px] tracking-[0.06em] text-white/85">
+                      <span className="mono block truncate text-[10px] tracking-[0.06em] text-white/85">
                         {f.name}
                       </span>
                     </span>

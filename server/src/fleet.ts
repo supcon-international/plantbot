@@ -318,16 +318,61 @@ export const ROBOTS: RobotSpec[] = [
       },
     ],
   },
+  {
+    id: 'go2-01',
+    callsign: 'UT·GO2-01',
+    vendor: 'Unitree 宇树科技',
+    model: 'Go2 EDU',
+    family: 'quadruped',
+    urdf: 'go2',
+    serial: 'UT-GO2-2605-0043',
+    firmware: 'v1.1.5',
+    ip: '10.7.31.44',
+    protocol: 'ROS2 / DDS · Wi-Fi 6',
+    massKg: 15,
+    ipRating: 'IP55',
+    maxSpeed: 3.7,
+    enduranceMin: 120,
+    batteryStart: 91,
+    color: '#d6d6ce',
+    home: { x: 5, z: 4.7 },
+    payloads: [
+      {
+        id: 'front-cam',
+        name: 'Front Wide Camera',
+        kind: 'camera',
+        model: '2K · 120° FOV',
+        stream: 'go2-front',
+        file: '/media/corridor.mp4',
+        detail: 'H.264 1440p30 · corridor sweep preset',
+      },
+      {
+        id: 'lidar-l1',
+        name: '4D LiDAR L1',
+        kind: 'lidar',
+        model: '360°×90° hemispherical',
+        detail: '21.6k pts/s · SLAM + terrain mapping',
+      },
+      {
+        id: 'imu',
+        name: 'IMU / Odometry',
+        kind: 'imu',
+        model: '6-axis · 500 Hz',
+        detail: 'Fused legged odometry',
+      },
+    ],
+  },
 ]
 
 export const SITE_CAMERAS: SiteCamera[] = [
   {
     id: 'perimeter-cam',
-    name: 'Perimeter — Reservoir Gate',
-    place: 'North fence, waterline sector',
+    name: 'Perimeter — Gate Yard',
+    place: 'North fence, container sector',
     stream: 'perimeter-cam',
-    live: true,
-    source: 'Public RTSP · stream.strba.sk (live)',
+    file: '/media/perimeter.mp4',
+    live: false,
+    source: 'NVR loop · demo footage',
   },
   {
     id: 'workshop-cam',
@@ -336,7 +381,7 @@ export const SITE_CAMERAS: SiteCamera[] = [
     stream: 'workshop-cam',
     file: '/media/staging.mp4',
     live: false,
-    source: 'RTSP loop · local relay',
+    source: 'NVR loop · demo footage',
   },
   {
     id: 'mast-cam',
@@ -345,35 +390,18 @@ export const SITE_CAMERAS: SiteCamera[] = [
     stream: 'mast-cam',
     file: '/media/plant_aerial.mp4',
     live: false,
-    source: 'RTSP loop · local relay',
+    source: 'NVR loop · demo footage',
+  },
+  {
+    id: 'tank-cam',
+    name: 'Tank Farm — South Rack',
+    place: 'ATEX zone pole mount',
+    stream: 'tank-cam',
+    file: '/media/tanknight.mp4',
+    live: false,
+    source: 'NVR loop · demo footage',
   },
 ]
-
-// go2rtc stream table. exec loops republish local public-license footage
-// through go2rtc's RTSP server, so every consumer path is genuine RTSP→MSE.
-export function streamTable(mediaDir: string, ffmpeg: string) {
-  const loop = (file: string, extra = '-c:v copy -an') =>
-    `exec:${ffmpeg} -hide_banner -loglevel error -re -stream_loop -1 -i ${mediaDir}/${file} ${extra} -rtsp_transport tcp -f rtsp {output}`
-  const thermal = (file: string) =>
-    loop(
-      file,
-      '-vf format=gray,format=gbrp,pseudocolor=preset=inferno,scale=640:-2 -r 15 -c:v libx264 -preset ultrafast -tune zerolatency -g 30 -pix_fmt yuv420p -an',
-    )
-  const ogi = (file: string) =>
-    loop(
-      file,
-      '-vf format=gray,eq=contrast=1.55:brightness=-0.06,unsharp=5:5:0.8,noise=alls=5:allf=t,scale=640:-2 -r 15 -c:v libx264 -preset ultrafast -tune zerolatency -g 30 -pix_fmt yuv420p -an',
-    )
-  return {
-    'perimeter-cam': 'rtsp://stream.strba.sk:1935/strba/VYHLAD_JAZERO.stream',
-    'lite3-front': loop('switchgear.mp4'),
-    'lite3-thermal': thermal('smokestack.mp4'),
-    'x30-optical': loop('substation.mp4'),
-    'agx-ogi': ogi('pumpjack.mp4'),
-    'workshop-cam': loop('staging.mp4'),
-    'mast-cam': loop('plant_aerial.mp4'),
-  } as Record<string, string>
-}
 
 // ---------- provisioning catalog (InOrbit-Connect-style directory) ----------
 
@@ -442,6 +470,40 @@ export const ROBOT_CATALOG: RobotModelSpec[] = [
       'Wheel-legged hybrid for rough terrain · 3D twin pending',
       '轮足复合构型,复杂地形通行 · 3D 模型待接入',
       'Híbrido rueda-pata para terreno difícil',
+    ],
+  },
+  {
+    model: 'Go2 EDU',
+    vendor: 'Unitree 宇树科技',
+    family: 'quadruped',
+    urdf: 'go2',
+    massKg: 15,
+    ipRating: 'IP55',
+    maxSpeed: 3.7,
+    enduranceMin: 120,
+    protocol: 'ROS2 / DDS · Wi-Fi 6',
+    firmware: 'v1.1.5',
+    blurb: [
+      'Agile quadruped for corridor and rack inspection',
+      '敏捷四足,适合廊道与机柜巡检',
+      'Cuadrúpedo ágil para pasillos',
+    ],
+  },
+  {
+    model: 'ANYmal C',
+    vendor: 'ANYbotics',
+    family: 'quadruped',
+    urdf: 'anymal',
+    massKg: 50,
+    ipRating: 'IP67',
+    maxSpeed: 1.3,
+    enduranceMin: 120,
+    protocol: 'ROS2 / DDS · LTE',
+    firmware: 'v23.04',
+    blurb: [
+      'Autonomous industrial inspection benchmark, Ex-proof option',
+      '工业巡检标杆机型,可选防爆版本',
+      'Referencia en inspección industrial autónoma',
     ],
   },
   {
@@ -533,6 +595,8 @@ const MODEL_CODE: Record<string, string> = {
   'Jueying X30': 'X30',
   'Lynx M20': 'M20',
   'Husky A200': 'HSK',
+  'Go2 EDU': 'GO2',
+  'ANYmal C': 'ANY',
 }
 
 /** provision a new unit from the catalog — id/serial/callsign are minted here */
