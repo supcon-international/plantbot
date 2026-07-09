@@ -69,7 +69,7 @@ function RobotMarker({ r, selected, onSelect }: { r: RobotSpec; selected: boolea
     }
   })
 
-  const color = selected ? '#f2f4f6' : r.color
+  const color = selected ? '#b8ee46' : r.color
 
   return (
     <group ref={group} onClick={(e) => (e.stopPropagation(), onSelect())}>
@@ -99,7 +99,7 @@ function RobotMarker({ r, selected, onSelect }: { r: RobotSpec; selected: boolea
       {selected && (
         <mesh position={[0, 0.9, 0]}>
           <cylinderGeometry args={[0.012, 0.012, 1.8, 6]} />
-          <meshBasicMaterial color="#f2f4f6" transparent opacity={0.3} />
+          <meshBasicMaterial color="#b8ee46" transparent opacity={0.3} />
         </mesh>
       )}
       <Html center position={[0, 1.15, 0]} style={{ pointerEvents: 'none', whiteSpace: 'nowrap' }} zIndexRange={[10, 0]}>
@@ -108,7 +108,7 @@ function RobotMarker({ r, selected, onSelect }: { r: RobotSpec; selected: boolea
             fontFamily: 'var(--font-mono)',
             fontSize: 10,
             letterSpacing: '0.1em',
-            color: selected ? '#f2f4f6' : 'rgba(230,232,234,0.85)',
+            color: selected ? '#b8ee46' : 'rgba(230,232,234,0.85)',
             background: 'rgba(12,13,15,0.78)',
             border: `1px solid ${selected ? 'rgba(242,244,246,0.5)' : 'rgba(47,53,60,0.9)'}`,
             padding: '2px 6px',
@@ -207,6 +207,7 @@ export function SceneMap({
   )
   return (
     <Canvas
+      eventPrefix="client"
       dpr={quality === 'high' ? [1, 1.75] : 1}
       camera={{ position: [13, 10.5, 16.5], fov: 42, near: 0.1, far: 300 }}
       gl={{ antialias: false, alpha: true, powerPreference: 'high-performance' }}
@@ -224,10 +225,10 @@ export function SceneMap({
         args={[32, 18]}
         cellSize={1}
         cellThickness={0.35}
-        cellColor="#1b2026"
+        cellColor="#232322"
         sectionSize={4}
         sectionThickness={0.7}
-        sectionColor="#262d35"
+        sectionColor="#34342f"
         fadeDistance={46}
         fadeStrength={1.6}
       />
@@ -239,13 +240,13 @@ export function SceneMap({
           [-16, 0.02, 9],
           [-16, 0.02, -9],
         ]}
-        color="#2f353c"
+        color="#4a4a46"
         lineWidth={1}
       />
 
       {robots.map((r) => (
         <group key={r.id}>
-          <LivePath robotId={r.id} color={selection?.kind === 'robot' && selection.id === r.id ? '#f2f4f6' : r.color} />
+          <LivePath robotId={r.id} color={selection?.kind === 'robot' && selection.id === r.id ? '#b8ee46' : r.color} />
           <RobotMarker
             r={r}
             selected={selection?.kind === 'robot' && selection.id === r.id}

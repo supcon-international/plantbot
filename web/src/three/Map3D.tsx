@@ -233,9 +233,10 @@ function WaypointMark({
           document.body.style.cursor = 'default'
         }}
       >
-        {/* invisible hit pad */}
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]} visible={false}>
+        {/* transparent hit pad — must stay raycastable, so no visible={false} */}
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
           <circleGeometry args={[0.62, 12]} />
+          <meshBasicMaterial transparent opacity={0} depthWrite={false} />
         </mesh>
         {wp.kind === 'dock' && (
           <>
@@ -525,6 +526,7 @@ export function Map3D({
     <div className={`relative touch-none overflow-hidden bg-surface ${heightClass} ${className}`}>
       <Canvas
         shadows
+        eventPrefix="client"
         dpr={[1, 1.75]}
         camera={{ position: HOME.pos.toArray() as [number, number, number], fov: 38, near: 0.5, far: 220 }}
         resize={{ polyfill: RafResizeObserver as any, scroll: false, debounce: 0 }}
