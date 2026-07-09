@@ -76,18 +76,32 @@ for (const j of ['base', 'battery', 'bottom_shell', 'depth_camera', 'drive', 'fa
 
 // ---------- gaussian splat scene ----------
 async function splatScene() {
-  const dest = join(ROOT, 'web', 'public', 'assets', 'scenes', 'building_yard.splat')
-  if (existsSync(dest) && statSync(dest).size > 1e6) return console.log('  ✓ building_yard.splat (cached)')
+  const dest = join(ROOT, 'web', 'public', 'assets', 'scenes', 'plant_yard.splat')
+  if (existsSync(dest) && statSync(dest).size > 1e6) return console.log('  ✓ plant_yard.splat (cached)')
   mkdirSync(dirname(dest), { recursive: true })
-  const raw = join(ROOT, 'server', 'media', 'building_raw.ply')
-  if (!existsSync(raw) || statSync(raw).size < 3e8) {
-    process.stdout.write('  ↓ 3DGS "building" scene (326 MB) … ')
-    await download('https://huggingface.co/kishimisu/3d-gaussian-splatting-webgl/resolve/main/building.ply', raw, 'building.ply')
-    console.log('done')
+  // SKANOSFERA "Hala Magazynowa" warehouse scan, published on superspl.at
+  // (scene 3eedaa2b). We pull the LOD-2 SOG chunks, merge them to a 3DGS ply
+  // with @playcanvas/splat-transform, then level/center/scale via level_splat.
+  const work = join(ROOT, 'server', 'media', 'hala')
+  const base = 'https://d28zzqy0iyovbz.cloudfront.net/3eedaa2b/v1'
+  const chunks = ['2_0', '2_1', '2_2', '2_3', '2_4']
+  const files = ['meta.json', 'means_l.webp', 'means_u.webp', 'scales.webp', 'quats.webp', 'sh0.webp']
+  for (const c of chunks) {
+    mkdirSync(join(work, c), { recursive: true })
+    for (const f of files) {
+      const p = join(work, c, f)
+      if (!existsSync(p) || statSync(p).size < 200) await download(`${base}/${c}/${f}`, p, `${c}/${f}`)
+    }
   }
-  // level + center + scale + crop, baked into the splat (needs python3 + numpy)
+  const ply = join(work, 'hala.ply')
+  if (!existsSync(ply) || statSync(ply).size < 1e8) {
+    console.log('  ⇄ merging SOG chunks (splat-transform) …')
+    execSync(`npx --yes @playcanvas/splat-transform ${chunks.map((c) => join(work, c, 'meta.json')).join(' ')} "${ply}"`, {
+      stdio: 'inherit',
+    })
+  }
   console.log('  ⟲ leveling & baking (scripts/level_splat.py) …')
-  execSync(`python3 "${join(ROOT, 'scripts', 'level_splat.py')}" "${raw}" "${dest}" --span 46`, { stdio: 'inherit' })
+  execSync(`python3 "${join(ROOT, 'scripts', 'level_splat.py')}" "${ply}" "${dest}" --span 38 --ymax 6.5`, { stdio: 'inherit' })
 }
 
 

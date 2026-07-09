@@ -19,6 +19,12 @@ import numpy as np
 SH_C0 = 0.28209479177387814
 
 
+def read_splat(path):
+    """antimatter15 .splat: pos f32x3 | scale f32x3 (linear) | rgba u8x4 | quat u8x4 (w-first)."""
+    raw = np.fromfile(path, dtype=[('p', '<f4', 3), ('s', '<f4', 3), ('c', 'u1', 4), ('q', 'u1', 4)])
+    return raw
+
+
 def read_gs_ply(path):
     with open(path, 'rb') as f:
         header = b''
@@ -111,10 +117,29 @@ def main():
     keep_target = int(next((sys.argv[i + 1] for i, a in enumerate(sys.argv) if a == '--keep'), 2_000_000))
     # indoor scenes: slice the ceiling off for the dollhouse view
     y_max = float(next((sys.argv[i + 1] for i, a in enumerate(sys.argv) if a == '--ymax'), 15))
+    # halo radius: beyond it, bright oversized blobs are capture haze — cull
+    halo_r = float(next((sys.argv[i + 1] for i, a in enumerate(sys.argv) if a == '--halo'), 0))
 
-    data, idx = read_gs_ply(src)
-    data = data[np.isfinite(data).all(1)]  # reconstructions ship stray NaN/Inf rows
-    pos = data[:, [idx['x'], idx['y'], idx['z']]].astype(np.float64)
+    if src.endswith('.splat'):
+        raw = read_splat(src)
+        ok = np.isfinite(raw['p']).all(1) & np.isfinite(raw['s']).all(1)
+        raw = raw[ok]
+        pos = raw['p'].astype(np.float64)
+        lin_scales = raw['s'].astype(np.float64)
+        rgba = raw['c'].copy()
+        quats = (raw['q'].astype(np.float64) - 128.0) / 128.0
+        data = idx = None
+    else:
+        data, idx = read_gs_ply(src)
+        data = data[np.isfinite(data).all(1)]  # reconstructions ship stray NaN/Inf rows
+        pos = data[:, [idx['x'], idx['y'], idx['z']]].astype(np.float64)
+        lin_scales = np.exp(data[:, [idx['scale_0'], idx['scale_1'], idx['scale_2']]])
+        dc = data[:, [idx['f_dc_0'], idx['f_dc_1'], idx['f_dc_2']]]
+        rgba = np.zeros((len(data), 4), np.uint8)
+        rgba[:, :3] = np.clip((0.5 + SH_C0 * dc) * 255, 0, 255).astype(np.uint8)
+        rgba[:, 3] = np.clip(1 / (1 + np.exp(-data[:, idx['opacity']])) * 255, 0, 255).astype(np.uint8)
+        q = data[:, [idx['rot_0'], idx['rot_1'], idx['rot_2'], idx['rot_3']]]
+        quats = q / np.linalg.norm(q, axis=1, keepdims=True)
     print(f'loaded {len(pos):,} splats')
 
     # 1. level: sky-side ground normal → +Y (handles y-up and y-down sources alike)
@@ -151,19 +176,21 @@ def main():
     # 5. crop to the yard shell + drop only the extreme floaters.
     # Scene reconstructions lean on big gaussians for surfaces — cull by
     # quantile, not absolute size, or buildings dissolve into mist.
-    scales = np.exp(data[:, [idx['scale_0'], idx['scale_1'], idx['scale_2']]]) * s
+    scales = lin_scales * s
     smax = scales.max(1)
     box = (np.abs(p2[:, 0]) < 19) & (np.abs(p2[:, 2]) < 12.5) & (p2[:, 1] > -0.7) & (p2[:, 1] < y_max)
     lim = np.percentile(smax[box], 99.6)
     # scan fog: bright cigar-shaped streaks hanging over the scene. Real
     # surfaces are pancake gaussians (smid ≈ smax); fog is thin and long.
-    dc = data[:, [idx['f_dc_0'], idx['f_dc_1'], idx['f_dc_2']]]
-    rgb_all = np.clip((0.5 + SH_C0 * dc) * 255, 0, 255)
+    rgb_all = rgba[:, :3].astype(np.float64)
     bright = rgb_all.mean(1)
     ssort = np.sort(scales, axis=1)
     cigar = (ssort[:, 2] > 0.05) & (ssort[:, 1] / np.maximum(ssort[:, 2], 1e-9) < 0.15)
     skyish = (bright > 190) | (rgb_all[:, 2] > rgb_all[:, 0] + 18)
     fog = ((p2[:, 1] > 0.5) & cigar & (bright > 170)) | ((p2[:, 1] > 2.5) & (smax > 0.08) & skyish)
+    if halo_r > 0:
+        rad = np.hypot(p2[:, 0], p2[:, 2])
+        fog = fog | ((rad > halo_r) & (smax > 0.1) & (bright > 175))
     keep = box & (smax < lim) & ~fog
     near = (np.abs(p2[:, 0]) < 12) & (np.abs(p2[:, 2]) < 9)
     print(f'crop keeps {keep.sum():,} (floater cutoff {lim:.2f})')
@@ -181,10 +208,9 @@ def main():
     # 7. bake into .splat (pos f32×3, scale f32×3, rgba u8×4, quat u8×4)
     P = p2[ki].astype('<f4')
     S = scales[ki].astype('<f4')
-    dc = data[ki][:, [idx['f_dc_0'], idx['f_dc_1'], idx['f_dc_2']]]
-    rgb = np.clip((0.5 + SH_C0 * dc) * 255, 0, 255).astype(np.uint8)
-    a = np.clip(1 / (1 + np.exp(-data[ki][:, idx['opacity']])) * 255, 0, 255).astype(np.uint8)
-    q = data[ki][:, [idx['rot_0'], idx['rot_1'], idx['rot_2'], idx['rot_3']]]
+    rgb = rgba[ki, :3]
+    a = rgba[ki, 3]
+    q = quats[ki]
     q = q / np.linalg.norm(q, axis=1, keepdims=True)
     qr = quat_mul(mat_to_quat(R), q)
     qr = qr / np.linalg.norm(qr, axis=1, keepdims=True)

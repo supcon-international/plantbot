@@ -7,7 +7,8 @@ import * as THREE from 'three'
 import { RafResizeObserver } from './rafResizeObserver'
 import { useApp } from '../lib/store'
 import type { DetectionEvent, RobotSpec } from '../lib/types'
-import { SEVERITY_COLOR } from '../lib/types'
+// THREE.Color can't parse CSS var() — mirror the palette as literals
+const SEVERITY_COLOR: Record<string, string> = { critical: '#dd5648', high: '#c2a05a', info: '#9c9c98', low: '#6b6b6f' }
 import type { MapSel } from '../components/OpsMap'
 
 // Calibration of the public "train" 3DGS capture into our site frame.
@@ -15,7 +16,7 @@ import type { MapSel } from '../components/OpsMap'
 // tandt "truck" capture: COLMAP y-down, yaw 0.705 rad from hull PCA,
 // ground plane at y≈0.5 — open-yard footprint fills the site frame.
 // bump when the baked scene file changes — busts the browser's cache
-const SCENE_REV = 4
+const SCENE_REV = 11
 
 // the scene file is pre-leveled and pre-scaled by scripts/level_splat.py —
 // identity here is the guarantee that nothing renders crooked
@@ -32,15 +33,31 @@ function SplatStage() {
       gpuAcceleratedSort: false,
       sharedMemoryForWorkers: false, // no COOP/COEP needed
       freeIntermediateSplatData: true,
+      // the radial reveal animation stalls under our render loop — show all
+      sceneRevealMode: GaussianSplats3D.SceneRevealMode.Instant,
     })
-    v.addSplatScene('/assets/scenes/building_yard.splat?v=' + SCENE_REV, {
+    v.addSplatScene('/assets/scenes/plant_yard.splat?v=' + SCENE_REV, {
       format: GaussianSplats3D.SceneFormat.Splat,
       splatAlphaRemovalThreshold: 5,
       showLoadingUI: false,
-      progressiveLoad: true,
+      // progressive + non-shared-memory drops sections beyond the first —
+      // load whole; the chip covers the wait
+      progressiveLoad: false,
     })
-      .then(() => window.dispatchEvent(new CustomEvent('aegis:splat-ready')))
+      .then(() => {
+        // the library's radial reveal stalls under our render loop — the
+        // Instant mode flag isn't forwarded by DropInViewer, so force the
+        // visible region open once the scene is in memory
+        const sm = (v as any).viewer?.splatMesh ?? (v as any).splatMesh
+        if (sm) {
+          sm.visibleRegionFadeStartRadius = 1000
+          sm.visibleRegionRadius = 1000
+          sm.visibleRegionBufferRadius = 1000
+        }
+        window.dispatchEvent(new CustomEvent('aegis:splat-ready'))
+      })
       .catch(() => window.dispatchEvent(new CustomEvent('aegis:splat-ready')))
+    ;(window as any).__viewer = v
     return v
   })
   useEffect(() => {
