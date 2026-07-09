@@ -97,6 +97,21 @@ export const api = {
       body: JSON.stringify(body),
     }).then((r) => r.json()),
   deleteRule: (id: string) => fetch(`/api/rules/${id}`, { method: 'DELETE' }),
+  getCatalog: () => fetch('/api/catalog').then((r) => r.json()),
+  registerRobot: (body: unknown) =>
+    fetch('/api/robots', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then((r) => r.json()),
+  installPayload: (robotId: string, payloadId: string) =>
+    fetch(`/api/robots/${robotId}/payloads`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ payloadId }),
+    }).then((r) => r.json()),
+  removePayload: (robotId: string, payloadId: string) =>
+    fetch(`/api/robots/${robotId}/payloads/${payloadId}`, { method: 'DELETE' }),
 }
 
 let ws: WebSocket | null = null
@@ -159,6 +174,8 @@ function connect() {
       useApp.setState((s) => ({
         events: s.events.map((e) => (e.id === msg.id ? { ...e, acked: true } : e)),
       }))
+    } else if (msg.t === 'fleet') {
+      useApp.setState({ robots: msg.robots })
     } else if (msg.t === 'missions' || msg.t === 'missionResult') {
       useApp.setState({ missions: msg.missions })
     } else if (msg.t === 'rules') {

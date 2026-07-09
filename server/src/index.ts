@@ -5,7 +5,19 @@ import { WebSocketServer, WebSocket } from 'ws'
 import { readFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { ROBOTS, SITE, SITE_CAMERAS, WAYPOINTS, ZONES, BUILDINGS } from './fleet.js'
+import {
+  ROBOTS,
+  SITE,
+  SITE_CAMERAS,
+  WAYPOINTS,
+  ZONES,
+  BUILDINGS,
+  ROBOT_CATALOG,
+  PAYLOAD_CATALOG,
+  registerRobot,
+  installPayload,
+  removePayload,
+} from './fleet.js'
 import { startGo2rtc, stopGo2rtc } from './go2rtc.js'
 import {
   tick,
@@ -20,7 +32,16 @@ import {
   deleteRule,
   missionSnapshot,
 } from './sim.js'
-import { missions, createMission, abortMission, teleopGoto, seedMissions, grabSnapshotHook, nav } from './missions.js'
+import {
+  missions,
+  createMission,
+  abortMission,
+  teleopGoto,
+  seedMissions,
+  grabSnapshotHook,
+  nav,
+  initNav,
+} from './missions.js'
 
 const app = Fastify({ logger: false })
 await app.register(cors, { origin: true })
@@ -43,6 +64,43 @@ app.get('/api/fleet', async () => ({
   zones: ZONES,
   buildings: BUILDINGS,
 }))
+
+// ---------- provisioning ----------
+
+app.get('/api/catalog', async () => ({ models: ROBOT_CATALOG, payloads: PAYLOAD_CATALOG }))
+
+app.post<{ Body: any }>('/api/robots', async (req, reply) => {
+  const b = (req.body ?? {}) as any
+  if (!b.model || !b.ip || !b.home) return reply.code(400).send({ error: 'model, ip, home required' })
+  const robot = registerRobot({
+    model: b.model,
+    callsign: b.callsign,
+    ip: b.ip,
+    protocol: b.protocol,
+    home: b.home,
+    payloadIds: Array.isArray(b.payloadIds) ? b.payloadIds : [],
+  })
+  if (!robot) return reply.code(400).send({ error: 'unknown model' })
+  initNav(robot)
+  const s = nav.get(robot.id)
+  if (s) s.onResult = (m, res) => broadcast({ t: 'missionResult', missionId: m.id, result: res, missions })
+  broadcast({ t: 'fleet', robots: ROBOTS })
+  return { robot }
+})
+
+app.post<{ Params: { id: string }; Body: any }>('/api/robots/:id/payloads', async (req, reply) => {
+  const b = (req.body ?? {}) as any
+  const inst = installPayload(req.params.id, b.payloadId)
+  if (!inst) return reply.code(404).send({ error: 'unknown robot or payload' })
+  broadcast({ t: 'fleet', robots: ROBOTS })
+  return { payload: inst }
+})
+
+app.delete<{ Params: { id: string; pid: string } }>('/api/robots/:id/payloads/:pid', async (req, reply) => {
+  if (!removePayload(req.params.id, req.params.pid)) return reply.code(404).send({ error: 'not found' })
+  broadcast({ t: 'fleet', robots: ROBOTS })
+  return { ok: true }
+})
 
 // ---------- events ----------
 

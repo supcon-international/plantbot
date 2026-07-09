@@ -107,6 +107,7 @@ export interface DetectionRule {
   enabled: boolean
   robotId?: string
   builtin: boolean
+  lastFiredAt?: number
   firedCount: number
 }
 
@@ -141,6 +142,7 @@ export function createRule(input: {
   zone?: string
   threshold?: number
   severity?: Severity
+  robotId?: string
 }) {
   return addRule({
     name: input.name,
@@ -151,6 +153,7 @@ export function createRule(input: {
     threshold: input.threshold ?? 0.6,
     severity: input.severity ?? 'info',
     enabled: true,
+    robotId: input.robotId,
     builtin: false,
   })
 }
@@ -255,6 +258,7 @@ export async function generateEvent(rule?: DetectionRule, ts = Date.now()): Prom
     z: +pos.z.toFixed(2),
   }
   r.firedCount++
+  r.lastFiredAt = ts
 
   const frame = await grabFrame(r.source)
   if (frame) {

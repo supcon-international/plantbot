@@ -175,10 +175,7 @@ export function MapPage() {
 
       {/* top-left: site + fleet chips */}
       <div className="pointer-events-none absolute left-3 top-3 z-10 space-y-2">
-        <div>
-          <div className="microlabel">{mode === 'ops' ? t('map.ops.title') : t('map.splat.title')}</div>
-          <div className="mt-0.5 text-[13px] font-medium text-ink">{site?.name ?? '—'}</div>
-        </div>
+        <div className="text-[13px] font-medium text-ink">{site?.name ?? '—'}</div>
         <div className="pointer-events-auto flex flex-wrap gap-1.5">
           {robots.map((r) => {
             const active = sel?.kind === 'robot' && sel.id === r.id

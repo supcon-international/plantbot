@@ -393,8 +393,7 @@ export function Missions() {
     <div className="mx-auto max-w-[1400px] space-y-3 p-3 md:p-4">
       <div className="flex items-center justify-between">
         <div>
-          <div className="microlabel">{t('mi.missionControl')}</div>
-          <div className="mono mt-0.5 text-[13px] text-ink-2">
+          <div className="mono text-[13px] text-ink-2">
             {groups.active.length} {t('ms.active')} · {groups.queued.length} {t('ms.queued')}
           </div>
         </div>

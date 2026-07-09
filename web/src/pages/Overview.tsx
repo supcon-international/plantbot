@@ -232,14 +232,7 @@ export function Overview() {
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
         <div className="space-y-3 lg:col-span-8">
           <Panel className="rise rise-2">
-            <PanelHead
-              label={t('ops.liveOperations')}
-              right={
-                <span className="mono hidden text-[10px] text-ink-3 sm:block">
-                  {active} {t('ops.liveOperations.hint')}
-                </span>
-              }
-            />
+            <PanelHead label={`${active} ${t('ops.liveOperations.hint')}`} />
             <OpsMap selection={sel} onSelect={onMapSelect} heightClass="h-[340px] md:h-[460px]" className="border-0" wheelZoom={false} />
           </Panel>
           <FleetStrip />

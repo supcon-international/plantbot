@@ -59,6 +59,20 @@ export type Building =
   | { id: string; kind: 'box'; x0: number; z0: number; x1: number; z1: number; h: number; tone?: 'light' | 'mid'; name?: string; order?: number }
   | { id: string; kind: 'cyl'; cx: number; cz: number; r: number; h: number; tone?: 'light' | 'mid'; name?: string; order?: number }
 
+export interface RobotModelSpec {
+  model: string
+  vendor: string
+  family: 'quadruped' | 'ugv'
+  urdf: string
+  massKg: number
+  ipRating: string
+  maxSpeed: number
+  enduranceMin: number
+  protocol: string
+  firmware: string
+  blurb: [string, string, string]
+}
+
 export interface SiteInfo {
   id: string
   name: string
@@ -144,6 +158,7 @@ export interface DetectionRule {
   enabled: boolean
   robotId?: string
   builtin: boolean
+  lastFiredAt?: number
   firedCount: number
 }
 

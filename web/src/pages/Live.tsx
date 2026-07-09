@@ -114,8 +114,7 @@ export function Live() {
     <div className="mx-auto max-w-[1400px] space-y-3 p-3 md:p-4">
       <div className="flex items-center justify-between">
         <div>
-          <div className="microlabel">{t('live.videoWall')}</div>
-          <div className="mt-0.5 text-[15px] font-medium text-ink">
+          <div className="text-[15px] font-medium text-ink">
             {mode === 'focus' ? feed?.name : `${t('live.allFeeds')} · ${feeds.length} ${t('live.channels')}`}
           </div>
         </div>

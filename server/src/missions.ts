@@ -70,7 +70,9 @@ export const missions: Mission[] = []
 let seq = 100
 
 export const nav = new Map<string, NavState>()
-for (const r of ROBOTS) {
+
+/** create nav state for a unit — also used when provisioning at runtime */
+export function initNav(r: RobotSpec) {
   nav.set(r.id, {
     x: r.home.x,
     z: r.home.z,
@@ -85,6 +87,7 @@ for (const r of ROBOTS) {
     actionIdx: 0,
   })
 }
+for (const r of ROBOTS) initNav(r)
 
 export function createMission(
   data: {

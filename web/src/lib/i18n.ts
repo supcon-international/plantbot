@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
 export type Lang = 'en' | 'zh' | 'es'
-const IDX: Record<Lang, number> = { en: 0, zh: 1, es: 2 }
+export const IDX: Record<Lang, number> = { en: 0, zh: 1, es: 2 }
 
 interface LangState {
   lang: Lang
@@ -160,6 +160,27 @@ const D: Record<string, [string, string, string]> = {
   'fl.quadruped': ['Quadruped units', '四足机器人', 'Cuadrúpedos'],
   'fl.ugv': ['Wheeled UGV', '轮式 UGV', 'UGV con ruedas'],
   'fl.provision': ['Provision unit', '接入新机', 'Aprovisionar unidad'],
+  'c.cancel': ['Cancel', '取消', 'Cancelar'],
+  'fl.wiz.title': ['Connect a robot', '接入机器人', 'Conectar un robot'],
+  'fl.wiz.stepModel': ['Model', '选择型号', 'Modelo'],
+  'fl.wiz.stepLink': ['Connection', '连接配置', 'Conexión'],
+  'fl.wiz.stepPayload': ['Payloads', '选择载荷', 'Cargas'],
+  'fl.wiz.callsign': ['Callsign', '呼号', 'Indicativo'],
+  'fl.wiz.address': ['Unit address', '机器人地址', 'Dirección de la unidad'],
+  'fl.wiz.transport': ['Transport', '传输协议', 'Transporte'],
+  'fl.wiz.home': ['Home / dock waypoint', '待命 / 充电航点', 'Waypoint base'],
+  'fl.wiz.payloadHint': ['Pick the sensor stack — streams and detections wire up automatically', '选择传感器配置 — 视频流与检测将自动接线', 'Elige los sensores — flujos y detecciones se conectan solos'],
+  'fl.wiz.back': ['Back', '上一步', 'Atrás'],
+  'fl.wiz.next': ['Next', '下一步', 'Siguiente'],
+  'fl.wiz.connect': ['CONNECT UNIT', '接入机器人', 'CONECTAR UNIDAD'],
+  'fl.wiz.connecting': ['CONNECTING…', '接入中…', 'CONECTANDO…'],
+  'fl.wiz.done.title': ['Unit online', '接入成功', 'Unidad en línea'],
+  'fl.wiz.done.desc': ['Telemetry is streaming — the dispatcher can assign missions now.', '遥测已接入 — 调度器现在即可派发任务。', 'Telemetría activa — el despachador ya puede asignar misiones.'],
+  'fl.wiz.viewUnit': ['VIEW UNIT', '查看机器人', 'VER UNIDAD'],
+  'fl.wiz.noTwin': ['3D TWIN PENDING', '3D 模型待接入', 'GEMELO 3D PENDIENTE'],
+  'fl.wiz.selected': ['selected', '已选', 'seleccionadas'],
+  'rd.addPayload': ['ADD PAYLOAD', '添加载荷', 'AÑADIR CARGA'],
+  'rd.removePayload': ['Remove payload', '移除载荷', 'Quitar carga'],
   'fl.matrix': ['Sensor coverage matrix', '传感器覆盖矩阵', 'Matriz de sensores'],
   'fl.matrix.sub': ['payload × unit', '载荷 × 机型', 'carga × unidad'],
   'fl.unit': ['Unit', '机器人', 'Unidad'],
@@ -216,12 +237,17 @@ const D: Record<string, [string, string, string]> = {
   // ---------- map ----------
   'map.ops.title': ['Operations map · occupancy + vector layers', '作业地图 · 栅格 + 矢量图层', 'Mapa de operaciones · ocupación + vectores'],
   'map.splat.title': ['3D capture · gaussian splats', '3D 采集 · 高斯泼溅', 'Captura 3D · gaussian splats'],
+  'map.lg.inspect': ['Inspect point', '巡检点位', 'Punto de inspección'],
+  'map.lg.nav': ['Route node', '路径节点', 'Nodo de ruta'],
+  'map.lg.dock': ['Charge dock', '充电桩', 'Base de carga'],
+  'map.lg.alarm': ['Alarm', '告警', 'Alarma'],
   'map.opsMap': ['OPS MAP', '作业地图', 'MAPA OPS'],
   'map.3dScan': ['3D SCAN', '3D 扫描', 'ESCANEO 3D'],
   'map.streaming': ['STREAMING GAUSSIAN SPLATS', '高斯泼溅加载中', 'CARGANDO GAUSSIAN SPLATS'],
   'map.wpDispatch': ['select a unit above to dispatch', '在上方选择机器人以派遣', 'elige una unidad arriba para despachar'],
 
   // ---------- events ----------
+  'ev.siteWide': ['Site-wide', '全站', 'Todo el sitio'],
   'ev.center': ['Detection center', '检测中心', 'Centro de detección'],
   'ev.rulesArmed': ['rules armed', '条规则启用', 'reglas activas'],
   'ev.board': ['Board', '看板', 'Tablero'],

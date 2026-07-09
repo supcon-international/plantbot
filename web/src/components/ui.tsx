@@ -74,9 +74,9 @@ export function SevTag({ sev }: { sev: Severity }) {
 const MODE_TONE: Record<RobotMode, string> = {
   idle: 'var(--color-ink-3)',
   navigating: 'var(--color-ink)',
-  executing: 'var(--color-ink)',
+  executing: 'var(--color-accent)',
   teleop: 'var(--color-warn)',
-  charging: 'var(--color-ok)',
+  charging: 'var(--color-accent)',
 }
 
 export function ModeChip({ mode }: { mode?: RobotMode }) {
@@ -93,9 +93,9 @@ export function ModeChip({ mode }: { mode?: RobotMode }) {
 }
 
 export const MISSION_STATUS_TONE: Record<MissionStatus, string> = {
-  active: 'var(--color-ink)',
+  active: 'var(--color-accent)',
   queued: 'var(--color-ink-2)',
-  done: 'var(--color-ok)',
+  done: 'var(--color-ink-2)',
   failed: 'var(--color-crit)',
   aborted: 'var(--color-low)',
 }

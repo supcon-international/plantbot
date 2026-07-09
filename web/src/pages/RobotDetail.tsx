@@ -1,11 +1,12 @@
-import { Suspense, lazy, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { ArrowLeft, ArrowUpRight } from 'lucide-react'
-import { useApp, useHistory } from '../lib/store'
+import { ArrowLeft, ArrowUpRight, Plus, ShieldCheck, X } from 'lucide-react'
+import { useApp, useHistory, api } from '../lib/store'
 import { useT } from '../lib/i18n'
 import { Panel, PanelHead, Stat, Spark, BatteryBar, ModeChip } from '../components/ui'
 const RobotViewer = lazy(() => import('../three/RobotViewer').then((m) => ({ default: m.RobotViewer })))
-import { KIND_ICON } from './Robots'
+import { KIND_ICON, TwinPlaceholder } from './Robots'
+import type { PayloadSpec } from '../lib/types'
 
 function JointRow({ name, c }: { name: string; c: number }) {
   const tone = c > 55 ? 'var(--color-crit)' : c > 50 ? 'var(--color-warn)' : 'var(--color-ink-2)'
@@ -31,9 +32,16 @@ export function RobotDetail() {
   const tel = useApp((s) => (id ? s.telemetry[id] : undefined))
   const missions = useApp((s) => s.missions)
   const waypoints = useApp((s) => s.waypoints)
+  const rules = useApp((s) => s.rules)
   const history = useHistory(id)
   const t = useT()
   const [payloadSel, setPayloadSel] = useState<string | null>(null)
+  const [addOpen, setAddOpen] = useState(false)
+  const [catalog, setCatalog] = useState<PayloadSpec[]>([])
+  useEffect(() => {
+    if (!addOpen || catalog.length) return
+    api.getCatalog().then((c) => setCatalog(c.payloads ?? []))
+  }, [addOpen, catalog.length])
 
   const mission = tel?.missionId ? missions.find((m) => m.id === tel.missionId) : undefined
   const targetWp = tel?.targetWp ? waypoints.find((w) => w.id === tel.targetWp) : undefined
@@ -93,19 +101,20 @@ export function RobotDetail() {
         <Panel className="relative h-[44vh] min-h-[300px] overflow-hidden lg:col-span-7 lg:h-[calc(100vh-190px)] lg:max-h-[720px]">
           <div className="absolute inset-0">
             <Suspense fallback={<div className="skeleton h-full w-full opacity-20" />}>
-              <RobotViewer
-              urdf={robot.urdf}
-              family={robot.family}
-              gait={tel?.gait}
-              speed={tel?.speed}
-              payloads={robot.payloads}
-              highlight={payloadSel}
-              onPick={setPayloadSel}
-              />
+              {robot.urdf ? (
+                <RobotViewer
+                  urdf={robot.urdf}
+                  family={robot.family}
+                  gait={tel?.gait}
+                  speed={tel?.speed}
+                  payloads={robot.payloads}
+                  highlight={payloadSel}
+                  onPick={setPayloadSel}
+                />
+              ) : (
+                <TwinPlaceholder family={robot.family} label={t('fl.wiz.noTwin')} />
+              )}
             </Suspense>
-          </div>
-          <div className="pointer-events-none absolute left-3 top-3">
-            <span className="microlabel">{t('rd.digitalTwin')}</span>
           </div>
         </Panel>
 
@@ -154,7 +163,47 @@ export function RobotDetail() {
           </Panel>
 
           <Panel className="rise rise-1">
-            <PanelHead label={t('rd.payloads')} right={<span className="mono text-[10px] text-ink-3">{robot.payloads.length} {t('rd.fitted')}</span>} />
+            <PanelHead
+              label={t('rd.payloads')}
+              right={
+                <span className="flex items-center gap-2.5">
+                  <span className="mono text-[10px] text-ink-3">
+                    {robot.payloads.length} {t('rd.fitted')}
+                  </span>
+                  <button
+                    onClick={() => setAddOpen((v) => !v)}
+                    className="mono flex items-center gap-1 border border-line-2 px-1.5 py-0.5 text-[9px] tracking-[0.1em] text-ink-2 transition-colors hover:border-ink-3 hover:text-ink"
+                  >
+                    <Plus size={10} /> {t('rd.addPayload')}
+                  </button>
+                </span>
+              }
+            />
+            {addOpen && (
+              <div className="border-b border-line bg-surface-2/50 p-2.5">
+                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                  {catalog.map((p) => {
+                    const Icon = KIND_ICON[p.kind]
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={async () => {
+                          await api.installPayload(robot.id, p.id)
+                          setAddOpen(false)
+                        }}
+                        className="flex items-center gap-2 border border-line px-2 py-1.5 text-left transition-colors hover:border-accent/50"
+                      >
+                        <Icon size={13} strokeWidth={1.5} className="shrink-0 text-ink-3" />
+                        <span className="min-w-0">
+                          <span className="block truncate text-[11.5px] text-ink">{p.name}</span>
+                          <span className="mono block truncate text-[9.5px] text-ink-3">{p.model}</span>
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
             {robot.payloads.map((p) => {
               const Icon = KIND_ICON[p.kind]
               const hot = payloadSel === p.id
@@ -184,12 +233,37 @@ export function RobotDetail() {
                     </div>
                     <div className="mono mt-0.5 text-[10.5px] text-ink-3">{p.model}</div>
                     <div className="mt-0.5 text-[11px] text-ink-2">{p.detail}</div>
+                    {(() => {
+                      const armed = rules.filter((rl) => rl.enabled && (rl.source === p.stream || rl.source === `${robot.id}:${p.id}`)).length
+                      return armed > 0 ? (
+                        <Link
+                          to="/events?view=rules"
+                          onClick={(e) => e.stopPropagation()}
+                          className="mono mt-1 inline-flex items-center gap-1 text-[9.5px] tracking-[0.08em] text-ink-3 underline decoration-line-2 underline-offset-2 hover:text-accent"
+                        >
+                          <ShieldCheck size={10} /> {armed} {t('ev.rulesArmed')}
+                        </Link>
+                      ) : null
+                    })()}
                   </div>
                   <span
                     className="mono mt-1 shrink-0 text-[9px] uppercase tracking-[0.1em]"
                     style={{ color: (tel?.payloadHealth[p.id] ?? 'ok') === 'ok' ? 'var(--color-ok)' : 'var(--color-warn)' }}
                   >
                     {tel?.payloadHealth[p.id] ?? 'ok'}
+                  </span>
+                  <span
+                    role="button"
+                    aria-label={t('rd.removePayload')}
+                    title={t('rd.removePayload')}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      api.removePayload(robot.id, p.id)
+                      if (payloadSel === p.id) setPayloadSel(null)
+                    }}
+                    className="mt-1 shrink-0 text-ink-3/50 transition-colors hover:text-crit"
+                  >
+                    <X size={12} />
                   </span>
                 </button>
               )

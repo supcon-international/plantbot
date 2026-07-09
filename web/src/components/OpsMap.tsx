@@ -34,7 +34,7 @@ function useOccupancyUrl(image?: string) {
         const v = px[i]
         if (v < 80) {
           // laser-struck surface — quiet white overlay
-          px[i] = 222; px[i + 1] = 228; px[i + 2] = 234; px[i + 3] = 120
+          px[i] = 228; px[i + 1] = 228; px[i + 2] = 220; px[i + 3] = 120
         } else {
           px[i + 3] = 0
         }
@@ -54,9 +54,9 @@ const SHX = 0.4 // shadow cast per unit height (down-right — light from NW)
 const SHZ = 0.26
 
 const CLAY = {
-  light: { top: '#e6eaee', west: '#c4cbd4', south: '#a2aab5' },
-  mid: { top: '#b9c0c8', west: '#9aa2ac', south: '#7f8791' },
-  edge: 'rgba(12,13,15,0.55)',
+  light: { top: '#e9e9e4', west: '#c7c7c0', south: '#a5a59e' },
+  mid: { top: '#bdbdb6', west: '#9e9e96', south: '#82827a' },
+  edge: 'rgba(10,10,10,0.55)',
 }
 
 function ClayBox({ b }: { b: Extract<Building, { kind: 'box' }> }) {
@@ -102,7 +102,7 @@ function RoofLabel({ x, y, w, name }: { x: number; y: number; w: number; name: s
       y={y}
       textAnchor="middle"
       dominantBaseline="central"
-      fill="rgba(66,74,84,0.9)"
+      fill="rgba(72,72,66,0.9)"
       fontSize={fs}
       fontFamily="var(--font-mono)"
       letterSpacing={fs * 0.18}
@@ -201,7 +201,7 @@ function WaypointGlyph({
   onClick?: () => void
 }) {
   const hot = state !== 'normal'
-  const tone = hot ? '#f2f4f6' : wp.kind === 'dock' ? 'var(--color-ok)' : '#98a1ab'
+  const tone = hot ? 'var(--color-accent)' : wp.kind === 'dock' ? 'var(--color-accent)' : '#a8a8a2'
   return (
     <g
       transform={`translate(${wp.x} ${wp.z})`}
@@ -216,21 +216,43 @@ function WaypointGlyph({
         {/* generous invisible hit area */}
         <circle r={0.62} fill="transparent" />
         <g className="wp-core" style={{ transition: 'transform 120ms ease' }}>
-          <rect x={-0.3} y={-0.3} width={0.6} height={0.6} transform="rotate(45)" fill="#0c0d0f" fillOpacity={0.72} stroke={tone} strokeWidth={hot ? 0.09 : 0.06} />
-          {wp.kind === 'inspect' && <circle r={0.13} fill="none" stroke={tone} strokeWidth={0.045} />}
-          <circle r={0.05} fill={tone} />
+          {wp.kind === 'dock' && (
+            <>
+              {/* charge dock — lightning bolt on a pad */}
+              <circle r={0.32} fill="#0a0a0a" fillOpacity={0.8} stroke={tone} strokeWidth={hot ? 0.07 : 0.05} />
+              <path d="M 0.05 -0.2 L -0.13 0.03 L -0.02 0.03 L -0.05 0.2 L 0.13 -0.03 L 0.02 -0.03 Z" fill={tone} />
+            </>
+          )}
+          {wp.kind === 'inspect' && (
+            <>
+              {/* inspection point — surveyor's reticle */}
+              <circle r={0.3} fill="#0a0a0a" fillOpacity={0.72} />
+              <circle r={0.21} fill="none" stroke={tone} strokeWidth={hot ? 0.06 : 0.045} />
+              {[0, 90, 180, 270].map((a) => (
+                <line key={a} x1={0.21} y1={0} x2={0.33} y2={0} stroke={tone} strokeWidth={hot ? 0.06 : 0.045} transform={`rotate(${a})`} />
+              ))}
+              <circle r={0.055} fill={tone} />
+            </>
+          )}
+          {wp.kind === 'nav' && (
+            <>
+              {/* route node — quiet open ring */}
+              <circle r={0.15} fill="#0a0a0a" fillOpacity={0.72} stroke={tone} strokeWidth={hot ? 0.07 : 0.05} />
+              {hot && <circle r={0.05} fill={tone} />}
+            </>
+          )}
         </g>
-        <text y={-0.62} textAnchor="middle" fill={hot ? '#f2f4f6' : '#7b8590'} fontSize={0.4} fontFamily="var(--font-mono)" letterSpacing="0.04" style={{ userSelect: 'none' }}>
+        <text y={-0.62} textAnchor="middle" fill={hot ? 'var(--color-accent)' : '#78786f'} fontSize={0.4} fontFamily="var(--font-mono)" letterSpacing="0.04" style={{ userSelect: 'none' }}>
           {wp.id.replace('WP-', 'W')}
         </text>
         {/* name on hover */}
-        <text y={0.98} textAnchor="middle" className="wp-name" fill="#c7ced6" fontSize={0.34} fontFamily="var(--font-mono)" style={{ opacity: 0, transition: 'opacity 120ms ease', userSelect: 'none', pointerEvents: 'none' }}>
+        <text y={0.98} textAnchor="middle" className="wp-name" fill="#b6b6b0" fontSize={0.34} fontFamily="var(--font-mono)" style={{ opacity: 0, transition: 'opacity 120ms ease', userSelect: 'none', pointerEvents: 'none' }}>
           {wp.name}
         </text>
         {order != null && (
           <g transform="translate(0.55 -0.55)">
-            <circle r={0.26} fill="#f2f4f6" />
-            <text y={0.11} textAnchor="middle" fill="#0c0d0f" fontSize={0.32} fontWeight={700} fontFamily="var(--font-mono)" style={{ userSelect: 'none' }}>
+            <circle r={0.26} fill="var(--color-accent)" />
+            <text y={0.11} textAnchor="middle" fill="#0a0a0a" fontSize={0.32} fontWeight={700} fontFamily="var(--font-mono)" style={{ userSelect: 'none' }}>
               {order}
             </text>
           </g>
@@ -258,7 +280,7 @@ function RobotMarker({
   onClick?: () => void
 }) {
   const deg = (-tel.heading * 180) / Math.PI
-  const tone = selected ? '#f2f4f6' : color
+  const tone = selected ? 'var(--color-accent)' : color
   const moving = tel.speed > 0.05
   return (
     <g transform={`translate(${tel.x} ${tel.z})`} style={{ transition: 'transform 260ms linear' }}>
@@ -281,20 +303,19 @@ function RobotMarker({
           {moving && <animate attributeName="r" values="0.34;0.52;0.34" dur="2.6s" repeatCount="indefinite" />}
           {moving && <animate attributeName="opacity" values="0.5;0;0.5" dur="2.6s" repeatCount="indefinite" />}
         </circle>
+        {/* nav puck — family silhouette + oriented arrow */}
         {family === 'ugv' ? (
-          <rect x={-0.24} y={-0.24} width={0.48} height={0.48} rx={0.08} transform={`rotate(${deg})`} fill="#0c0d0f" stroke={tone} strokeWidth={selected ? 0.09 : 0.07} />
+          <rect x={-0.27} y={-0.27} width={0.54} height={0.54} rx={0.1} transform={`rotate(${deg})`} fill="#0a0a0a" stroke={tone} strokeWidth={selected ? 0.08 : 0.06} />
         ) : (
-          <circle r={0.26} fill="#0c0d0f" stroke={tone} strokeWidth={selected ? 0.09 : 0.07} />
+          <circle r={0.29} fill="#0a0a0a" stroke={tone} strokeWidth={selected ? 0.08 : 0.06} />
         )}
-        {/* heading tick */}
         <g transform={`rotate(${deg})`}>
-          <path d="M 0.4 0 L 0.16 -0.13 L 0.16 0.13 Z" fill={tone} />
+          <path d="M 0.2 0 L -0.13 -0.15 L -0.06 0 L -0.13 0.15 Z" fill={tone} />
         </g>
-        <circle r={0.07} fill={tone} />
         {/* callsign chip */}
         <g transform="translate(0 -0.72)">
-          <rect x={-callsign.length * 0.115 - 0.12} y={-0.26} width={callsign.length * 0.23 + 0.24} height={0.5} rx={0.06} fill="#0c0d0f" fillOpacity={0.85} stroke={selected ? 'rgba(242,244,246,0.55)' : 'var(--color-line-2)'} strokeWidth={0.03} />
-          <text y={0.12} textAnchor="middle" fill={selected ? '#f2f4f6' : '#c7ced6'} fontSize={0.36} fontFamily="var(--font-mono)" letterSpacing="0.05" style={{ userSelect: 'none' }}>
+          <rect x={-callsign.length * 0.115 - 0.12} y={-0.26} width={callsign.length * 0.23 + 0.24} height={0.5} rx={0.06} fill="#0a0a0a" fillOpacity={0.85} stroke={selected ? 'var(--color-accent)' : 'var(--color-line-2)'} strokeWidth={0.03} strokeOpacity={selected ? 0.6 : 1} />
+          <text y={0.12} textAnchor="middle" fill={selected ? 'var(--color-accent)' : '#b6b6b0'} fontSize={0.36} fontFamily="var(--font-mono)" letterSpacing="0.05" style={{ userSelect: 'none' }}>
             {callsign}
           </text>
         </g>
@@ -455,7 +476,7 @@ export function OpsMap({
   const zoomed = vb.w < FULL.w * 0.98
 
   const zoneTone = (kind: string) =>
-    kind === 'restricted' ? 'var(--color-crit)' : kind === 'charging' ? 'var(--color-ok)' : '#aab3bd'
+    kind === 'restricted' ? 'var(--color-crit)' : kind === 'charging' ? 'var(--color-accent)' : '#b0b0a8'
 
   return (
     <div className={`relative touch-none overflow-hidden bg-surface ${heightClass} ${className}`}>
@@ -486,29 +507,29 @@ export function OpsMap({
       >
         <defs>
           <radialGradient id="fovGrad" cx="0" cy="0.5" r="1">
-            <stop offset="0%" stopColor="#e6e8ea" stopOpacity="0.34" />
-            <stop offset="100%" stopColor="#e6e8ea" stopOpacity="0" />
+            <stop offset="0%" stopColor="#ebebe8" stopOpacity="0.34" />
+            <stop offset="100%" stopColor="#ebebe8" stopOpacity="0" />
           </radialGradient>
           <filter id="claySoft" x="-40%" y="-40%" width="180%" height="180%">
             <feGaussianBlur stdDeviation="0.22" />
           </filter>
           <radialGradient id="groundGrad" cx="0.5" cy="0.42" r="0.75">
-            <stop offset="0%" stopColor="#171b20" />
-            <stop offset="100%" stopColor="#101318" />
+            <stop offset="0%" stopColor="#161616" />
+            <stop offset="100%" stopColor="#0f0f0f" />
           </radialGradient>
         </defs>
 
         {/* ---- ground plate ---- */}
         <rect x={FULL.x} y={FULL.z} width={FULL.w} height={FULL.h} fill="url(#groundGrad)" />
         {/* aprons / lanes */}
-        <g fill="#e8ecef" opacity={0.055}>
+        <g fill="#e9e9e2" opacity={0.055}>
           <rect x={-13.6} y={-6.1} width={27.2} height={2.4} />
           <rect x={-13.6} y={3.6} width={27.2} height={2.3} />
           <rect x={5.9} y={-3.8} width={2.4} height={7.5} />
           <rect x={-14.9} y={-5.9} width={2.6} height={9.6} />
         </g>
         {/* survey grid */}
-        <g stroke="#e8ecef" strokeWidth={0.02} opacity={0.1}>
+        <g stroke="#e9e9e2" strokeWidth={0.02} opacity={0.1}>
           {Array.from({ length: 7 }, (_, i) => FULL.x + (i + 1) * 4).map((gx) => (
             <line key={`gx${gx}`} x1={gx} y1={FULL.z} x2={gx} y2={FULL.z + FULL.h} />
           ))}
@@ -517,8 +538,8 @@ export function OpsMap({
           ))}
         </g>
         {/* site boundary */}
-        <rect x={FULL.x + 0.35} y={FULL.z + 0.35} width={FULL.w - 0.7} height={FULL.h - 0.7} fill="none" stroke="#3a424b" strokeWidth={0.05} />
-        <rect x={FULL.x + 0.55} y={FULL.z + 0.55} width={FULL.w - 1.1} height={FULL.h - 1.1} fill="none" stroke="#e8ecef" strokeWidth={0.02} opacity={0.1} strokeDasharray="0.12 0.5" />
+        <rect x={FULL.x + 0.35} y={FULL.z + 0.35} width={FULL.w - 0.7} height={FULL.h - 0.7} fill="none" stroke="#3a3a36" strokeWidth={0.05} />
+        <rect x={FULL.x + 0.55} y={FULL.z + 0.55} width={FULL.w - 1.1} height={FULL.h - 1.1} fill="none" stroke="#e9e9e2" strokeWidth={0.02} opacity={0.1} strokeDasharray="0.12 0.5" />
 
         {/* laser-scan texture (from the live occupancy grid) */}
         {occUrl && (
@@ -546,13 +567,35 @@ export function OpsMap({
             <g key={z.id}>
               <polygon points={pts} fill={tone} opacity={0.05} />
               <polygon points={pts} fill="none" stroke={tone} strokeWidth={0.05 * k} strokeDasharray={`${0.5 * k} ${0.3 * k}`} opacity={0.55} />
-              {labels && lp && (
-                <g transform={`translate(${lp.x} ${lp.z}) scale(${k})`}>
-                  <text textAnchor={lp.anchor ?? 'middle'} fill={tone} opacity={0.85} fontSize={0.38} fontFamily="var(--font-mono)" letterSpacing="0.08" style={{ userSelect: 'none' }}>
-                    {z.name.toUpperCase()}
-                  </text>
-                </g>
-              )}
+              {labels &&
+                lp &&
+                (() => {
+                  const label = z.name.toUpperCase()
+                  const cw = 0.315 // mono glyph pitch at fs 0.38 + tracking
+                  const left = lp.anchor === 'start' ? 0 : lp.anchor === 'end' ? -label.length * cw : (-label.length * cw) / 2
+                  return (
+                    <g transform={`translate(${lp.x} ${lp.z}) scale(${k})`}>
+                      {/* zone-kind pictogram: no-entry / ATEX diamond / charge bolt */}
+                      <g transform={`translate(${left - 0.32} -0.13)`} opacity={0.85}>
+                        {z.kind === 'restricted' && (
+                          <>
+                            <circle r={0.16} fill="none" stroke={tone} strokeWidth={0.045} />
+                            <line x1={-0.11} y1={0.11} x2={0.11} y2={-0.11} stroke={tone} strokeWidth={0.045} />
+                          </>
+                        )}
+                        {z.kind === 'inspection' && (
+                          <rect x={-0.13} y={-0.13} width={0.26} height={0.26} transform="rotate(45)" fill="none" stroke={tone} strokeWidth={0.045} />
+                        )}
+                        {z.kind === 'charging' && (
+                          <path d="M 0.04 -0.16 L -0.1 0.02 L -0.01 0.02 L -0.04 0.16 L 0.1 -0.02 L 0.01 -0.02 Z" fill={tone} />
+                        )}
+                      </g>
+                      <text textAnchor={lp.anchor ?? 'middle'} fill={tone} opacity={0.85} fontSize={0.38} fontFamily="var(--font-mono)" letterSpacing="0.08" style={{ userSelect: 'none' }}>
+                        {label}
+                      </text>
+                    </g>
+                  )
+                })()}
             </g>
           )
         })}
@@ -586,7 +629,7 @@ export function OpsMap({
               .map((w) => `${w!.x},${w!.z}`)
               .join(' ')}
             fill="none"
-            stroke="#f2f4f6"
+            stroke="var(--color-accent)"
             strokeWidth={0.06 * k + 0.02}
             strokeDasharray={`${0.4} ${0.28}`}
             opacity={0.8}
@@ -631,10 +674,23 @@ export function OpsMap({
           >
             <g transform={`scale(${k})`}>
               <circle r={0.4} fill="transparent" />
-              <circle r={0.26} fill="none" stroke={SEVERITY_COLOR[e.severity]} strokeWidth={0.055} opacity={0.95}>
-                {e.severity === 'critical' && <animate attributeName="r" values="0.2;0.36;0.2" dur="1.6s" repeatCount="indefinite" />}
-              </circle>
-              <circle r={0.08} fill={SEVERITY_COLOR[e.severity]} />
+              {e.severity === 'critical' || e.severity === 'high' ? (
+                <>
+                  {/* alarm — warning triangle */}
+                  <path d="M 0 -0.3 L 0.3 0.22 L -0.3 0.22 Z" fill="#0a0a0a" fillOpacity={0.85} stroke={SEVERITY_COLOR[e.severity]} strokeWidth={0.055} strokeLinejoin="round">
+                    {e.severity === 'critical' && (
+                      <animate attributeName="stroke-opacity" values="1;0.35;1" dur="1.4s" repeatCount="indefinite" />
+                    )}
+                  </path>
+                  <rect x={-0.032} y={-0.13} width={0.064} height={0.2} fill={SEVERITY_COLOR[e.severity]} />
+                  <circle cy={0.13} r={0.045} fill={SEVERITY_COLOR[e.severity]} />
+                </>
+              ) : (
+                <>
+                  <circle r={0.2} fill="none" stroke={SEVERITY_COLOR[e.severity]} strokeWidth={0.05} opacity={0.9} />
+                  <circle r={0.07} fill={SEVERITY_COLOR[e.severity]} />
+                </>
+              )}
             </g>
           </g>
         ))}
@@ -651,7 +707,7 @@ export function OpsMap({
                   <polyline
                     points={[`${tel.x},${tel.z}`, ...tel.path.map((p) => `${p.x},${p.z}`)].join(' ')}
                     fill="none"
-                    stroke={sel ? '#f2f4f6' : r.color}
+                    stroke={sel ? 'var(--color-accent)' : r.color}
                     strokeWidth={sel ? 0.09 : 0.06}
                     strokeDasharray="0.32 0.22"
                     className="path-march"
@@ -662,10 +718,10 @@ export function OpsMap({
                     const dst = tel.path[tel.path.length - 1]
                     return (
                       <g transform={`translate(${dst.x} ${dst.z}) scale(${k})`}>
-                        <circle r={0.3} fill="none" stroke={sel ? '#f2f4f6' : r.color} strokeWidth={0.05} opacity={0.8}>
+                        <circle r={0.3} fill="none" stroke={sel ? 'var(--color-accent)' : r.color} strokeWidth={0.05} opacity={0.8}>
                           <animate attributeName="r" values="0.22;0.4;0.22" dur="2.2s" repeatCount="indefinite" />
                         </circle>
-                        <circle r={0.06} fill={sel ? '#f2f4f6' : r.color} />
+                        <circle r={0.06} fill={sel ? 'var(--color-accent)' : r.color} />
                       </g>
                     )
                   })()}
@@ -742,10 +798,52 @@ export function OpsMap({
         </div>
       )}
 
-      {/* map provenance */}
-      {labels && (
-        <div className="pointer-events-none absolute bottom-1.5 left-2">
-          <span className="mono text-[9px] text-ink-3/80">occupancy 5 cm/px · {site.map.source}</span>
+      {/* legend + provenance — full-page map only, embeds stay clean */}
+      {labels && wheelZoom && (
+        <div className="pointer-events-none absolute bottom-1.5 left-2 space-y-1">
+          <div className="hidden items-center gap-3 sm:flex">
+            {(
+              [
+                [
+                  'map.lg.inspect',
+                  <svg key="i" viewBox="-0.42 -0.42 0.84 0.84" className="h-3 w-3">
+                    <circle r={0.21} fill="none" stroke="#a8a8a2" strokeWidth={0.05} />
+                    {[0, 90, 180, 270].map((a) => (
+                      <line key={a} x1={0.21} y1={0} x2={0.33} y2={0} stroke="#a8a8a2" strokeWidth={0.05} transform={`rotate(${a})`} />
+                    ))}
+                    <circle r={0.06} fill="#a8a8a2" />
+                  </svg>,
+                ],
+                [
+                  'map.lg.nav',
+                  <svg key="n" viewBox="-0.42 -0.42 0.84 0.84" className="h-3 w-3">
+                    <circle r={0.16} fill="none" stroke="#a8a8a2" strokeWidth={0.06} />
+                  </svg>,
+                ],
+                [
+                  'map.lg.dock',
+                  <svg key="d" viewBox="-0.42 -0.42 0.84 0.84" className="h-3 w-3">
+                    <circle r={0.32} fill="none" stroke="var(--color-accent)" strokeWidth={0.05} />
+                    <path d="M 0.06 -0.2 L -0.13 0.03 L -0.02 0.03 L -0.05 0.2 L 0.14 -0.03 L 0.03 -0.03 Z" fill="var(--color-accent)" />
+                  </svg>,
+                ],
+                [
+                  'map.lg.alarm',
+                  <svg key="a" viewBox="-0.42 -0.42 0.84 0.84" className="h-3 w-3">
+                    <path d="M 0 -0.3 L 0.3 0.22 L -0.3 0.22 Z" fill="none" stroke="var(--color-warn)" strokeWidth={0.055} strokeLinejoin="round" />
+                  </svg>,
+                ],
+              ] as const
+            ).map(([key, icon]) => (
+              <span key={key} className="flex items-center gap-1.5">
+                {icon}
+                <span className="mono text-[9px] text-ink-3">{t(key)}</span>
+              </span>
+            ))}
+          </div>
+          <div>
+            <span className="mono text-[9px] text-ink-3/80">occupancy 5 cm/px · {site.map.source}</span>
+          </div>
         </div>
       )}
     </div>

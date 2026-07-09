@@ -179,7 +179,7 @@ export const ROBOTS: RobotSpec[] = [
     maxSpeed: 2.5,
     enduranceMin: 90,
     batteryStart: 86,
-    color: '#e8edf2',
+    color: '#ebebe8',
     home: { x: -11.5, z: -6.9 },
     payloads: [
       {
@@ -232,7 +232,7 @@ export const ROBOTS: RobotSpec[] = [
     maxSpeed: 4.0,
     enduranceMin: 150,
     batteryStart: 62,
-    color: '#aeb9c4',
+    color: '#b4b4ac',
     home: { x: -3, z: 5 },
     payloads: [
       {
@@ -283,7 +283,7 @@ export const ROBOTS: RobotSpec[] = [
     maxSpeed: 1.0,
     enduranceMin: 180,
     batteryStart: 74,
-    color: '#7c8895',
+    color: '#8a8a82',
     home: { x: 11, z: 5 },
     payloads: [
       {
@@ -373,4 +373,230 @@ export function streamTable(mediaDir: string, ffmpeg: string) {
     'workshop-cam': loop('staging.mp4'),
     'mast-cam': loop('plant_aerial.mp4'),
   } as Record<string, string>
+}
+
+// ---------- provisioning catalog (InOrbit-Connect-style directory) ----------
+
+export interface RobotModelSpec {
+  model: string
+  vendor: string
+  family: 'quadruped' | 'ugv'
+  /** empty string → no 3D twin yet, UI falls back to a silhouette */
+  urdf: string
+  massKg: number
+  ipRating: string
+  maxSpeed: number
+  enduranceMin: number
+  protocol: string
+  firmware: string
+  blurb: [string, string, string] // en / zh / es
+}
+
+export const ROBOT_CATALOG: RobotModelSpec[] = [
+  {
+    model: 'Jueying Lite3',
+    vendor: 'DEEP Robotics 云深处科技',
+    family: 'quadruped',
+    urdf: 'lite3',
+    massKg: 12,
+    ipRating: 'IP54',
+    maxSpeed: 2.5,
+    enduranceMin: 90,
+    protocol: 'ROS2 / DDS · 5G-U',
+    firmware: 'v2.4.1-rc3',
+    blurb: [
+      'Agile indoor/yard patrol quadruped',
+      '轻型敏捷四足,适合室内与场区巡逻',
+      'Cuadrúpedo ágil para patrulla',
+    ],
+  },
+  {
+    model: 'Jueying X30',
+    vendor: 'DEEP Robotics 云深处科技',
+    family: 'quadruped',
+    urdf: 'x30',
+    massKg: 56,
+    ipRating: 'IP67',
+    maxSpeed: 4.0,
+    enduranceMin: 150,
+    protocol: 'ROS2 / DDS · Wi-Fi 6 mesh',
+    firmware: 'v3.1.0',
+    blurb: [
+      'Industrial all-weather inspection flagship',
+      '全天候工业巡检旗舰,防护等级 IP67',
+      'Buque insignia de inspección industrial',
+    ],
+  },
+  {
+    model: 'Lynx M20',
+    vendor: 'DEEP Robotics 云深处科技',
+    family: 'quadruped',
+    urdf: '',
+    massKg: 33,
+    ipRating: 'IP66',
+    maxSpeed: 5.0,
+    enduranceMin: 180,
+    protocol: 'ROS2 / DDS · 5G-U',
+    firmware: 'v1.2.0',
+    blurb: [
+      'Wheel-legged hybrid for rough terrain · 3D twin pending',
+      '轮足复合构型,复杂地形通行 · 3D 模型待接入',
+      'Híbrido rueda-pata para terreno difícil',
+    ],
+  },
+  {
+    model: 'Husky A200',
+    vendor: 'Clearpath Robotics',
+    family: 'ugv',
+    urdf: 'husky',
+    massKg: 50,
+    ipRating: 'IP44',
+    maxSpeed: 1.0,
+    enduranceMin: 180,
+    protocol: 'ROS2 / DDS · Ethernet',
+    firmware: 'v2.1.4',
+    blurb: [
+      'Proven payload mule for heavy sensor stacks',
+      '成熟轮式平台,适合重型传感器载荷',
+      'Plataforma UGV para cargas pesadas',
+    ],
+  },
+]
+
+/** payload directory — instances are cloned onto robots at install time */
+export const PAYLOAD_CATALOG: PayloadSpec[] = [
+  {
+    id: 'ptz-4mp',
+    name: 'Front PTZ Camera',
+    kind: 'camera',
+    model: '4MP · 25× optical zoom',
+    file: '/media/switchgear.mp4',
+    detail: 'H.264 1080p25 · gimbal-stabilized · IR-cut',
+  },
+  {
+    id: 'optical-4k',
+    name: 'Optical Zoom Camera',
+    kind: 'camera',
+    model: '4K · 30× hybrid zoom',
+    file: '/media/substation.mp4',
+    detail: 'Person / PPE / behavior analytics on-board',
+  },
+  {
+    id: 'thermal-640',
+    name: 'Thermal Imager',
+    kind: 'thermal',
+    model: '640×512 radiometric · <40mK NETD',
+    file: '/media/thermal.mp4',
+    detail: 'Radiometric video, ΔT alarm thresholds',
+  },
+  {
+    id: 'ogi-320',
+    name: 'OGI Gas Camera',
+    kind: 'ogi',
+    model: '320×240 cooled InSb · CH₄/VOC',
+    file: '/media/ogi.mp4',
+    detail: 'Optical gas imaging, ppm·m quantification',
+  },
+  {
+    id: 'lidar-m360',
+    name: '3D LiDAR',
+    kind: 'lidar',
+    model: 'Mid-360 · 360°×59° FOV',
+    detail: '200k pts/s · SLAM + obstacle avoidance',
+  },
+  {
+    id: 'gas-4in1',
+    name: 'Gas Detector',
+    kind: 'gas',
+    model: 'CH₄ · CO · H₂S · O₂',
+    detail: 'Pump-sampled, 1 Hz, auto-calibrating',
+  },
+  {
+    id: 'acoustic-124',
+    name: 'Acoustic Imager',
+    kind: 'acoustic',
+    model: '124-mic array · 2–48 kHz',
+    detail: 'Partial discharge & gas-leak localization',
+  },
+  {
+    id: 'imu-6x',
+    name: 'IMU / Odometry',
+    kind: 'imu',
+    model: '6-axis · 200 Hz',
+    detail: 'Fused odometry, slip detection',
+  },
+]
+
+const UNIT_COLORS = ['#ebebe8', '#b4b4ac', '#8a8a82', '#d6d6ce', '#c2c2ba']
+const MODEL_CODE: Record<string, string> = {
+  'Jueying Lite3': 'L3',
+  'Jueying X30': 'X30',
+  'Lynx M20': 'M20',
+  'Husky A200': 'HSK',
+}
+
+/** provision a new unit from the catalog — id/serial/callsign are minted here */
+export function registerRobot(input: {
+  model: string
+  callsign?: string
+  ip: string
+  protocol?: string
+  home: { x: number; z: number }
+  payloadIds: string[]
+}): RobotSpec | null {
+  const spec = ROBOT_CATALOG.find((m) => m.model === input.model)
+  if (!spec) return null
+  const code = MODEL_CODE[spec.model] ?? 'UNIT'
+  const siblings = ROBOTS.filter((r) => r.model === spec.model).length
+  const seq = String(siblings + 1).padStart(2, '0')
+  const base = code.toLowerCase().replace(/[^a-z0-9]/g, '')
+  let id = `${base}-${seq}`
+  while (ROBOTS.some((r) => r.id === id)) id = `${base}-${String(Number(id.split('-')[1]) + 1).padStart(2, '0')}`
+  const payloads = input.payloadIds
+    .map((pid) => PAYLOAD_CATALOG.find((p) => p.id === pid))
+    .filter((p): p is PayloadSpec => !!p)
+    .map((p) => ({ ...p }))
+  const robot: RobotSpec = {
+    id,
+    callsign: input.callsign?.trim() || `${spec.vendor.startsWith('DEEP') ? 'JY·' : ''}${code}-${seq}`,
+    vendor: spec.vendor,
+    model: spec.model,
+    family: spec.family,
+    urdf: spec.urdf,
+    serial: `${spec.vendor.startsWith('DEEP') ? 'DR' : 'CP'}-${code}-2607-${String(1000 + Math.floor(Math.random() * 9000)).slice(0, 4)}`,
+    firmware: spec.firmware,
+    ip: input.ip,
+    protocol: input.protocol || spec.protocol,
+    massKg: spec.massKg,
+    ipRating: spec.ipRating,
+    maxSpeed: spec.maxSpeed,
+    enduranceMin: spec.enduranceMin,
+    payloads,
+    batteryStart: Math.round(55 + Math.random() * 35),
+    color: UNIT_COLORS[ROBOTS.length % UNIT_COLORS.length],
+    home: input.home,
+  }
+  ROBOTS.push(robot)
+  return robot
+}
+
+export function installPayload(robotId: string, payloadId: string): PayloadSpec | null {
+  const robot = ROBOTS.find((r) => r.id === robotId)
+  const item = PAYLOAD_CATALOG.find((p) => p.id === payloadId)
+  if (!robot || !item) return null
+  let pid = item.id
+  let n = 2
+  while (robot.payloads.some((p) => p.id === pid)) pid = `${item.id}-${n++}`
+  const inst = { ...item, id: pid }
+  robot.payloads.push(inst)
+  return inst
+}
+
+export function removePayload(robotId: string, payloadId: string): boolean {
+  const robot = ROBOTS.find((r) => r.id === robotId)
+  if (!robot) return false
+  const i = robot.payloads.findIndex((p) => p.id === payloadId)
+  if (i < 0) return false
+  robot.payloads.splice(i, 1)
+  return true
 }

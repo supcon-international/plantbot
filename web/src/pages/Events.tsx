@@ -21,8 +21,10 @@ function Snapshot({ ev, size = 'sm' }: { ev: DetectionEvent; size?: 'sm' | 'lg' 
   )
 }
 
-function DetailModal({ ev, onClose }: { ev: DetectionEvent; onClose: () => void }) {
+function DetailModal({ ev, onClose, onRule }: { ev: DetectionEvent; onClose: () => void; onRule: (id: string) => void }) {
   const ack = useApp((s) => s.ack)
+  const rules = useApp((s) => s.rules)
+  const rule = rules.find((r) => r.id === ev.ruleId)
   const t = useT()
   const ago = useAgo()
   return (
@@ -43,14 +45,24 @@ function DetailModal({ ev, onClose }: { ev: DetectionEvent; onClose: () => void 
         </div>
         <Snapshot ev={ev} size="lg" />
         <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-3">
-          {[
+          {([
             [t('c.time'), `${timeShort(ev.ts)} · ${ago(ev.ts)}`],
             [t('c.zone'), ev.zone],
             [t('c.source'), ev.sourceName],
-            [t('ev.rule'), ev.ruleId],
+            [
+              t('ev.rule'),
+              rule ? (
+                <button key="r" onClick={() => onRule(rule.id)} className="mono text-[11.5px] text-ink underline decoration-ink-3 underline-offset-2 hover:text-accent">
+                  {rule.name}
+                </button>
+              ) : (
+                ev.ruleId
+              ),
+            ],
             [t('c.confidence'), `${Math.round(ev.confidence * 100)}%`],
             [t('c.status'), ev.acked ? t('ev.acked') : t('ev.open')],
-          ].map(([k, v]) => (
+          ] as [string, React.ReactNode][]
+          ).map(([k, v]) => (
             <div key={k}>
               <div className="microlabel mb-0.5">{k}</div>
               <div className="mono text-[11.5px] text-ink-2">{v}</div>
@@ -152,10 +164,14 @@ function Board({ events, onOpen }: { events: DetectionEvent[]; onOpen: (e: Detec
 
 // ---------- rules ----------
 
-function RuleRow({ r }: { r: DetectionRule }) {
+function RuleRow({ r, hi, onViewEvents }: { r: DetectionRule; hi?: boolean; onViewEvents: (id: string) => void }) {
   const t = useT()
+  const ago = useAgo()
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line/70 px-3.5 py-3">
+    <div
+      className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line/70 px-3.5 py-3"
+      style={hi ? { boxShadow: 'inset 2px 0 0 var(--color-accent)', background: 'var(--color-surface-2)' } : undefined}
+    >
       <button
         onClick={() => api.patchRule(r.id, { enabled: !r.enabled })}
         className="relative h-4 w-8 shrink-0 border border-line-2 transition-colors"
@@ -185,14 +201,19 @@ function RuleRow({ r }: { r: DetectionRule }) {
           step={0.05}
           defaultValue={r.threshold}
           onChange={(e) => api.patchRule(r.id, { threshold: Number(e.target.value) })}
-          className="h-[3px] w-20 cursor-pointer appearance-none bg-line-2 accent-white"
+          className="h-[3px] w-20 cursor-pointer appearance-none bg-line-2 accent-ink-2"
         />
         <span className="mono w-8 text-[10.5px] text-ink-2">{Math.round(r.threshold * 100)}%</span>
       </div>
       <SevTag sev={r.severity} />
-      <span className="mono w-16 text-right text-[10px] text-ink-3">
+      <button
+        onClick={() => onViewEvents(r.id)}
+        title={t('ev.table')}
+        className="mono w-32 text-right text-[10px] text-ink-3 transition-colors hover:text-accent"
+      >
         {r.firedCount}× {t('ev.fired')}
-      </span>
+        <span className="block text-[9px] opacity-80">{r.lastFiredAt ? ago(r.lastFiredAt) : '—'}</span>
+      </button>
       {!r.builtin && (
         <button onClick={() => api.deleteRule(r.id)} className="text-ink-3 transition-colors hover:text-crit" title="delete">
           <Trash2 size={13} />
@@ -205,6 +226,7 @@ function RuleRow({ r }: { r: DetectionRule }) {
 function NewRuleModal({ onClose }: { onClose: () => void }) {
   const robots = useApp((s) => s.robots)
   const cameras = useApp((s) => s.cameras)
+  const zonesList = useApp((s) => s.zones)
   const t = useT()
   const [name, setName] = useState('')
   const [model, setModel] = useState<DetectionModel>('person')
@@ -214,17 +236,27 @@ function NewRuleModal({ onClose }: { onClose: () => void }) {
   const [severity, setSeverity] = useState<Severity>('high')
 
   const sources = useMemo(() => {
-    const out: { id: string; label: string }[] = []
+    const out: { id: string; label: string; robotId?: string }[] = []
     for (const r of robots)
-      for (const p of r.payloads) if (p.stream) out.push({ id: p.stream, label: `${r.callsign} · ${p.name}` })
+      for (const p of r.payloads)
+        if (p.stream || p.file) out.push({ id: p.stream ?? `${r.id}:${p.id}`, label: `${r.callsign} · ${p.name}`, robotId: r.id })
     for (const c of cameras) out.push({ id: c.stream, label: c.name })
     return out
   }, [robots, cameras])
 
   const submit = async () => {
     if (!name.trim() || !source) return
-    const sourceName = sources.find((s) => s.id === source)?.label
-    await api.createRule({ name: name.trim(), model, source, sourceName, zone: zone || undefined, threshold, severity })
+    const src = sources.find((s) => s.id === source)
+    await api.createRule({
+      name: name.trim(),
+      model,
+      source,
+      sourceName: src?.label,
+      robotId: src?.robotId,
+      zone: zone || undefined,
+      threshold,
+      severity,
+    })
     onClose()
   }
 
@@ -271,19 +303,21 @@ function NewRuleModal({ onClose }: { onClose: () => void }) {
         </div>
         <div>
           <div className="microlabel mb-1.5">{t('ev.zoneLabel')}</div>
-          <input
-            value={zone}
-            onChange={(e) => setZone(e.target.value)}
-            placeholder={t('ev.zonePh')}
-            className="mono w-full border border-line-2 bg-surface-2 px-2.5 py-2 text-[12px] text-ink outline-none focus:border-ink-3"
-          />
+          <select value={zone} onChange={(e) => setZone(e.target.value)} className="mono w-full border border-line-2 bg-surface-2 px-2 py-2 text-[11px] text-ink outline-none">
+            <option value="">{t('ev.siteWide')}</option>
+            {zonesList.map((z) => (
+              <option key={z.id} value={z.name}>
+                {z.name}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="grid grid-cols-2 items-end gap-3">
           <div>
             <div className="microlabel mb-1.5">
               {t('ev.minConf')} · {Math.round(threshold * 100)}%
             </div>
-            <input type="range" min={0.3} max={0.95} step={0.05} value={threshold} onChange={(e) => setThreshold(Number(e.target.value))} className="h-[3px] w-full cursor-pointer appearance-none bg-line-2 accent-white" />
+            <input type="range" min={0.3} max={0.95} step={0.05} value={threshold} onChange={(e) => setThreshold(Number(e.target.value))} className="h-[3px] w-full cursor-pointer appearance-none bg-line-2 accent-ink-2" />
           </div>
           <div>
             <div className="microlabel mb-1.5">{t('ev.severity')}</div>
@@ -324,20 +358,34 @@ export function Events() {
   const clock = useApp((s) => s.clock)
   const t = useT()
   const ago = useAgo()
-  const [view, setView] = useState<View>('board')
+  const [view, setView] = useState<View>(() => {
+    const v = new URLSearchParams(window.location.search).get('view')
+    return v === 'rules' || v === 'table' ? v : 'board'
+  })
   const [sel, setSel] = useState<DetectionEvent | null>(null)
   const [newRule, setNewRule] = useState(false)
+  const [ruleFilter, setRuleFilter] = useState<string | null>(null)
+  const [hiRule, setHiRule] = useState<string | null>(null)
 
   const unacked = events.filter((e) => !e.acked).length
+  const shown = ruleFilter ? events.filter((e) => e.ruleId === ruleFilter) : events
+  const filterRule = ruleFilter ? rules.find((r) => r.id === ruleFilter) : null
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-3 p-3 md:p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <div className="microlabel">{t('ev.center')}</div>
-          <div className="mono mt-0.5 text-[13px] text-ink-2">
+          <div className="mono text-[13px] text-ink-2">
             {events.length} {t('c.events')} · <span style={{ color: unacked ? 'var(--color-warn)' : 'var(--color-ok)' }}>{unacked} {t('c.open')}</span> · {rules.filter((r) => r.enabled).length}/{rules.length} {t('ev.rulesArmed')}
           </div>
+          {filterRule && (
+            <button
+              onClick={() => setRuleFilter(null)}
+              className="mono mt-1 flex items-center gap-1.5 border border-accent/40 bg-accent/10 px-2 py-1 text-[10px] tracking-[0.06em] text-accent transition-colors hover:bg-accent/20"
+            >
+              {filterRule.name} <X size={11} />
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {view === 'rules' && (
@@ -369,7 +417,7 @@ export function Events() {
         </div>
       </div>
 
-      {view === 'board' && <Board events={events} onOpen={setSel} />}
+      {view === 'board' && <Board events={shown} onOpen={setSel} />}
 
       {view === 'table' && (
         <Panel className="rise overflow-x-auto">
@@ -384,7 +432,7 @@ export function Events() {
               </tr>
             </thead>
             <tbody>
-              {events.map((e) => (
+              {shown.map((e) => (
                 <tr
                   key={e.id}
                   onClick={() => setSel(e)}
@@ -426,7 +474,7 @@ export function Events() {
               ))}
             </tbody>
           </table>
-          {events.length === 0 && <EmptyNote>{t('ev.noEvents')}</EmptyNote>}
+          {shown.length === 0 && <EmptyNote>{t('ev.noEvents')}</EmptyNote>}
         </Panel>
       )}
 
@@ -437,12 +485,30 @@ export function Events() {
             <span className="mono hidden text-[10px] text-ink-3 sm:block">{t('ev.rulesHint')}</span>
           </div>
           {rules.map((r) => (
-            <RuleRow key={r.id} r={r} />
+            <RuleRow
+              key={r.id}
+              r={r}
+              hi={hiRule === r.id}
+              onViewEvents={(id) => {
+                setRuleFilter(id)
+                setView('table')
+              }}
+            />
           ))}
         </Panel>
       )}
 
-      {sel && <DetailModal ev={sel} onClose={() => setSel(null)} />}
+      {sel && (
+        <DetailModal
+          ev={sel}
+          onClose={() => setSel(null)}
+          onRule={(id) => {
+            setSel(null)
+            setHiRule(id)
+            setView('rules')
+          }}
+        />
+      )}
       {newRule && <NewRuleModal onClose={() => setNewRule(false)} />}
     </div>
   )

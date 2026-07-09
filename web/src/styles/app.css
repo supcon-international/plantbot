@@ -1,25 +1,25 @@
 @import 'tailwindcss';
 
 @theme {
-  /* monochrome core — near-black surfaces, warm off-white ink */
-  --color-bg: #0c0d0f;
-  --color-surface: #111316;
-  --color-surface-2: #16191d;
-  --color-surface-3: #1c2025;
-  --color-line: #22262b;
-  --color-line-2: #2f353c;
-  --color-ink: #e6e8ea;
-  --color-ink-2: #9aa2ab;
-  --color-ink-3: #5d646c;
+  /* neutral black core — no blue cast, warm off-white ink */
+  --color-bg: #0a0a0a;
+  --color-surface: #101010;
+  --color-surface-2: #151515;
+  --color-surface-3: #1b1b1c;
+  --color-line: #1f1f20;
+  --color-line-2: #2b2b2d;
+  --color-ink: #ebebe8;
+  --color-ink-2: #9c9c98;
+  --color-ink-3: #5e5e5b;
 
-  /* white is the accent */
-  --color-accent: #f2f4f6;
+  /* acid lime — the single accent, used sparingly */
+  --color-accent: #b8ee46;
 
-  /* semantic status only — desaturated */
-  --color-ok: #5fa072;
-  --color-warn: #c9973a;
-  --color-crit: #e05d54;
-  --color-low: #6e7681;
+  /* status: ok folds into the accent; warn/crit stay muted and rare */
+  --color-ok: #b8ee46;
+  --color-warn: #c2a05a;
+  --color-crit: #dd5648;
+  --color-low: #6b6b6f;
 
   --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', monospace;
@@ -53,15 +53,15 @@ body::before {
   inset: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(180, 190, 200, 0.022) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(180, 190, 200, 0.022) 1px, transparent 1px);
+    linear-gradient(rgba(200, 200, 190, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(200, 200, 190, 0.02) 1px, transparent 1px);
   background-size: 32px 32px;
   mask-image: radial-gradient(ellipse 90% 80% at 50% 20%, black 30%, transparent 100%);
   z-index: 0;
 }
 
 ::selection {
-  background: rgba(230, 232, 234, 0.18);
+  background: rgba(184, 238, 70, 0.22);
 }
 
 * {
@@ -117,17 +117,17 @@ body::before {
   background: var(--color-surface-2);
 }
 
-/* live pulse dot */
+/* live pulse dot — lime = alive */
 @keyframes pulse-ring {
-  0% { box-shadow: 0 0 0 0 rgba(230, 232, 234, 0.35); }
-  70% { box-shadow: 0 0 0 5px rgba(230, 232, 234, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(230, 232, 234, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(184, 238, 70, 0.35); }
+  70% { box-shadow: 0 0 0 5px rgba(184, 238, 70, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(184, 238, 70, 0); }
 }
 .live-dot {
   width: 6px;
   height: 6px;
   border-radius: 9999px;
-  background: var(--color-ink);
+  background: var(--color-accent);
   animation: pulse-ring 2.4s ease-out infinite;
 }
 .live-dot.crit {
@@ -155,7 +155,7 @@ body::before {
 .rise-5 { animation-delay: 240ms; }
 
 @keyframes flash-in {
-  0% { background: rgba(230, 232, 234, 0.1); }
+  0% { background: rgba(184, 238, 70, 0.07); }
   100% { background: transparent; }
 }
 .flash-new {
@@ -186,7 +186,7 @@ button {
 
 /* keyboard affordance without mouse noise */
 :focus-visible {
-  outline: 1px solid var(--color-ink-3);
+  outline: 1px solid var(--color-accent);
   outline-offset: 2px;
 }
 input:focus-visible,

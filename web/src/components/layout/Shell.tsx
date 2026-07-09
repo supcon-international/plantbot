@@ -133,7 +133,6 @@ export function Shell() {
             <circle cx="16" cy="16" r="3.5" fill="var(--color-accent)" />
           </svg>
           <span className="text-[13px] font-semibold tracking-[0.02em] text-ink">Plantbot</span>
-          <span className="microlabel hidden sm:block">{t('shell.brand')}</span>
         </div>
         <div className="ml-auto flex items-center gap-3">
           <LangSwitch />
