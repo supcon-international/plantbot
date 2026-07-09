@@ -96,10 +96,10 @@ def building(x0, z0, x1, z1):
     line(x0, z1, x0, z0, thick=2, drop=0.05)
 
 building(-14.6, 4.6, -10.4, 8.3)      # substation
-building(8.2, -8.2, 13.6, -5.1)       # workshop
-building(-15.2, -8.3, -12.6, -6.0)    # charge depot
-circle(14.2, 6.2, 1.15); fill_rect(13.2, 5.3, 15.2, 7.1, UNKNOWN); circle(14.2, 6.2, 1.15, drop=0.04)
-circle(14.3, 2.9, 0.95); fill_rect(13.5, 2.0, 15.1, 3.8, UNKNOWN); circle(14.3, 2.9, 0.95, drop=0.04)
+building(8.2, -7.2, 13.6, -5.1)       # workshop
+building(-15.2, -7.8, -12.6, -6.0)    # charge depot
+circle(13.7, 6.2, 1.15); fill_rect(12.7, 5.3, 14.7, 7.1, UNKNOWN); circle(13.7, 6.2, 1.15, drop=0.04)
+circle(13.8, 2.9, 0.95); fill_rect(13.0, 2.0, 14.6, 3.8, UNKNOWN); circle(13.8, 2.9, 0.95, drop=0.04)
 
 # --- scattered clutter: pallets, poles, cones ---
 for _ in range(26):

@@ -56,7 +56,14 @@ export interface Zone {
   name: string
   kind: 'restricted' | 'inspection' | 'charging'
   polygon: [number, number][]
+  /** label anchor on the map — null suppresses (a roof label carries the name) */
+  label?: { x: number; z: number; anchor?: 'start' | 'middle' | 'end' } | null
 }
+
+/** clay-model massing for the ops map (screen-space extruded) */
+export type Building =
+  | { id: string; kind: 'box'; x0: number; z0: number; x1: number; z1: number; h: number; tone?: 'light' | 'mid'; name?: string; order?: number }
+  | { id: string; kind: 'cyl'; cx: number; cz: number; r: number; h: number; tone?: 'light' | 'mid'; name?: string; order?: number }
 
 export const SITE = {
   id: 'plant-07',
@@ -78,15 +85,30 @@ export const WAYPOINTS: Waypoint[] = [
   { id: 'WP-02', name: 'Manifold VM-4', x: -4, z: -5.3, kind: 'inspect' },
   { id: 'WP-03', name: 'Stack cluster N', x: 4, z: -4.9, kind: 'inspect' },
   { id: 'WP-04', name: 'East switch', x: 12, z: -4.6, kind: 'nav' },
-  { id: 'WP-05', name: 'Substation apron', x: -11, z: 4.6, kind: 'inspect' },
+  { id: 'WP-05', name: 'Substation apron', x: -9.4, z: 4.9, kind: 'inspect' },
   { id: 'WP-06', name: 'Bay B2 door', x: -3, z: 5.0, kind: 'nav' },
   { id: 'WP-07', name: 'Transfer pumps', x: 5, z: 4.7, kind: 'inspect' },
   { id: 'WP-08', name: 'Tank farm', x: 11, z: 5.0, kind: 'inspect' },
-  { id: 'WP-09', name: 'Charge dock', x: -13.6, z: -6.9, kind: 'dock' },
-  { id: 'WP-10', name: 'Workshop ramp', x: 10.5, z: -4.8, kind: 'nav' },
+  { id: 'WP-09', name: 'Charge dock', x: -11.5, z: -6.9, kind: 'dock' },
+  { id: 'WP-10', name: 'Workshop ramp', x: 10.5, z: -4.2, kind: 'nav' },
   { id: 'WP-11', name: 'North fence mid', x: 0, z: -7.2, kind: 'nav' },
   { id: 'WP-12', name: 'South fence mid', x: 0, z: 7.2, kind: 'nav' },
   { id: 'WP-13', name: 'Truck bay', x: 7.2, z: -1.2, kind: 'inspect' },
+]
+
+// massing mirrors planner.ts RECTS / gen_occupancy.py
+export const BUILDINGS: Building[] = [
+  { id: 'substation', kind: 'box', x0: -14.8, z0: 4.4, x1: -10.2, z1: 8.5, h: 2.4, name: 'SUBSTATION' },
+  { id: 'substation-gear', kind: 'box', x0: -14.2, z0: 5.0, x1: -12.8, z1: 6.2, h: 3.4, tone: 'mid', order: 1 },
+  { id: 'workshop', kind: 'box', x0: 8.0, z0: -7.4, x1: 13.8, z1: -4.9, h: 2.6, name: 'WORKSHOP' },
+  { id: 'charge-depot', kind: 'box', x0: -15.4, z0: -8.0, x1: -12.4, z1: -5.8, h: 1.4, name: 'CHARGE DEPOT' },
+  { id: 'tank-a', kind: 'cyl', cx: 13.7, cz: 6.2, r: 1.15, h: 2.8, name: 'TK·A' },
+  { id: 'tank-b', kind: 'cyl', cx: 13.8, cz: 2.9, r: 0.95, h: 2.3, name: 'TK·B' },
+  { id: 'truck-bed', kind: 'box', x0: -3.2, z0: -3.0, x1: 5.0, z1: 0.6, h: 0.9, tone: 'mid' },
+  { id: 'truck-cab', kind: 'box', x0: -5.0, z0: -2.6, x1: -3.2, z1: 0.2, h: 1.5, tone: 'mid' },
+  { id: 'pallet-w', kind: 'box', x0: -9.5, z0: -0.8, x1: -8.4, z1: 0.1, h: 0.55, tone: 'mid' },
+  { id: 'pallet-e', kind: 'box', x0: 8.2, z0: 1.8, x1: 9.3, z1: 2.7, h: 0.55, tone: 'mid' },
+  { id: 'pallet-s', kind: 'box', x0: -2.5, z0: 3.2, x1: -1.4, z1: 4.1, h: 0.55, tone: 'mid' },
 ]
 
 export const ZONES: Zone[] = [
@@ -94,6 +116,7 @@ export const ZONES: Zone[] = [
     id: 'ZN-01',
     name: 'Vehicle exclusion',
     kind: 'restricted',
+    label: { x: 0, z: -4.05 },
     polygon: [
       [-5.9, -3.7],
       [5.9, -3.7],
@@ -105,17 +128,19 @@ export const ZONES: Zone[] = [
     id: 'ZN-02',
     name: 'Tank farm — ATEX',
     kind: 'inspection',
+    label: { x: 14.55, z: 8.25, anchor: 'end' },
     polygon: [
-      [12.9, 1.6],
+      [12.4, 1.6],
       [15.6, 1.6],
       [15.6, 7.6],
-      [12.9, 7.6],
+      [12.4, 7.6],
     ],
   },
   {
     id: 'ZN-03',
     name: 'Substation',
     kind: 'inspection',
+    label: null,
     polygon: [
       [-14.8, 4.4],
       [-10.2, 4.4],
@@ -127,9 +152,10 @@ export const ZONES: Zone[] = [
     id: 'ZN-04',
     name: 'Charge depot',
     kind: 'charging',
+    label: null,
     polygon: [
-      [-15.4, -8.5],
-      [-12.4, -8.5],
+      [-15.4, -8.0],
+      [-12.4, -8.0],
       [-12.4, -5.8],
       [-15.4, -5.8],
     ],
@@ -154,7 +180,7 @@ export const ROBOTS: RobotSpec[] = [
     enduranceMin: 90,
     batteryStart: 86,
     color: '#e8edf2',
-    home: { x: -13.6, z: -6.9 },
+    home: { x: -11.5, z: -6.9 },
     payloads: [
       {
         id: 'ptz',

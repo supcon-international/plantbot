@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Plus, Minus, Maximize2 } from 'lucide-react'
 import { useApp, api } from '../lib/store'
 import { useT } from '../lib/i18n'
-import type { Telemetry, Waypoint } from '../lib/types'
+import type { Building, Telemetry, Waypoint } from '../lib/types'
 import { SEVERITY_COLOR } from '../lib/types'
 
 export type MapSel =
@@ -15,7 +15,7 @@ const FULL = { x: -16, z: -9, w: 32, h: 18 }
 const MIN_W = FULL.w / 7 // max zoom-in
 const MAX_W = FULL.w * 1.05
 
-/** Occupancy PNG → theme-mapped dataURL (occupied=white laser, free=lifted floor). */
+/** Occupancy PNG → laser-scan texture: only occupied cells survive, as faint white. */
 function useOccupancyUrl(image?: string) {
   const [url, setUrl] = useState<string>()
   useEffect(() => {
@@ -33,13 +33,10 @@ function useOccupancyUrl(image?: string) {
       for (let i = 0; i < px.length; i += 4) {
         const v = px[i]
         if (v < 80) {
-          px[i] = 226; px[i + 1] = 231; px[i + 2] = 236; px[i + 3] = 240
-        } else if (v > 235) {
-          px[i] = 23; px[i + 1] = 26; px[i + 2] = 31; px[i + 3] = 255
-        } else if (v >= 180 && v <= 225) {
-          px[i + 3] = 0
+          // laser-struck surface — quiet white overlay
+          px[i] = 222; px[i + 1] = 228; px[i + 2] = 234; px[i + 3] = 120
         } else {
-          px[i] = 92; px[i + 1] = 99; px[i + 2] = 107; px[i + 3] = 150
+          px[i + 3] = 0
         }
       }
       ctx.putImageData(d, 0, 0)
@@ -47,6 +44,126 @@ function useOccupancyUrl(image?: string) {
     }
   }, [image])
   return url
+}
+
+// ---------- clay massing (screen-space cavalier extrusion) ----------
+
+const EX = 0.26 // x offset per unit height (extrude up-right)
+const EY = -0.5 // y offset per unit height
+const SHX = 0.4 // shadow cast per unit height (down-right — light from NW)
+const SHZ = 0.26
+
+const CLAY = {
+  light: { top: '#e6eaee', west: '#c4cbd4', south: '#a2aab5' },
+  mid: { top: '#b9c0c8', west: '#9aa2ac', south: '#7f8791' },
+  edge: 'rgba(12,13,15,0.55)',
+}
+
+function ClayBox({ b }: { b: Extract<Building, { kind: 'box' }> }) {
+  const { x0, z0, x1, z1, h } = b
+  const c = CLAY[b.tone ?? 'light']
+  const dx = h * EX
+  const dy = h * EY
+  return (
+    <g>
+      <polygon
+        points={`${x0 + h * SHX},${z1 + h * SHZ} ${x1 + h * SHX},${z1 + h * SHZ} ${x1 + h * SHX},${z0 + h * SHZ} ${x0 + h * SHX},${z0 + h * SHZ}`}
+        fill="#000"
+        opacity={0.3}
+        filter="url(#claySoft)"
+      />
+      {/* south face */}
+      <polygon points={`${x0},${z1} ${x1},${z1} ${x1 + dx},${z1 + dy} ${x0 + dx},${z1 + dy}`} fill={c.south} />
+      {/* west face */}
+      <polygon points={`${x0},${z0} ${x0},${z1} ${x0 + dx},${z1 + dy} ${x0 + dx},${z0 + dy}`} fill={c.west} />
+      {/* top */}
+      <polygon
+        points={`${x0 + dx},${z0 + dy} ${x1 + dx},${z0 + dy} ${x1 + dx},${z1 + dy} ${x0 + dx},${z1 + dy}`}
+        fill={c.top}
+        stroke={CLAY.edge}
+        strokeWidth={0.03}
+      />
+      {/* ground contact line */}
+      <polygon points={`${x0},${z0} ${x1},${z0} ${x1},${z1} ${x0},${z1}`} fill="none" stroke={CLAY.edge} strokeWidth={0.03} opacity={0.5} />
+      {/* label rides the south band of the roof — clear of rooftop structures */}
+      {b.name && (
+        <RoofLabel x={(x0 + x1) / 2 + dx} y={z1 + dy - Math.min(0.55, (z1 - z0) * 0.2)} w={x1 - x0} name={b.name} />
+      )}
+    </g>
+  )
+}
+
+/** engraved roof label — sized to fit the top face */
+function RoofLabel({ x, y, w, name }: { x: number; y: number; w: number; name: string }) {
+  const fs = Math.min(0.38, (w * 0.82) / (name.length * 0.78))
+  return (
+    <text
+      x={x}
+      y={y}
+      textAnchor="middle"
+      dominantBaseline="central"
+      fill="rgba(66,74,84,0.9)"
+      fontSize={fs}
+      fontFamily="var(--font-mono)"
+      letterSpacing={fs * 0.18}
+      style={{ userSelect: 'none' }}
+    >
+      {name}
+    </text>
+  )
+}
+
+function ClayCyl({ b }: { b: Extract<Building, { kind: 'cyl' }> }) {
+  const { cx, cz, r, h } = b
+  const c = CLAY[b.tone ?? 'light']
+  const dx = h * EX
+  const dy = h * EY
+  // tangent points perpendicular to the extrusion direction
+  const len = Math.hypot(dx, dy) || 1
+  const nx = (-dy / len) * r
+  const nz = (dx / len) * r
+  const gid = `cyl-${b.id}`
+  return (
+    <g>
+      <ellipse cx={cx + h * SHX} cy={cz + h * SHZ} rx={r * 1.05} ry={r * 0.85} fill="#000" opacity={0.3} filter="url(#claySoft)" />
+      <defs>
+        <linearGradient id={gid} x1={cx - nx} y1={cz - nz} x2={cx + nx} y2={cz + nz} gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor={c.west} />
+          <stop offset="100%" stopColor={c.south} />
+        </linearGradient>
+      </defs>
+      <path
+        d={`M ${cx - nx} ${cz - nz} L ${cx + dx - nx} ${cz + dy - nz} A ${r} ${r} 0 0 0 ${cx + dx + nx} ${cz + dy + nz} L ${cx + nx} ${cz + nz} A ${r} ${r} 0 0 1 ${cx - nx} ${cz - nz} Z`}
+        fill={`url(#${gid})`}
+      />
+      <circle cx={cx + dx} cy={cz + dy} r={r} fill={c.top} stroke={CLAY.edge} strokeWidth={0.03} />
+      {/* tank lid detail */}
+      <circle cx={cx + dx} cy={cz + dy} r={r * 0.55} fill="none" stroke={CLAY.edge} strokeWidth={0.025} opacity={0.5} />
+      {b.name && <RoofLabel x={cx + dx} y={cz + dy} w={r * 2} name={b.name} />}
+    </g>
+  )
+}
+
+function ClayBuildings({ buildings }: { buildings: Building[] }) {
+  // painter's order: north first so southern volumes overlap correctly;
+  // `order` lifts nested structures (roof gear) above their parent volume
+  const sorted = useMemo(
+    () =>
+      [...buildings].sort((a, b) => {
+        const ao = a.order ?? 0
+        const bo = b.order ?? 0
+        if (ao !== bo) return ao - bo
+        const az = a.kind === 'box' ? a.z1 : a.cz + a.r
+        const bz = b.kind === 'box' ? b.z1 : b.cz + b.r
+        return az - bz
+      }),
+    [buildings],
+  )
+  return (
+    <g>
+      {sorted.map((b) => (b.kind === 'box' ? <ClayBox key={b.id} b={b} /> : <ClayCyl key={b.id} b={b} />))}
+    </g>
+  )
 }
 
 /** breadcrumb trails collected client-side from telemetry */
@@ -215,6 +332,7 @@ export function OpsMap({
   const telemetry = useApp((s) => s.telemetry)
   const waypoints = useApp((s) => s.waypoints)
   const zones = useApp((s) => s.zones)
+  const buildings = useApp((s) => s.buildings)
   const events = useApp((s) => s.events)
   const t = useT()
   const [gotoMenu, setGotoMenu] = useState<Waypoint | null>(null)
@@ -371,9 +489,38 @@ export function OpsMap({
             <stop offset="0%" stopColor="#e6e8ea" stopOpacity="0.34" />
             <stop offset="100%" stopColor="#e6e8ea" stopOpacity="0" />
           </radialGradient>
+          <filter id="claySoft" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="0.22" />
+          </filter>
+          <radialGradient id="groundGrad" cx="0.5" cy="0.42" r="0.75">
+            <stop offset="0%" stopColor="#171b20" />
+            <stop offset="100%" stopColor="#101318" />
+          </radialGradient>
         </defs>
 
-        {/* occupancy base */}
+        {/* ---- ground plate ---- */}
+        <rect x={FULL.x} y={FULL.z} width={FULL.w} height={FULL.h} fill="url(#groundGrad)" />
+        {/* aprons / lanes */}
+        <g fill="#e8ecef" opacity={0.055}>
+          <rect x={-13.6} y={-6.1} width={27.2} height={2.4} />
+          <rect x={-13.6} y={3.6} width={27.2} height={2.3} />
+          <rect x={5.9} y={-3.8} width={2.4} height={7.5} />
+          <rect x={-14.9} y={-5.9} width={2.6} height={9.6} />
+        </g>
+        {/* survey grid */}
+        <g stroke="#e8ecef" strokeWidth={0.02} opacity={0.1}>
+          {Array.from({ length: 7 }, (_, i) => FULL.x + (i + 1) * 4).map((gx) => (
+            <line key={`gx${gx}`} x1={gx} y1={FULL.z} x2={gx} y2={FULL.z + FULL.h} />
+          ))}
+          {Array.from({ length: 4 }, (_, i) => FULL.z + (i + 1) * 4).map((gz) => (
+            <line key={`gz${gz}`} x1={FULL.x} y1={gz} x2={FULL.x + FULL.w} y2={gz} />
+          ))}
+        </g>
+        {/* site boundary */}
+        <rect x={FULL.x + 0.35} y={FULL.z + 0.35} width={FULL.w - 0.7} height={FULL.h - 0.7} fill="none" stroke="#3a424b" strokeWidth={0.05} />
+        <rect x={FULL.x + 0.55} y={FULL.z + 0.55} width={FULL.w - 1.1} height={FULL.h - 1.1} fill="none" stroke="#e8ecef" strokeWidth={0.02} opacity={0.1} strokeDasharray="0.12 0.5" />
+
+        {/* laser-scan texture (from the live occupancy grid) */}
         {occUrl && (
           <image
             href={occUrl}
@@ -382,6 +529,7 @@ export function OpsMap({
             width={FULL.w}
             height={FULL.h}
             preserveAspectRatio="none"
+            opacity={0.5}
             style={{ imageRendering: 'pixelated' }}
           />
         )}
@@ -392,13 +540,15 @@ export function OpsMap({
           const tone = zoneTone(z.kind)
           const cx = z.polygon.reduce((a, p) => a + p[0], 0) / z.polygon.length
           const topZ = Math.min(...z.polygon.map((p) => p[1]))
+          // anchor hint from site data; null → a roof label carries the name
+          const lp = z.label === null ? null : (z.label ?? { x: cx, z: topZ + 0.62 })
           return (
             <g key={z.id}>
               <polygon points={pts} fill={tone} opacity={0.05} />
               <polygon points={pts} fill="none" stroke={tone} strokeWidth={0.05 * k} strokeDasharray={`${0.5 * k} ${0.3 * k}`} opacity={0.55} />
-              {labels && (
-                <g transform={`translate(${cx} ${topZ}) scale(${k})`}>
-                  <text y={0.62} textAnchor="middle" fill={tone} opacity={0.85} fontSize={0.38} fontFamily="var(--font-mono)" letterSpacing="0.08" style={{ userSelect: 'none' }}>
+              {labels && lp && (
+                <g transform={`translate(${lp.x} ${lp.z}) scale(${k})`}>
+                  <text textAnchor={lp.anchor ?? 'middle'} fill={tone} opacity={0.85} fontSize={0.38} fontFamily="var(--font-mono)" letterSpacing="0.08" style={{ userSelect: 'none' }}>
                     {z.name.toUpperCase()}
                   </text>
                 </g>
@@ -406,6 +556,9 @@ export function OpsMap({
             </g>
           )
         })}
+
+        {/* clay massing */}
+        <ClayBuildings buildings={buildings} />
 
         {/* breadcrumb trails */}
         {robots.map((r) => {

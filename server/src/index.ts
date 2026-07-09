@@ -5,7 +5,7 @@ import { WebSocketServer, WebSocket } from 'ws'
 import { readFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { ROBOTS, SITE, SITE_CAMERAS, WAYPOINTS, ZONES } from './fleet.js'
+import { ROBOTS, SITE, SITE_CAMERAS, WAYPOINTS, ZONES, BUILDINGS } from './fleet.js'
 import { startGo2rtc, stopGo2rtc } from './go2rtc.js'
 import {
   tick,
@@ -41,6 +41,7 @@ app.get('/api/fleet', async () => ({
   cameras: SITE_CAMERAS,
   waypoints: WAYPOINTS,
   zones: ZONES,
+  buildings: BUILDINGS,
 }))
 
 // ---------- events ----------
@@ -70,7 +71,7 @@ app.get<{ Params: { file: string } }>('/api/snapshots/:file', async (req, reply)
 app.get('/api/rules', async () => ({ rules }))
 
 app.post<{ Body: any }>('/api/rules', async (req, reply) => {
-  const b = req.body ?? {}
+  const b = (req.body ?? {}) as any
   if (!b.name || !b.model || !b.source) return reply.code(400).send({ error: 'name, model, source required' })
   const rule = createRule(b)
   broadcast({ t: 'rules', rules })
@@ -95,7 +96,7 @@ app.delete<{ Params: { id: string } }>('/api/rules/:id', async (req, reply) => {
 app.get('/api/missions', async () => ({ missions }))
 
 app.post<{ Body: any }>('/api/missions', async (req, reply) => {
-  const b = req.body ?? {}
+  const b = (req.body ?? {}) as any
   if (!b.name || !Array.isArray(b.steps) || !b.steps.length)
     return reply.code(400).send({ error: 'name and steps[] required' })
   const m = createMission({
@@ -117,7 +118,7 @@ app.post<{ Params: { id: string } }>('/api/missions/:id/abort', async (req, repl
 })
 
 app.post<{ Params: { id: string }; Body: any }>('/api/robots/:id/goto', async (req, reply) => {
-  const { x, z } = req.body ?? {}
+  const { x, z } = (req.body ?? {}) as { x?: number; z?: number }
   if (typeof x !== 'number' || typeof z !== 'number') return reply.code(400).send({ error: 'x,z required' })
   if (!teleopGoto(req.params.id, x, z)) return reply.code(404).send({ error: 'unknown robot' })
   return { ok: true }
@@ -143,6 +144,7 @@ wss.on('connection', (ws) => {
       cameras: SITE_CAMERAS,
       waypoints: WAYPOINTS,
       zones: ZONES,
+      buildings: BUILDINGS,
       events: listEvents(80),
       missions,
       rules,

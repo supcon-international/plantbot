@@ -52,7 +52,12 @@ export interface Zone {
   name: string
   kind: 'restricted' | 'inspection' | 'charging'
   polygon: [number, number][]
+  label?: { x: number; z: number; anchor?: 'start' | 'middle' | 'end' } | null
 }
+
+export type Building =
+  | { id: string; kind: 'box'; x0: number; z0: number; x1: number; z1: number; h: number; tone?: 'light' | 'mid'; name?: string; order?: number }
+  | { id: string; kind: 'cyl'; cx: number; cz: number; r: number; h: number; tone?: 'light' | 'mid'; name?: string; order?: number }
 
 export interface SiteInfo {
   id: string

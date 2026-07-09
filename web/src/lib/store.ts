@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type {
+  Building,
   DetectionEvent,
   DetectionRule,
   Mission,
@@ -26,6 +27,7 @@ interface AppState {
   cameras: SiteCamera[]
   waypoints: Waypoint[]
   zones: Zone[]
+  buildings: Building[]
   missions: Mission[]
   rules: DetectionRule[]
   telemetry: Record<string, Telemetry>
@@ -50,6 +52,7 @@ export const useApp = create<AppState>((set) => ({
   cameras: [],
   waypoints: [],
   zones: [],
+  buildings: [],
   missions: [],
   rules: [],
   telemetry: {},
@@ -130,6 +133,7 @@ function connect() {
         cameras: msg.cameras,
         waypoints: msg.waypoints ?? [],
         zones: msg.zones ?? [],
+        buildings: msg.buildings ?? [],
         missions: msg.missions ?? [],
         rules: msg.rules ?? [],
         events: msg.events ?? [],

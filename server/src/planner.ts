@@ -16,12 +16,12 @@ const RECTS: [number, number, number, number][] = [
   [7.6, 1.2, 9.9, 3.3], // pallet stack E
   [-3.1, 2.6, -0.8, 4.7], // pallet stack S
   [-14.8, 4.4, -10.2, 8.5], // substation
-  [8.0, -8.4, 13.8, -4.9], // workshop
-  [-15.4, -8.5, -12.4, -5.8], // charge depot walls (dock approach handled below)
+  [8.0, -7.4, 13.8, -4.9], // workshop
+  [-15.4, -8.0, -12.4, -5.8], // charge depot walls (dock approach handled below)
 ]
 const CIRCLES: [number, number, number][] = [
-  [14.2, 6.2, 1.5],
-  [14.3, 2.9, 1.3],
+  [13.7, 6.2, 1.5],
+  [13.8, 2.9, 1.3],
 ]
 
 const blocked = new Uint8Array(W * H)
