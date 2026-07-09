@@ -27,6 +27,9 @@ const HOME = { pos: new THREE.Vector3(0, 26, 22), tgt: new THREE.Vector3(0, 0, 0
 
 const MONO = undefined // troika default — keep bundle lean
 
+/** labels/badges must never swallow the ray — clicks pass through to pads underneath */
+const NO_RAYCAST = () => null
+
 /** minimal structural type for the drei MapControls instance */
 interface MapControlsImpl {
   object: THREE.Camera
@@ -276,22 +279,22 @@ function WaypointMark({
         )}
       </group>
       <Billboard position={[0, 0.62, 0]}>
-        <Text font={MONO} fontSize={0.34} color={hot ? ACCENT : '#78786f'} anchorX="center" anchorY="bottom" letterSpacing={0.04}>
+        <Text raycast={NO_RAYCAST} font={MONO} fontSize={0.34} color={hot ? ACCENT : '#78786f'} anchorX="center" anchorY="bottom" letterSpacing={0.04}>
           {wp.id.replace('WP-', 'W')}
         </Text>
         {hover && (
-          <Text font={MONO} fontSize={0.3} color="#b6b6b0" anchorX="center" anchorY="top" position={[0, -0.06, 0]}>
+          <Text raycast={NO_RAYCAST} font={MONO} fontSize={0.3} color="#b6b6b0" anchorX="center" anchorY="top" position={[0, -0.06, 0]}>
             {wp.name}
           </Text>
         )}
       </Billboard>
       {order != null && (
         <Billboard position={[0.5, 0.95, 0]}>
-          <mesh>
+          <mesh raycast={NO_RAYCAST}>
             <circleGeometry args={[0.24, 24]} />
             <meshBasicMaterial color={ACCENT} />
           </mesh>
-          <Text font={MONO} fontSize={0.28} color="#0a0a0a" anchorX="center" anchorY="middle" fontWeight={700}>
+          <Text raycast={NO_RAYCAST} font={MONO} fontSize={0.28} color="#0a0a0a" anchorX="center" anchorY="middle" fontWeight={700}>
             {String(order)}
           </Text>
         </Billboard>
@@ -382,6 +385,7 @@ function RobotPuck({
       </mesh>
       <Billboard position={[0, 1.05, 0]}>
         <Text
+          raycast={NO_RAYCAST}
           font={MONO}
           fontSize={0.36}
           color={selected ? ACCENT : '#d8d8d2'}
@@ -526,11 +530,26 @@ export function Map3D({
     <div className={`relative touch-none overflow-hidden bg-surface ${heightClass} ${className}`}>
       <Canvas
         shadows
-        eventPrefix="client"
         dpr={[1, 1.75]}
         camera={{ position: HOME.pos.toArray() as [number, number, number], fov: 38, near: 0.5, far: 220 }}
         resize={{ polyfill: RafResizeObserver as any, scroll: false, debounce: 0 }}
         onPointerMissed={deselect}
+        onCreated={({ setEvents, gl }) =>
+          // r3f's eventPrefix compute divides raw client coords by canvas size
+          // without subtracting the canvas origin — every embedded map picked
+          // offset by its viewport position. Measure the rect per event instead
+          // (correct under page scroll, sidebars, and the resize polyfill).
+          setEvents({
+            compute: (event, state) => {
+              const rect = gl.domElement.getBoundingClientRect()
+              state.pointer.set(
+                ((event.clientX - rect.left) / rect.width) * 2 - 1,
+                (-(event.clientY - rect.top) / rect.height) * 2 + 1,
+              )
+              state.raycaster.setFromCamera(state.pointer, state.camera)
+            },
+          })
+        }
       >
         <CameraRig controls={controls} homeRef={homeRef} />
         <ambientLight intensity={0.85} />
