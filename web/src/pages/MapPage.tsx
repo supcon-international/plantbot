@@ -148,7 +148,7 @@ export function MapPage() {
   })
   const [follow, setFollow] = useState(false)
   const [mode, setMode] = useState<'ops' | 'splat'>(() =>
-    new URLSearchParams(location.search).get('mode') === 'splat' ? 'splat' : 'ops',
+    new URLSearchParams(location.search).get('mode') === 'ops' ? 'ops' : 'splat',
   )
 
   return (

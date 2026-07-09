@@ -84,6 +84,12 @@ export function FeedPlayer({ stream, file, muted = true }: { stream: string; fil
   return <StreamPlayer src={stream} muted={muted} />
 }
 
+/** first-frame preview from a local loop file — no live snapshot service */
+export function VideoThumb({ file, className = '' }: { file?: string; className?: string }) {
+  if (!file) return <div className={`skeleton ${className}`} />
+  return <video src={`${file}#t=0.6`} preload="metadata" muted playsInline className={className} />
+}
+
 export function SnapshotImg({
   src,
   refreshMs = 0,

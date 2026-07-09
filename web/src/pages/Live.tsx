@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router'
 import { Grid2X2, Focus, Radio } from 'lucide-react'
 import { useApp } from '../lib/store'
 import { useT } from '../lib/i18n'
-import { FeedPlayer, SnapshotImg } from '../components/StreamPlayer'
+import { FeedPlayer, VideoThumb } from '../components/StreamPlayer'
 import { Panel } from '../components/ui'
 import { utcClock } from '../lib/format'
 
@@ -162,11 +162,9 @@ export function Live() {
                       sel ? 'border-accent' : 'border-line hover:border-line-2'
                     }`}
                   >
-                    <SnapshotImg
-                      src={`/stream/api/frame.jpeg?src=${f.stream}`}
-                      refreshMs={15000}
+                    <VideoThumb
+                      file={f.file}
                       className="h-full w-full object-cover opacity-80 transition-opacity group-hover:opacity-100"
-                      alt={f.name}
                     />
                     <span className="absolute inset-x-0 bottom-0 truncate bg-black/60 px-1.5 py-1 text-left">
                       <span className="mono block truncate text-[10px] tracking-[0.06em] text-white/85">

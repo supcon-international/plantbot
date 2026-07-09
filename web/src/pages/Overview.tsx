@@ -4,7 +4,7 @@ import { ArrowUpRight, Radio } from 'lucide-react'
 import { useApp, useHistory } from '../lib/store'
 import { useT, useAgo } from '../lib/i18n'
 import { Panel, PanelHead, Spark, BatteryBar, SevDot, ModeChip, EmptyNote } from '../components/ui'
-import { SnapshotImg } from '../components/StreamPlayer'
+import { VideoThumb } from '../components/StreamPlayer'
 import { OpsMap, type MapSel } from '../components/OpsMap'
 import type { RobotSpec } from '../lib/types'
 
@@ -201,7 +201,7 @@ function VideoQuick() {
     <div className="grid grid-cols-2 gap-2 md:gap-3">
       {picks.map((c) => (
         <button key={c.id} onClick={() => nav(`/live?src=${c.stream}`)} className="group relative aspect-video overflow-hidden border border-line transition-colors hover:border-line-2">
-          <SnapshotImg src={`/stream/api/frame.jpeg?src=${c.stream}`} refreshMs={20000} className="h-full w-full object-cover opacity-75 transition-opacity group-hover:opacity-100" alt={c.name} />
+          <VideoThumb file={c.file} className="h-full w-full object-cover opacity-75 transition-opacity group-hover:opacity-100" />
           <span className="absolute inset-x-0 bottom-0 flex items-center gap-1.5 bg-black/60 px-2 py-1">
             {c.live && <Radio size={9} className="text-ok" />}
             <span className="mono truncate text-[10px] tracking-[0.06em] text-white/85">{c.name}</span>
