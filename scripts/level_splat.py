@@ -32,12 +32,15 @@ def read_gs_ply(path):
     return data, idx
 
 
-def ransac_ground(pos, iters=400, tol=None, gravity=np.array([0, -1.0, 0])):
-    """Largest plane whose normal roughly matches the COLMAP gravity prior (y-down)."""
+def ransac_ground(pos, iters=400, tol=None):
+    """Largest roughly-horizontal plane; its sky side is decided by the DATA,
+    not by a coordinate-system prior — the scene mass (buildings, trees)
+    always sits above the floor, so the heavier side of the plane is up."""
     rng = np.random.default_rng(7)
     sample = pos[rng.choice(len(pos), min(60000, len(pos)), replace=False)]
     diag = np.linalg.norm(sample.max(0) - sample.min(0))
     tol = tol or diag * 0.004
+    y_axis = np.array([0, 1.0, 0])
     best_n, best_d, best_count = None, 0.0, -1
     for _ in range(iters):
         p = sample[rng.choice(len(sample), 3, replace=False)]
@@ -46,9 +49,7 @@ def ransac_ground(pos, iters=400, tol=None, gravity=np.array([0, -1.0, 0])):
         if norm < 1e-9:
             continue
         n = n / norm
-        if n @ gravity < 0:
-            n = -n
-        if n @ gravity < 0.7:  # within ~45° of "up" (y-down world → sky is -y)
+        if abs(n @ y_axis) < 0.7:  # keep the plane horizontal-ish, either sign
             continue
         d = n @ p[0]
         count = int((np.abs(sample @ n - d) < tol).sum())
@@ -59,7 +60,10 @@ def ransac_ground(pos, iters=400, tol=None, gravity=np.array([0, -1.0, 0])):
     c = inl.mean(0)
     _, _, vt = np.linalg.svd(inl - c, full_matrices=False)
     n = vt[2]
-    if n @ gravity < 0:
+    # point n at the sky: most off-plane mass lives above the floor
+    signed = (sample - c) @ n
+    off = signed[np.abs(signed) > tol]
+    if len(off) and np.median(off) < 0:
         n = -n
     return n, c, best_count / len(sample)
 
@@ -113,10 +117,9 @@ def main():
     pos = data[:, [idx['x'], idx['y'], idx['z']]].astype(np.float64)
     print(f'loaded {len(pos):,} splats')
 
-    # 1. level: ground normal → +Y (this also flips the COLMAP y-down world upright)
+    # 1. level: sky-side ground normal → +Y (handles y-up and y-down sources alike)
     n, c, frac = ransac_ground(pos)
-    up = -n  # n points along gravity (y-down "sky"), the world up is the opposite
-    R1 = rot_between(up, np.array([0, 1.0, 0]))
+    R1 = rot_between(n, np.array([0, 1.0, 0]))
     p1 = pos @ R1.T
     ground_y = np.median((c @ R1.T)[1])
 
@@ -152,7 +155,16 @@ def main():
     smax = scales.max(1)
     box = (np.abs(p2[:, 0]) < 19) & (np.abs(p2[:, 2]) < 12.5) & (p2[:, 1] > -0.7) & (p2[:, 1] < y_max)
     lim = np.percentile(smax[box], 99.6)
-    keep = box & (smax < lim)
+    # scan fog: bright cigar-shaped streaks hanging over the scene. Real
+    # surfaces are pancake gaussians (smid ≈ smax); fog is thin and long.
+    dc = data[:, [idx['f_dc_0'], idx['f_dc_1'], idx['f_dc_2']]]
+    rgb_all = np.clip((0.5 + SH_C0 * dc) * 255, 0, 255)
+    bright = rgb_all.mean(1)
+    ssort = np.sort(scales, axis=1)
+    cigar = (ssort[:, 2] > 0.05) & (ssort[:, 1] / np.maximum(ssort[:, 2], 1e-9) < 0.15)
+    skyish = (bright > 190) | (rgb_all[:, 2] > rgb_all[:, 0] + 18)
+    fog = ((p2[:, 1] > 0.5) & cigar & (bright > 170)) | ((p2[:, 1] > 2.5) & (smax > 0.08) & skyish)
+    keep = box & (smax < lim) & ~fog
     near = (np.abs(p2[:, 0]) < 12) & (np.abs(p2[:, 2]) < 9)
     print(f'crop keeps {keep.sum():,} (floater cutoff {lim:.2f})')
 

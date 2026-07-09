@@ -14,6 +14,9 @@ import type { MapSel } from '../components/OpsMap'
 // COLMAP y-down → y-up; 0.562 rad yaw from PCA of the hull point cloud.
 // tandt "truck" capture: COLMAP y-down, yaw 0.705 rad from hull PCA,
 // ground plane at y≈0.5 — open-yard footprint fills the site frame.
+// bump when the baked scene file changes — busts the browser's cache
+const SCENE_REV = 4
+
 // the scene file is pre-leveled and pre-scaled by scripts/level_splat.py —
 // identity here is the guarantee that nothing renders crooked
 export const SPLAT_CALIB = {
@@ -30,7 +33,8 @@ function SplatStage() {
       sharedMemoryForWorkers: false, // no COOP/COEP needed
       freeIntermediateSplatData: true,
     })
-    v.addSplatScene('/assets/scenes/building_yard.splat', {
+    v.addSplatScene('/assets/scenes/building_yard.splat?v=' + SCENE_REV, {
+      format: GaussianSplats3D.SceneFormat.Splat,
       splatAlphaRemovalThreshold: 5,
       showLoadingUI: false,
       progressiveLoad: true,
