@@ -3,6 +3,7 @@ import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Grid, ContactShadows, Html } from '@react-three/drei'
 import * as THREE from 'three'
 import { RafResizeObserver } from './rafResizeObserver'
+import { useTheme } from '../lib/theme'
 import { useUrdfRobot, useLocomotion } from './UrdfRobot'
 import { BASE } from '../lib/base'
 import type { PayloadSpec } from '../lib/types'
@@ -56,6 +57,7 @@ function RobotScene({
   highlight?: string | null
   onPick?: (id: string | null) => void
 }) {
+  const dark = useTheme((s) => s.theme) === 'dark'
   const url = `${BASE}/assets/robots/${urdf}/${URDF_FILE[urdf] ?? `${urdf}.urdf`}`
   const { robot, robotRef } = useUrdfRobot(url)
   useLocomotion(robotRef, { family, gait, speed, urdf })
@@ -100,9 +102,9 @@ function RobotScene({
                         fontSize: 10,
                         letterSpacing: '0.1em',
                         textTransform: 'uppercase',
-                        color: hot ? '#f2f4f6' : 'rgba(154,162,171,0.85)',
-                        background: 'rgba(12,13,15,0.72)',
-                        border: `1px solid ${hot ? 'rgba(242,244,246,0.5)' : 'rgba(47,53,60,0.9)'}`,
+                        color: hot ? 'var(--color-ink)' : 'var(--color-ink-2)',
+                        background: 'color-mix(in srgb, var(--color-surface) 80%, transparent)',
+                        border: `1px solid ${hot ? 'var(--color-ink-3)' : 'var(--color-line-2)'}`,
                         padding: '2px 6px',
                         backdropFilter: 'blur(2px)',
                       }}
@@ -115,16 +117,16 @@ function RobotScene({
             })}
         </group>
       )}
-      <ContactShadows position={[0, 0.001, 0]} opacity={0.55} scale={3.5} blur={2.6} far={1.2} resolution={512} color="#000000" />
+      <ContactShadows position={[0, 0.001, 0]} opacity={dark ? 0.55 : 0.3} scale={3.5} blur={2.6} far={1.2} resolution={512} color="#000000" />
       <Grid
         position={[0, 0, 0]}
         args={[14, 14]}
         cellSize={0.25}
         cellThickness={0.4}
-        cellColor="#1d2229"
+        cellColor={dark ? '#1d2229' : '#c9c7bb'}
         sectionSize={1}
         sectionThickness={0.8}
-        sectionColor="#272d35"
+        sectionColor={dark ? '#272d35' : '#b3b1a4'}
         fadeDistance={7}
         fadeStrength={2.2}
         infiniteGrid
@@ -152,6 +154,7 @@ export function RobotViewer({
   onPick?: (id: string | null) => void
   autoRotate?: boolean
 }) {
+  const dark = useTheme((s) => s.theme) === 'dark'
   return (
     <Canvas
       dpr={[1, 2]}
@@ -162,7 +165,7 @@ export function RobotViewer({
       onPointerMissed={() => onPick?.(null)}
     >
       {/* all-local lighting — no network-fetched HDR (keeps Suspense clean offline) */}
-      <hemisphereLight intensity={0.6} groundColor="#0c0d0f" color="#c3ccd6" />
+      <hemisphereLight intensity={0.6} groundColor={dark ? '#0c0d0f' : '#b8b6aa'} color={dark ? '#c3ccd6' : '#ffffff'} />
       <directionalLight position={[3, 4, 2]} intensity={1.9} color="#e6ebf1" castShadow={false} />
       <directionalLight position={[-4, 2, -3]} intensity={0.65} color="#94a1ae" />
       <directionalLight position={[0, -2, 0]} intensity={0.25} color="#6b7683" />

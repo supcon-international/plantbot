@@ -27,6 +27,7 @@ const D: Record<string, [string, string, string]> = {
   'shell.view': ['View', '查看', 'Ver'],
   'shell.brand': ['Robotics Operations', '机器人运营中心', 'Operaciones Robóticas'],
   'shell.eco': ['ECO', '省流', 'ECO'],
+  'shell.theme': ['Toggle light / dark', '切换明暗模式', 'Cambiar claro / oscuro'],
   'shell.signIn': ['SIGN IN', '登录', 'ENTRAR'],
   'shell.signOut': ['SIGN OUT', '退出登录', 'SALIR'],
   'shell.role.viewer': ['VIEWER', '只读', 'VISOR'],

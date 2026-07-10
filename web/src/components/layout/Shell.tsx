@@ -1,7 +1,8 @@
 import { NavLink, Outlet, useNavigate } from 'react-router'
-import { LayoutGrid, Cctv, Bot, Map as MapIcon, ShieldAlert, X, Route, Plug, LogIn, LogOut } from 'lucide-react'
+import { LayoutGrid, Cctv, Bot, Map as MapIcon, ShieldAlert, X, Route, Plug, LogIn, LogOut, Sun, Moon } from 'lucide-react'
 import { useApp, useAuth, useCan, useRole, useSite } from '../../lib/store'
 import { useDataSaver } from '../../lib/media'
+import { useTheme } from '../../lib/theme'
 import { useT, useLang, type Lang } from '../../lib/i18n'
 import { utcClock } from '../../lib/format'
 import { SevDot } from '../ui'
@@ -128,6 +129,22 @@ function AuthChip() {
   )
 }
 
+function ThemeToggle() {
+  const theme = useTheme((s) => s.theme)
+  const toggle = useTheme((s) => s.toggle)
+  const t = useT()
+  return (
+    <button
+      onClick={toggle}
+      title={t('shell.theme')}
+      aria-label={t('shell.theme')}
+      className="flex h-[22px] w-[22px] items-center justify-center border border-line text-ink-3 transition-colors hover:text-ink"
+    >
+      {theme === 'dark' ? <Sun size={12} /> : <Moon size={12} />}
+    </button>
+  )
+}
+
 function EcoToggle() {
   const on = useDataSaver((s) => s.on)
   const toggle = useDataSaver((s) => s.toggle)
@@ -209,6 +226,7 @@ export function Shell() {
           <SiteSwitch />
           <AuthChip />
           <EcoToggle />
+          <ThemeToggle />
           <LangSwitch />
           {!connected && (
             <span className="flex items-center gap-1.5">

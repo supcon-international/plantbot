@@ -8,9 +8,9 @@ import { MapControls, Text, Line, Billboard, Edges } from '@react-three/drei'
 import * as THREE from 'three'
 import { Plus, Minus, Maximize2 } from 'lucide-react'
 import { useApp, api, useCan } from '../lib/store'
+import { useTheme } from '../lib/theme'
 import { useT } from '../lib/i18n'
 import type { Building, Waypoint } from '../lib/types'
-import { SEVERITY_COLOR } from '../lib/types'
 import { RafResizeObserver } from './rafResizeObserver'
 
 export type MapSel =
@@ -19,13 +19,77 @@ export type MapSel =
   | { kind: 'waypoint'; id: string }
   | null
 
-const ACCENT = '#b8ee46'
-const INK2 = '#9c9c98'
-const CLAY = '#e9e9e4'
-const CLAY_MID = '#bdbdb6'
 const HOME = { pos: new THREE.Vector3(0, 26, 22), tgt: new THREE.Vector3(0, 0, 0.5) }
 
 const MONO = undefined // troika default — keep bundle lean
+
+// three can't read CSS vars — the scene carries its own two palettes.
+// dark = charcoal yard with white clay; light = paper board with warm shadows.
+const MAP_THEME = {
+  dark: {
+    accent: '#b8ee46',
+    clay: '#e9e9e4',
+    clayMid: '#bdbdb6',
+    clayEdge: '#0a0a0a',
+    roofText: '#4b4b46',
+    apron: '#101010',
+    ground: '#161615',
+    grid: '#242423',
+    boundary: '#4a4a46',
+    zoneNeutral: '#b0b0a8',
+    zoneOutline: '#0c0c0b',
+    wpNeutral: '#8a8a82',
+    wpBright: '#c9c9c2',
+    wpDot: '#e4e4de',
+    padBg: '#0d0d0c',
+    chipBg: '#0d0d0c',
+    chipEdge: '#3a3a36',
+    chipEdgeSoft: '#33332f',
+    chipText: '#e2e2dc',
+    chipTextDim: '#b6b6b0',
+    chipOnActive: '#0c0c0b',
+    body: '#141414',
+    fov: '#ebebe8',
+    badgeInk: '#0a0a0a',
+    sev: { critical: '#dd5648', high: '#c2a05a', info: '#9c9c98', low: '#6b6b6f' } as Record<string, string>,
+    unit: (c: string) => c,
+  },
+  light: {
+    accent: '#5c8a00',
+    clay: '#ffffff',
+    clayMid: '#d6d4ca',
+    clayEdge: '#4a4941',
+    roofText: '#6e6c60',
+    apron: '#d8d6cc',
+    ground: '#e7e5dc',
+    grid: '#c7c5b9',
+    boundary: '#8f8d80',
+    zoneNeutral: '#767468',
+    zoneOutline: '#f2f1ea',
+    wpNeutral: '#6d6d63',
+    wpBright: '#45453d',
+    wpDot: '#26261f',
+    padBg: '#fbfaf5',
+    chipBg: '#fbfaf5',
+    chipEdge: '#a5a396',
+    chipEdgeSoft: '#b6b4a7',
+    chipText: '#26261f',
+    chipTextDim: '#54544a',
+    chipOnActive: '#fbfaf5',
+    body: '#2c2c27',
+    fov: '#3a3a32',
+    badgeInk: '#f6f5ef',
+    sev: { critical: '#bf3527', high: '#96701f', info: '#54544d', low: '#85858b' } as Record<string, string>,
+    // fleet colors are pale greys tuned for the dark board — deepen them on paper
+    unit: (c: string) =>
+      (({ '#ebebe8': '#4c4c44', '#b4b4ac': '#5e5e55', '#8a8a82': '#6d6d63', '#d6d6ce': '#54544a', '#c2c2ba': '#63625a' }) as Record<string, string>)[c] ?? c,
+  },
+}
+type MapPalette = (typeof MAP_THEME)['dark']
+
+function useMapTheme(): MapPalette {
+  return MAP_THEME[useTheme((s) => s.theme)]
+}
 
 /** labels/badges must never swallow the ray — clicks pass through to pads underneath */
 const NO_RAYCAST = () => null
@@ -42,6 +106,7 @@ interface MapControlsImpl {
 /** uploaded occupancy underlay (ROS map_server convention: origin = scene
  *  coords of the image's top-left pixel, x→east/right, z→south/down) */
 function OccupancyUnderlay({ map }: { map: NonNullable<ReturnType<typeof useApp.getState>['site']>['map'] }) {
+  const P = useMapTheme()
   const [tex, setTex] = useState<THREE.Texture | null>(null)
   useEffect(() => {
     if (!map) return
@@ -73,12 +138,13 @@ function OccupancyUnderlay({ map }: { map: NonNullable<ReturnType<typeof useApp.
       raycast={NO_RAYCAST}
     >
       <planeGeometry args={[w, h]} />
-      <meshBasicMaterial map={tex} transparent opacity={0.34} depthWrite={false} color="#9aa39a" />
+      <meshBasicMaterial map={tex} transparent opacity={0.34} depthWrite={false} color={P === MAP_THEME.dark ? '#9aa39a' : '#5d6058'} />
     </mesh>
   )
 }
 
 function Ground({ bounds }: { bounds: { x: [number, number]; z: [number, number] } }) {
+  const P = useMapTheme()
   const [x0, x1] = bounds.x
   const [z0, z1] = bounds.z
   const w = x1 - x0
@@ -94,14 +160,14 @@ function Ground({ bounds }: { bounds: { x: [number, number]; z: [number, number]
     <group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[(x0 + x1) / 2, -0.02, (z0 + z1) / 2]} receiveShadow>
         <planeGeometry args={[w + 12, d + 12]} />
-        <meshStandardMaterial color="#101010" roughness={1} metalness={0} />
+        <meshStandardMaterial color={P.apron} roughness={1} metalness={0} />
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[(x0 + x1) / 2, -0.01, (z0 + z1) / 2]} receiveShadow>
         <planeGeometry args={[w, d]} />
-        <meshStandardMaterial color="#161615" roughness={1} metalness={0} />
+        <meshStandardMaterial color={P.ground} roughness={1} metalness={0} />
       </mesh>
       <lineSegments geometry={grid} position={[0, 0.005, 0]}>
-        <lineBasicMaterial color="#242423" transparent opacity={0.7} />
+        <lineBasicMaterial color={P.grid} transparent opacity={0.7} />
       </lineSegments>
       {/* site boundary */}
       <Line
@@ -112,7 +178,7 @@ function Ground({ bounds }: { bounds: { x: [number, number]; z: [number, number]
           [x0 + inset, 0.01, z1 - inset],
           [x0 + inset, 0.01, z0 + inset],
         ]}
-        color="#4a4a46"
+        color={P.boundary}
         lineWidth={1}
       />
     </group>
@@ -120,11 +186,12 @@ function Ground({ bounds }: { bounds: { x: [number, number]; z: [number, number]
 }
 
 function Buildings({ buildings, onMiss }: { buildings: Building[]; onMiss?: () => void }) {
+  const P = useMapTheme()
   return (
     <group>
       {buildings.map((b) => {
         const mid = b.tone === 'mid'
-        const color = mid ? CLAY_MID : CLAY
+        const color = mid ? P.clayMid : P.clay
         if (b.kind === 'box') {
           const w = b.x1 - b.x0
           const d = b.z1 - b.z0
@@ -133,7 +200,7 @@ function Buildings({ buildings, onMiss }: { buildings: Building[]; onMiss?: () =
               <mesh position={[0, b.h / 2, 0]} castShadow receiveShadow onClick={onMiss}>
                 <boxGeometry args={[w, b.h, d]} />
                 <meshStandardMaterial color={color} roughness={0.9} metalness={0} />
-                <Edges color="#0a0a0a" threshold={20} opacity={0.32} transparent />
+                <Edges color={P.clayEdge} threshold={20} opacity={0.32} transparent />
               </mesh>
               {b.name && (
                 <Text
@@ -142,7 +209,7 @@ function Buildings({ buildings, onMiss }: { buildings: Building[]; onMiss?: () =
                   rotation={[-Math.PI / 2, 0, 0]}
                   fontSize={Math.min(0.42, (w * 0.8) / Math.max(4, b.name.length * 0.66))}
                   letterSpacing={0.12}
-                  color="#4b4b46"
+                  color={P.roofText}
                   anchorX="center"
                   anchorY="middle"
                 >
@@ -161,7 +228,7 @@ function Buildings({ buildings, onMiss }: { buildings: Building[]; onMiss?: () =
             {/* lid detail */}
             <mesh position={[0, b.h + 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
               <ringGeometry args={[b.r * 0.5, b.r * 0.55, 40]} />
-              <meshBasicMaterial color="#0a0a0a" transparent opacity={0.3} />
+              <meshBasicMaterial color={P.clayEdge} transparent opacity={0.3} />
             </mesh>
             {b.name && (
               <Text
@@ -170,7 +237,7 @@ function Buildings({ buildings, onMiss }: { buildings: Building[]; onMiss?: () =
                 rotation={[-Math.PI / 2, 0, 0]}
                 fontSize={Math.min(0.34, (b.r * 1.5) / Math.max(3, b.name.length * 0.62))}
                 letterSpacing={0.1}
-                color="#4b4b46"
+                color={P.roofText}
                 anchorX="center"
                 anchorY="middle"
               >
@@ -187,7 +254,8 @@ function Buildings({ buildings, onMiss }: { buildings: Building[]; onMiss?: () =
 const ZONE_GLYPH: Record<string, string> = { restricted: '⊘', inspection: '◇', charging: '⚡' }
 
 function ZoneFlat({ z, labels }: { z: ReturnType<typeof useApp.getState>['zones'][number]; labels: boolean }) {
-  const tone = z.kind === 'restricted' ? SEVERITY_COLOR.critical : z.kind === 'charging' ? ACCENT : '#b0b0a8'
+  const P = useMapTheme()
+  const tone = z.kind === 'restricted' ? P.sev.critical : z.kind === 'charging' ? P.accent : P.zoneNeutral
   const shape = useMemo(() => {
     const sh = new THREE.Shape()
     z.polygon.forEach(([x, zz], i) => (i === 0 ? sh.moveTo(x, zz) : sh.lineTo(x, zz)))
@@ -221,7 +289,7 @@ function ZoneFlat({ z, labels }: { z: ReturnType<typeof useApp.getState>['zones'
           color={tone}
           fillOpacity={0.95}
           outlineWidth={0.05}
-          outlineColor="#0c0c0b"
+          outlineColor={P.zoneOutline}
           outlineOpacity={0.85}
           anchorX={lp.anchor === 'end' ? 'right' : lp.anchor === 'start' ? 'left' : 'center'}
           anchorY="middle"
@@ -246,10 +314,10 @@ function Zones({ labels }: { labels: boolean }) {
 
 // ---------- dynamic layer ----------
 
-/** billboarded label with a dark backing plate — readable over any surface */
+/** billboarded label with a theme-aware backing plate — readable over any surface */
 function LabelChip({
   text,
-  tone = '#d8d8d2',
+  tone,
   edge,
   active = false,
   y = 0.7,
@@ -264,26 +332,27 @@ function LabelChip({
   size?: number
   pointer?: boolean
 }) {
+  const P = useMapTheme()
   const w = text.length * size * 0.64 + size * 1.1
   const h = size * 1.7
-  const bg = active ? ACCENT : '#0d0d0c'
-  const fg = active ? '#0c0c0b' : tone
+  const bg = active ? P.accent : P.chipBg
+  const fg = active ? P.chipOnActive : (tone ?? P.chipText)
   return (
     <Billboard position={[0, y, 0]}>
       <group raycast={NO_RAYCAST}>
         {/* backing plate + hairline edge */}
         <mesh raycast={NO_RAYCAST}>
           <planeGeometry args={[w, h]} />
-          <meshBasicMaterial color={bg} transparent opacity={active ? 0.96 : 0.82} depthWrite={false} />
+          <meshBasicMaterial color={bg} transparent opacity={active ? 0.96 : 0.86} depthWrite={false} />
         </mesh>
         <mesh raycast={NO_RAYCAST} position={[0, 0, -0.001]}>
           <planeGeometry args={[w + 0.05, h + 0.05]} />
-          <meshBasicMaterial color={edge ?? (active ? ACCENT : '#3a3a36')} transparent opacity={active ? 1 : 0.9} depthWrite={false} />
+          <meshBasicMaterial color={edge ?? (active ? P.accent : P.chipEdge)} transparent opacity={active ? 1 : 0.9} depthWrite={false} />
         </mesh>
         {pointer && (
           <mesh raycast={NO_RAYCAST} position={[0, -h / 2 - 0.07, 0]} rotation={[0, 0, Math.PI]}>
             <circleGeometry args={[0.09, 3, Math.PI / 2]} />
-            <meshBasicMaterial color={edge ?? '#3a3a36'} transparent opacity={0.95} depthWrite={false} />
+            <meshBasicMaterial color={edge ?? P.chipEdge} transparent opacity={0.95} depthWrite={false} />
           </mesh>
         )}
         <Text
@@ -313,9 +382,10 @@ function WaypointMark({
   order?: number
   onClick?: () => void
 }) {
+  const P = useMapTheme()
   const hot = state !== 'normal'
   const checkpoint = wp.id.startsWith('CP')
-  const tone = hot ? ACCENT : wp.kind === 'dock' ? ACCENT : checkpoint ? '#c9c9c2' : '#8a8a82'
+  const tone = hot ? P.accent : wp.kind === 'dock' ? P.accent : checkpoint ? P.wpBright : P.wpNeutral
   const [hover, setHover] = useState(false)
   const s = hover ? 1.2 : 1
   const shortId = wp.id.replace('WP-', 'W·').replace('CP-', 'CP·').replace('LOT-', 'LOT·')
@@ -351,11 +421,11 @@ function WaypointMark({
             {/* charge pad: dark disc, lime bolt */}
             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.015, 0]}>
               <circleGeometry args={[0.4, 28]} />
-              <meshBasicMaterial color="#0d0d0c" transparent opacity={0.9} />
+              <meshBasicMaterial color={P.padBg} transparent opacity={0.9} />
             </mesh>
             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.025, 0]}>
               <ringGeometry args={[0.34, 0.4, 28]} />
-              <meshBasicMaterial color={ACCENT} />
+              <meshBasicMaterial color={P.accent} />
             </mesh>
             <Text
               raycast={NO_RAYCAST}
@@ -363,7 +433,7 @@ function WaypointMark({
               position={[0, 0.03, 0.02]}
               rotation={[-Math.PI / 2, 0, 0]}
               fontSize={0.42}
-              color={ACCENT}
+              color={P.accent}
               anchorX="center"
               anchorY="middle"
             >
@@ -380,11 +450,11 @@ function WaypointMark({
             </mesh>
             <mesh rotation={[-Math.PI / 2, 0, Math.PI / 4]} position={[0, 0.015, 0]}>
               <circleGeometry args={[0.26, 4]} />
-              <meshBasicMaterial color="#0d0d0c" transparent opacity={0.72} />
+              <meshBasicMaterial color={P.padBg} transparent opacity={0.72} />
             </mesh>
             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.025, 0]}>
               <circleGeometry args={[0.07, 12]} />
-              <meshBasicMaterial color={hot ? ACCENT : '#e4e4de'} />
+              <meshBasicMaterial color={hot ? P.accent : P.wpDot} />
             </mesh>
           </>
         )}
@@ -424,8 +494,8 @@ function WaypointMark({
       {(checkpoint || wp.kind === 'dock' || hot || hover) && (
         <LabelChip
           text={hover ? `${shortId} ${wp.name.toUpperCase()}` : wp.kind === 'dock' ? 'DOCK' : shortId}
-          tone={checkpoint || wp.kind === 'dock' ? '#e4e4de' : '#b6b6b0'}
-          edge={hot ? ACCENT : checkpoint ? '#4a4a44' : '#33332f'}
+          tone={checkpoint || wp.kind === 'dock' ? P.chipText : P.chipTextDim}
+          edge={hot ? P.accent : checkpoint ? P.chipEdge : P.chipEdgeSoft}
           active={hot}
           y={0.66}
           size={0.26}
@@ -436,13 +506,13 @@ function WaypointMark({
         <Billboard position={[checkpoint || wp.kind === 'dock' ? 0.85 : 0.55, 1.05, 0]}>
           <mesh raycast={NO_RAYCAST}>
             <circleGeometry args={[0.26, 24]} />
-            <meshBasicMaterial color={ACCENT} />
+            <meshBasicMaterial color={P.accent} />
           </mesh>
           <mesh raycast={NO_RAYCAST} position={[0, 0, -0.001]}>
             <circleGeometry args={[0.3, 24]} />
-            <meshBasicMaterial color="#0c0c0b" />
+            <meshBasicMaterial color={P.chipBg} />
           </mesh>
-          <Text raycast={NO_RAYCAST} font={MONO} fontSize={0.3} color="#0a0a0a" anchorX="center" anchorY="middle" fontWeight={700}>
+          <Text raycast={NO_RAYCAST} font={MONO} fontSize={0.3} color={P.badgeInk} anchorX="center" anchorY="middle" fontWeight={700}>
             {String(order)}
           </Text>
         </Billboard>
@@ -471,6 +541,7 @@ function RobotPuck({
   selected: boolean
   onClick?: () => void
 }) {
+  const P = useMapTheme()
   const group = useRef<THREE.Group>(null)
   const ring = useRef<THREE.Mesh>(null)
   const inited = useRef(false)
@@ -504,13 +575,13 @@ function RobotPuck({
       }
     }
   })
-  const tone = selected ? ACCENT : color
+  const tone = selected ? P.accent : P.unit(color)
   return (
     <group ref={group} visible={false}>
       {/* FOV wedge */}
       <mesh rotation={[-Math.PI / 2, 0, -0.46]} position={[0, 0.03, 0]}>
         <circleGeometry args={[2.35, 26, 0, 0.92]} />
-        <meshBasicMaterial color="#ebebe8" transparent opacity={selected ? 0.14 : 0.08} depthWrite={false} />
+        <meshBasicMaterial color={P.fov} transparent opacity={selected ? 0.14 : 0.08} depthWrite={false} />
       </mesh>
       <group
         onClick={
@@ -527,12 +598,12 @@ function RobotPuck({
         {family === 'ugv' ? (
           <mesh position={[0, 0.14, 0]} castShadow>
             <boxGeometry args={[0.56, 0.26, 0.56]} />
-            <meshStandardMaterial color="#141414" roughness={0.6} />
+            <meshStandardMaterial color={P.body} roughness={0.6} />
           </mesh>
         ) : (
           <mesh position={[0, 0.14, 0]} castShadow>
             <cylinderGeometry args={[0.3, 0.34, 0.26, 24]} />
-            <meshStandardMaterial color="#141414" roughness={0.6} />
+            <meshStandardMaterial color={P.body} roughness={0.6} />
           </mesh>
         )}
         {/* heading arrow on the deck */}
@@ -551,19 +622,20 @@ function RobotPuck({
         <ringGeometry args={[0.4, 0.44, 32]} />
         <meshBasicMaterial color={tone} transparent opacity={0.35} depthWrite={false} />
       </mesh>
-      <LabelChip text={callsign} tone="#e2e2dc" edge={selected ? ACCENT : color} active={selected} y={1.12} size={0.3} pointer />
+      <LabelChip text={callsign} edge={selected ? P.accent : P.unit(color)} active={selected} y={1.12} size={0.3} pointer />
     </group>
   )
 }
 
 /** planned-path ribbon — its own 4 Hz subscription so path churn never re-renders the tree */
 function PathLine({ robotId, color, selected }: { robotId: string; color: string; selected: boolean }) {
+  const P = useMapTheme()
   const tel = useApp((s) => s.telemetry[robotId])
   if (!tel || tel.path.length === 0) return null
   return (
     <Line
       points={[[tel.x, 0.04, tel.z], ...tel.path.map((p) => [p.x, 0.04, p.z] as [number, number, number])]}
-      color={selected ? ACCENT : color}
+      color={selected ? P.accent : P.unit(color)}
       lineWidth={selected ? 2 : 1.2}
       dashed
       dashSize={0.32}
@@ -575,7 +647,8 @@ function PathLine({ robotId, color, selected }: { robotId: string; color: string
 }
 
 function EventPin({ x, z, severity, onClick }: { x: number; z: number; severity: string; onClick?: () => void }) {
-  const tone = SEVERITY_COLOR[severity as keyof typeof SEVERITY_COLOR] ?? INK2
+  const P = useMapTheme()
+  const tone = P.sev[severity] ?? P.sev.info
   const mat = useRef<THREE.MeshBasicMaterial>(null)
   const pulse = useRef<THREE.Mesh>(null)
   const alarm = severity === 'critical' || severity === 'high'
@@ -621,7 +694,7 @@ function EventPin({ x, z, severity, onClick }: { x: number; z: number; severity:
       <Billboard position={[0, 1.0, 0]} renderOrder={40}>
         <mesh onClick={stop} renderOrder={40}>
           <circleGeometry args={[0.33, 3, Math.PI / 2]} />
-          <meshBasicMaterial color="#0c0c0b" transparent opacity={0.9} depthTest={false} />
+          <meshBasicMaterial color={P.chipBg} transparent opacity={0.9} depthTest={false} />
         </mesh>
         <mesh raycast={NO_RAYCAST} renderOrder={41} position={[0, 0, 0.001]}>
           <ringGeometry args={[0.26, 0.315, 3, 1, Math.PI / 2]} />
@@ -722,6 +795,7 @@ export function Map3D({
   routePreview?: string[]
   wheelZoom?: boolean
 }) {
+  const P = useMapTheme()
   const site = useApp((s) => s.site)
   const robots = useApp((s) => s.robots)
   const waypoints = useApp((s) => s.waypoints)
@@ -774,8 +848,8 @@ export function Map3D({
         }
       >
         <CameraRig controls={controls} homeRef={homeRef} span={span} />
-        <ambientLight intensity={0.85} />
-        <hemisphereLight args={['#3a3a38', '#181816', 0.5]} />
+        <ambientLight intensity={P === MAP_THEME.dark ? 0.85 : 1.0} />
+        <hemisphereLight args={P === MAP_THEME.dark ? ['#3a3a38', '#181816', 0.5] : ['#ffffff', '#c9c7ba', 0.55]} />
         <directionalLight
           position={[-14, 26, -10]}
           intensity={1.5}
@@ -800,7 +874,7 @@ export function Map3D({
                 .map((id) => waypoints.find((w) => w.id === id))
                 .filter(Boolean)
                 .map((w) => [w!.x, 0.05, w!.z] as [number, number, number])}
-              color={ACCENT}
+              color={P.accent}
               lineWidth={2}
               dashed
               dashSize={0.4}
@@ -947,31 +1021,31 @@ export function Map3D({
                 [
                   'map.lg.checkpoint',
                   <svg key="c" viewBox="-0.42 -0.42 0.84 0.84" className="h-3 w-3">
-                    <rect x={-0.24} y={-0.24} width={0.48} height={0.48} fill="none" stroke="#c9c9c2" strokeWidth={0.06} transform="rotate(45)" />
-                    <circle r={0.07} fill="#e4e4de" />
+                    <rect x={-0.24} y={-0.24} width={0.48} height={0.48} fill="none" stroke="var(--color-ink-2)" strokeWidth={0.06} transform="rotate(45)" />
+                    <circle r={0.07} fill="var(--color-ink)" />
                   </svg>,
                 ],
                 [
                   'map.lg.inspect',
                   <svg key="i" viewBox="-0.42 -0.42 0.84 0.84" className="h-3 w-3">
-                    <circle r={0.21} fill="none" stroke="#a8a8a2" strokeWidth={0.05} />
+                    <circle r={0.21} fill="none" stroke="var(--color-ink-3)" strokeWidth={0.05} />
                     {[0, 90, 180, 270].map((a) => (
-                      <line key={a} x1={0.21} y1={0} x2={0.33} y2={0} stroke="#a8a8a2" strokeWidth={0.05} transform={`rotate(${a})`} />
+                      <line key={a} x1={0.21} y1={0} x2={0.33} y2={0} stroke="var(--color-ink-3)" strokeWidth={0.05} transform={`rotate(${a})`} />
                     ))}
-                    <circle r={0.06} fill="#a8a8a2" />
+                    <circle r={0.06} fill="var(--color-ink-3)" />
                   </svg>,
                 ],
                 [
                   'map.lg.nav',
                   <svg key="n" viewBox="-0.42 -0.42 0.84 0.84" className="h-3 w-3">
-                    <circle r={0.16} fill="none" stroke="#a8a8a2" strokeWidth={0.06} />
+                    <circle r={0.16} fill="none" stroke="var(--color-ink-3)" strokeWidth={0.06} />
                   </svg>,
                 ],
                 [
                   'map.lg.dock',
                   <svg key="d" viewBox="-0.42 -0.42 0.84 0.84" className="h-3 w-3">
-                    <circle r={0.32} fill="none" stroke={ACCENT} strokeWidth={0.05} />
-                    <path d="M 0.06 -0.2 L -0.13 0.03 L -0.02 0.03 L -0.05 0.2 L 0.14 -0.03 L 0.03 -0.03 Z" fill={ACCENT} />
+                    <circle r={0.32} fill="none" stroke="var(--color-accent)" strokeWidth={0.05} />
+                    <path d="M 0.06 -0.2 L -0.13 0.03 L -0.02 0.03 L -0.05 0.2 L 0.14 -0.03 L 0.03 -0.03 Z" fill="var(--color-accent)" />
                   </svg>,
                 ],
                 [

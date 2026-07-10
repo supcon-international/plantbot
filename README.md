@@ -1,6 +1,6 @@
 # Plantbot · Robotics Operations
 
-工业巡检机器人管理平台。近黑科技灰 × 暖白的单色作战室美学（IBM Plex 字型体系），白色即强调色，语义色只出现在状态点上。桌面与移动端全适配。
+工业巡检机器人管理平台。近黑科技灰 × 暖白的单色作战室美学（IBM Plex 字型体系），酸绿为唯一强调色；一键切换**明亮纸面模式**（3D 白模随主题换纸板质感，强调色自动加深保证对比度）。桌面与移动端全适配。
 
 ![stack](https://img.shields.io/badge/React_19-Vite_7-e6e8ea) ![3d](https://img.shields.io/badge/three.js-R3F_9-9aa2ab) ![video](https://img.shields.io/badge/Video-local_loops-b8ee46)
 

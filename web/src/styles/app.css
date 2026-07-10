@@ -30,6 +30,56 @@
   color-scheme: dark;
 }
 
+/* ---------- light theme — warm paper, same acid-lime family ----------
+   The lime itself fails contrast on paper, so interactive accent deepens
+   to a readable leaf green; status colors keep hue, drop luminance. */
+[data-theme='light'] {
+  color-scheme: light;
+  --color-bg: #f2f1ec;
+  --color-surface: #faf9f5;
+  --color-surface-2: #f0efe8;
+  --color-surface-3: #e6e5dd;
+  --color-line: #dddbd2;
+  --color-line-2: #c9c7bc;
+  --color-ink: #1c1c19;
+  --color-ink-2: #54544d;
+  --color-ink-3: #8b8b81;
+  --color-accent: #5c8a00;
+  --color-ok: #5c8a00;
+  --color-warn: #96701f;
+  --color-crit: #bf3527;
+  --color-low: #85858b;
+}
+
+[data-theme='light'] body::before {
+  background-image:
+    linear-gradient(rgba(40, 40, 28, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(40, 40, 28, 0.035) 1px, transparent 1px);
+}
+
+[data-theme='light'] ::selection {
+  background: rgba(92, 138, 0, 0.18);
+}
+
+[data-theme='light'] .live-dot {
+  animation-name: pulse-ring-light;
+}
+@keyframes pulse-ring-light {
+  0% { box-shadow: 0 0 0 0 rgba(92, 138, 0, 0.3); }
+  70% { box-shadow: 0 0 0 5px rgba(92, 138, 0, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(92, 138, 0, 0); }
+}
+[data-theme='light'] .live-dot.crit {
+  animation-name: pulse-ring-crit;
+}
+[data-theme='light'] .flash-new {
+  animation-name: flash-in-light;
+}
+@keyframes flash-in-light {
+  0% { background: rgba(92, 138, 0, 0.1); }
+  100% { background: transparent; }
+}
+
 html,
 body,
 #root {
