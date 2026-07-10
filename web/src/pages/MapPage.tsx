@@ -6,6 +6,8 @@ import { useT, useAgo } from '../lib/i18n'
 const SceneMap = lazy(() => import('../three/SceneMap').then((m) => ({ default: m.SceneMap })))
 import { OpsMap, type MapSel } from '../components/OpsMap'
 import { BatteryBar, SevTag, Panel, ModeChip } from '../components/ui'
+import { Toggle } from '@/components/ui/toggle'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
 function LoaderChip() {
   const [ready, setReady] = useState(false)
@@ -62,14 +64,15 @@ function SelectionCard({ sel, onFollow, follow, mode3d }: { sel: MapSel; onFollo
           </div>
           <div className="flex items-center gap-1.5">
             {mode3d && (
-              <button
-                onClick={onFollow}
-                className={`mono flex items-center gap-1 border px-1.5 py-1 text-[10px] tracking-[0.1em] transition-colors ${
-                  follow ? 'border-ink/40 bg-ink/10 text-ink' : 'border-line-2 text-ink-3 hover:text-ink-2'
-                }`}
+              <Toggle
+                pressed={follow}
+                onPressedChange={onFollow}
+                variant="outline"
+                size="sm"
+                className="mono h-auto gap-1 border-line-2 px-1.5 py-1 text-[10px] normal-case tracking-[0.1em] data-[state=on]:border-(--signal) data-[state=on]:bg-(--signal) data-[state=on]:text-[#080808]"
               >
                 <Crosshair size={11} /> {t('c.follow')}
-              </button>
+              </Toggle>
             )}
             <Link
               to={`/robots/${r.id}`}
@@ -195,7 +198,7 @@ export function MapPage() {
                 key={r.id}
                 onClick={() => setSel(active ? null : { kind: 'robot', id: r.id })}
                 className={`mono flex items-center gap-1.5 border px-2 py-1 text-[11px] tracking-[0.08em] backdrop-blur transition-colors ${
-                  active ? 'border-ink/50 bg-ink/10 text-ink' : 'border-line bg-bg/60 text-ink-2 hover:border-line-2'
+                  active ? 'border-(--signal) bg-(--signal) text-[#080808]' : 'border-line bg-bg/60 text-ink-2 hover:border-line-2'
                 }`}
               >
                 <span style={{ width: 5, height: 5, borderRadius: r.family === 'ugv' ? 1 : 99, background: r.color, display: 'inline-block' }} />
@@ -207,27 +210,30 @@ export function MapPage() {
       </div>
 
       {/* top-right: layer switch — the map inventory drives what's offered */}
-      <div className="absolute right-3 top-3 z-10 flex overflow-hidden border border-line bg-bg/70 backdrop-blur">
+      <ToggleGroup
+        type="single"
+        value={effMode}
+        onValueChange={(v) => v && setMode(v as 'ops' | 'splat')}
+        className="absolute right-3 top-3 z-10 h-auto bg-bg/70 backdrop-blur"
+      >
         {(
           [
             ['ops', MapIcon, t('map.opsMap'), true],
             ['splat', Box, t('map.3dScan'), !!splatAsset || !ready],
           ] as const
         ).map(([m, Icon, label, avail]) => (
-          <button
+          <ToggleGroupItem
             key={m}
-            onClick={() => avail && setMode(m)}
+            value={m}
             disabled={!avail}
             title={avail ? undefined : t('map.noScan')}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 transition-colors ${
-              effMode === m ? 'bg-surface-2 text-ink' : avail ? 'text-ink-3 hover:text-ink-2' : 'cursor-not-allowed text-ink-3/40'
-            }`}
+            className="gap-1.5 bg-transparent px-2.5 py-1.5 data-[state=on]:bg-surface-2 data-[state=on]:text-ink"
           >
             <Icon size={12} strokeWidth={1.5} />
             <span className="mono text-[10.5px] tracking-[0.1em]">{label}</span>
-          </button>
+          </ToggleGroupItem>
         ))}
-      </div>
+      </ToggleGroup>
 
       {/* bottom: selection card */}
       <div className="pointer-events-none absolute inset-x-3 bottom-3 z-10 flex justify-center md:justify-start">

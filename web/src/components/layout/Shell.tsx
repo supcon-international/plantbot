@@ -13,13 +13,16 @@ import {
   Settings2,
   ShieldAlert,
   Sun,
-  X,
 } from 'lucide-react'
 import { useApp, useAuth, useCan, useRole, useSite } from '../../lib/store'
 import { useDataSaver } from '../../lib/media'
 import { useTheme } from '../../lib/theme'
 import { useT, useLang, type Lang } from '../../lib/i18n'
-import { SevDot } from '../ui'
+import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Toaster } from '@/components/ui/sonner'
 
 const NAV = [
   { to: '/', key: 'nav.ops', icon: LayoutGrid },
@@ -75,13 +78,13 @@ function LangSwitch() {
     { id: 'zh', label: '中' },
   ]
   return (
-    <div className="segmented-control">
+    <ToggleGroup type="single" value={lang} onValueChange={(v) => v && setLang(v as Lang)} aria-label="language">
       {langs.map((l) => (
-        <button key={l.id} onClick={() => setLang(l.id)} className={lang === l.id ? 'is-selected' : ''}>
+        <ToggleGroupItem key={l.id} value={l.id} className="mono text-[9px] tracking-normal normal-case">
           {l.label}
-        </button>
+        </ToggleGroupItem>
       ))}
-    </div>
+    </ToggleGroup>
   )
 }
 
@@ -93,13 +96,18 @@ function SiteSwitch() {
   return (
     <label className="site-switch">
       <span className="utility-label">SITE</span>
-      <select value={siteId} onChange={(e) => setSite(e.target.value)} aria-label="site">
-        {sites.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.name}
-          </option>
-        ))}
-      </select>
+      <Select value={siteId} onValueChange={setSite}>
+        <SelectTrigger size="bare" aria-label="site">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent align="end">
+          {sites.map((s) => (
+            <SelectItem key={s.id} value={s.id}>
+              {s.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </label>
   )
 }
@@ -112,18 +120,18 @@ function AuthChip() {
   const nav = useNavigate()
   if (!me?.user)
     return (
-      <button onClick={() => nav('/login')} className="utility-button">
+      <Button variant="utility" onClick={() => nav('/login')}>
         <LogIn size={13} />
         <span>{t('shell.signIn')}</span>
-      </button>
+      </Button>
     )
   return (
     <span className="flex items-center gap-2">
       <span className="mono hidden text-[11px] text-ink-2 xl:inline">{me.user.username}</span>
       <span className="role-chip">{t(`shell.role.${role}`)}</span>
-      <button onClick={() => logout()} title={t('shell.signOut')} className="icon-button">
+      <Button variant="utility" size="icon" onClick={() => logout()} title={t('shell.signOut')}>
         <LogOut size={13} />
-      </button>
+      </Button>
     </span>
   )
 }
@@ -133,9 +141,9 @@ function ThemeToggle() {
   const toggle = useTheme((s) => s.toggle)
   const t = useT()
   return (
-    <button onClick={toggle} title={t('shell.theme')} aria-label={t('shell.theme')} className="icon-button">
+    <Button variant="utility" size="icon" onClick={toggle} title={t('shell.theme')} aria-label={t('shell.theme')}>
       {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
-    </button>
+    </Button>
   )
 }
 
@@ -144,10 +152,10 @@ function EcoToggle() {
   const toggle = useDataSaver((s) => s.toggle)
   const t = useT()
   return (
-    <button onClick={toggle} title={t('shell.ecoTitle')} aria-pressed={on} className={`utility-button ${on ? 'is-on' : ''}`}>
+    <Button variant={on ? 'signal' : 'utility'} onClick={toggle} title={t('shell.ecoTitle')} aria-pressed={on}>
       <span className="eco-leaf" />
       {t('shell.eco')}
-    </button>
+    </Button>
   )
 }
 
@@ -165,11 +173,17 @@ function ConnectionStatus({ compact = false }: { compact?: boolean }) {
 function MobileUtilityMenu() {
   const t = useT()
   return (
-    <details className="mobile-utility-menu">
-      <summary className="icon-button" aria-label={t('shell.controls')}>
-        <Settings2 size={15} />
-      </summary>
-      <div className="mobile-utility-popover">
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="utility" size="icon" aria-label={t('shell.controls')}>
+          <Settings2 size={15} />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        sideOffset={6}
+        className="mobile-utility-popover-signal flex w-[min(300px,calc(100vw-24px))] flex-col gap-2.5 p-2.5"
+      >
         <SiteSwitch />
         <div className="flex items-center justify-between gap-3">
           <EcoToggle />
@@ -177,33 +191,8 @@ function MobileUtilityMenu() {
           <LangSwitch />
         </div>
         <AuthChip />
-      </div>
-    </details>
-  )
-}
-
-function Toast() {
-  const toast = useApp((s) => s.toast)
-  const dismiss = useApp((s) => s.dismissToast)
-  const t = useT()
-  useEffect(() => {
-    if (!toast) return
-    const timer = setTimeout(dismiss, 7000)
-    return () => clearTimeout(timer)
-  }, [toast, dismiss])
-  if (!toast) return null
-  return (
-    <div className="toast-position fixed z-50 w-[min(420px,calc(100vw-24px))]">
-      <div className="toast-card rise flex items-center gap-3 px-4 py-3">
-        <SevDot sev={toast.severity} pulse />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[14px] font-medium text-ink">{toast.label}</div>
-          <div className="microlabel mt-0.5">{toast.sourceName} · {toast.zone}</div>
-        </div>
-        <NavLink to={`/events?ev=${toast.id}`} onClick={dismiss} className="text-link shrink-0">{t('shell.view')}</NavLink>
-        <button onClick={dismiss} className="icon-button is-quiet" aria-label="dismiss"><X size={14} /></button>
-      </div>
-    </div>
+      </PopoverContent>
+    </Popover>
   )
 }
 
@@ -282,7 +271,7 @@ export function Shell() {
         {nav.map((n) => <NavItem key={n.to} to={n.to} label={t(n.key)} icon={n.icon} badge={n.to === '/events' ? critCount : 0} />)}
       </nav>
 
-      <Toast />
+      <Toaster />
 
       <main className="app-main">
         <RouteStage routeKey={`${location.pathname}${location.search}`} />

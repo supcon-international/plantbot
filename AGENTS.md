@@ -27,6 +27,7 @@ cd integrations && pnpm test                        # 三厂商全行为 e2e（�
 
 ## 其他约定
 
+- **前端组件基座 = shadcn/ui**（Tailwind v4，`web/src/components/ui/*`，别名 `@/`）。这些基元已**皮肤化为 Carbon 工业控制台**：直角（`--radius:0`）、硬偏移阴影、IBM Plex Condensed、酸绿 signal。shadcn 语义变量（`--background`/`--primary`…）在 `app.css` 里**派生自 Carbon 令牌**（`--color-*`），改设计只动 Carbon 令牌，双主题自动翻。写页面用 `Button`(variant utility/signal/outline/ghost)/`Dialog`/`Select`/`Tabs|ToggleGroup`(段控)/`Table`/`Input`/`Switch`/`Slider`/`Progress`/`Badge`，不要再手搓原生 `<button>/<select>` 或旧的 `.utility-button/.segmented-control`（已删）。`components/ui.tsx` 的 `Panel/PanelHead/Modal/SevTag/ModeChip` 是包在 shadcn 之上的领域封装，API 不变。Toast 走 sonner（`lib/notify.tsx` 渲染 Carbon 卡片）。**坑：`.panel` 类带 `position:relative`，别加到需要 `fixed` 的元素（Dialog 已规避）；React 必须单副本（19.2.7），重复副本会触发 Invalid hook call。**
 - 新视频通道：素材在 `scripts/setup.mjs` 登记（自动出 640p `.low.mp4` 孪生），快照抓帧源在 `server/src/frames.ts` 的 `SOURCE` 表登记。
 - 仿真状态全内存（重启即复位）；持久配置（用户/API key/自定义事件类型/上传地图/外部机器人）在 `server/data/config.json`（已 gitignore，删除即重新播种）。
 - 权限：匿名=viewer 只读；种子账户 `admin/operator/viewer`（默认密码 `plantbot`，生产用 `PB_*_PASSWORD` 环境变量覆盖）。写接口按 `viewer<operator<admin` × 场站授权。

@@ -1,7 +1,15 @@
+// Console-domain widgets on top of the shadcn/ui substrate (@/components/ui/*).
+// Panel/PanelHead wrap Card, Modal wraps Dialog, the status chips wrap Badge —
+// same exported API as before, so pages keep their vocabulary while behavior,
+// focus management and a11y come from Radix.
+
 import type { CSSProperties, ReactNode } from 'react'
 import type { MissionStatus, RobotMode, Severity } from '../lib/types'
 import { SEVERITY_COLOR } from '../lib/types'
 import { useT } from '../lib/i18n'
+import { Card, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 
 export function Panel({
   children,
@@ -15,9 +23,9 @@ export function Panel({
   onClick?: () => void
 }) {
   return (
-    <div onClick={onClick} style={style} className={`panel ${className}`}>
+    <Card onClick={onClick} style={style} className={`panel ${className}`}>
       {children}
-    </div>
+    </Card>
   )
 }
 
@@ -31,10 +39,10 @@ export function PanelHead({
   className?: string
 }) {
   return (
-    <div className={`panel-head flex items-center justify-between gap-2 ${className}`}>
-      <span className="microlabel">{label}</span>
+    <CardHeader className={className}>
+      <CardTitle>{label}</CardTitle>
       {right}
-    </div>
+    </CardHeader>
   )
 }
 
@@ -57,17 +65,17 @@ export function SevDot({ sev, pulse = false }: { sev: Severity; pulse?: boolean 
 export function SevTag({ sev }: { sev: Severity }) {
   const t = useT()
   return (
-    <span
-      className="mono inline-flex items-center gap-1.5 px-1.5 py-0.5 text-[11px] uppercase tracking-[0.1em]"
+    <Badge
+      variant="outline"
       style={{
         color: SEVERITY_COLOR[sev],
-        border: `1px solid color-mix(in srgb, ${SEVERITY_COLOR[sev]} 30%, transparent)`,
+        borderColor: `color-mix(in srgb, ${SEVERITY_COLOR[sev]} 30%, transparent)`,
         background: `color-mix(in srgb, ${SEVERITY_COLOR[sev]} 7%, transparent)`,
       }}
     >
       <SevDot sev={sev} />
       {t(`sev.${sev}`)}
-    </span>
+    </Badge>
   )
 }
 
@@ -84,13 +92,9 @@ export function ModeChip({ mode }: { mode?: RobotMode }) {
   const t = useT()
   const tone = mode ? MODE_TONE[mode] : 'var(--color-ink-3)'
   return (
-    <span
-      className="mode-chip mono px-1.5 py-0.5 text-[11px] uppercase tracking-[0.1em]"
-      data-mode={mode ?? 'offline'}
-      style={{ color: tone, border: '1px solid var(--color-line-2)', background: 'var(--color-surface-2)' }}
-    >
+    <Badge className="mode-chip" data-mode={mode ?? 'offline'} style={{ color: tone }}>
       {t(mode ? `mode.${mode}` : 'mode.offline')}
-    </span>
+    </Badge>
   )
 }
 
@@ -106,14 +110,10 @@ export function MissionStatusTag({ status }: { status: MissionStatus }) {
   const t = useT()
   const tone = MISSION_STATUS_TONE[status]
   return (
-    <span
-      className="mission-status-chip mono inline-flex items-center gap-1.5 px-1.5 py-0.5 text-[11px] uppercase tracking-[0.1em]"
-      data-status={status}
-      style={{ color: tone, border: '1px solid var(--color-line-2)', background: 'var(--color-surface-2)' }}
-    >
+    <Badge className="mission-status-chip" data-status={status} style={{ color: tone }}>
       {status === 'active' && <span className="live-dot" style={{ width: 5, height: 5 }} />}
       {t(`ms.${status}`)}
-    </span>
+    </Badge>
   )
 }
 
@@ -206,26 +206,30 @@ export function EmptyNote({ children }: { children: ReactNode }) {
   )
 }
 
+/** Dialog with the console modal geometry (bottom sheet on mobile, centred on
+ *  md+). Same call signature as the old hand-rolled Modal; `title` feeds the
+ *  accessible name (visually hidden — pages draw their own heading rows). */
 export function Modal({
   children,
   onClose,
   wide = false,
+  title = 'Dialog',
 }: {
   children: ReactNode
   onClose: () => void
   wide?: boolean
+  title?: string
 }) {
   return (
-    <div
-      className="modal-backdrop-scrim fixed inset-0 z-50 flex items-end justify-center bg-black/65 backdrop-blur-sm md:items-center"
-      onClick={onClose}
-    >
-      <div
-        className={`panel modal-surface max-h-[92vh] w-full overflow-y-auto ${wide ? 'md:max-w-2xl' : 'md:max-w-xl'}`}
-        onClick={(e) => e.stopPropagation()}
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        showCloseButton={false}
+        aria-describedby={undefined}
+        className={wide ? 'md:max-w-2xl' : 'md:max-w-xl'}
       >
+        <DialogTitle className="sr-only">{title}</DialogTitle>
         {children}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }

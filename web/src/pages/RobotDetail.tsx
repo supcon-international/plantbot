@@ -4,6 +4,9 @@ import { ArrowLeft, ArrowUpRight, Anchor, Megaphone, Pause, Play, Plus, ShieldCh
 import { useApp, useReadings, useHistory, api, useCan } from '../lib/store'
 import { useT } from '../lib/i18n'
 import { Panel, PanelHead, Stat, Spark, BatteryBar, ModeChip } from '../components/ui'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Toggle } from '@/components/ui/toggle'
 const RobotViewer = lazy(() => import('../three/RobotViewer').then((m) => ({ default: m.RobotViewer })))
 import { KIND_ICON, TwinPlaceholder } from './Robots'
 import type { CommandRecord, PayloadSpec, Reading } from '../lib/types'
@@ -55,15 +58,16 @@ function ReadingsPanel({ robotId }: { robotId: string }) {
       <div className="p-3.5">
         <div className="mb-2.5 flex flex-wrap gap-1.5">
           {metrics.map((d) => (
-            <button
+            <Toggle
               key={d.id}
-              onClick={() => setMetric(d.id)}
-              className={`mono border px-1.5 py-0.5 text-[10.5px] tracking-[0.06em] transition-colors ${
-                active === d.id ? 'border-ink/40 bg-ink/10 text-ink' : 'border-line text-ink-3 hover:border-line-2 hover:text-ink-2'
-              }`}
+              pressed={active === d.id}
+              onPressedChange={() => setMetric(d.id)}
+              variant="outline"
+              size="sm"
+              className="mono h-auto px-1.5 py-0.5 text-[10.5px] normal-case tracking-[0.06em] data-[state=on]:border-(--signal) data-[state=on]:bg-(--signal) data-[state=on]:text-[#080808]"
             >
               {d.label}
-            </button>
+            </Toggle>
           ))}
         </div>
         <Spark
@@ -101,23 +105,22 @@ function CommandPanel({ robotId }: { robotId: string }) {
       <PanelHead label={t('rd.commands')} right={<span className="mono text-[10.5px] text-ink-3">{t('rd.commandsHint')}</span>} />
       <div className="space-y-2.5 p-3.5">
         <div className="flex flex-wrap gap-1.5">
-          <button
-            onClick={() => send({ type: 'dock' })}
-            className="mono flex items-center gap-1.5 border border-line-2 px-2 py-1.5 text-[11px] tracking-[0.06em] text-ink-2 transition-colors hover:border-ink-3 hover:text-ink"
-          >
+          <Button variant="outline" size="sm" onClick={() => send({ type: 'dock' })} className="mono h-auto gap-1.5 px-2 py-1.5 text-[11px] normal-case tracking-[0.06em]">
             <Anchor size={11} /> {t('rd.cmdDock')}
-          </button>
+          </Button>
           {mission?.status === 'active' && (
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => send({ type: mission.paused ? 'resume' : 'pause' })}
-              className="mono flex items-center gap-1.5 border border-line-2 px-2 py-1.5 text-[11px] tracking-[0.06em] text-ink-2 transition-colors hover:border-ink-3 hover:text-ink"
+              className="mono h-auto gap-1.5 px-2 py-1.5 text-[11px] normal-case tracking-[0.06em]"
             >
               {mission.paused ? <Play size={11} /> : <Pause size={11} />} {mission.paused ? t('mi.resume') : t('mi.pause')}
-            </button>
+            </Button>
           )}
         </div>
         <div className="flex gap-1.5">
-          <input
+          <Input
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
@@ -127,18 +130,19 @@ function CommandPanel({ robotId }: { robotId: string }) {
               }
             }}
             placeholder={t('rd.announcePh')}
-            className="mono min-w-0 flex-1 border border-line-2 bg-surface-2 px-2.5 py-1.5 text-[12px] text-ink outline-none focus:border-ink-3"
+            className="mono h-auto min-w-0 flex-1 bg-surface-2 py-1.5 text-[12px]"
           />
-          <button
+          <Button
+            variant="signal"
             disabled={!text.trim()}
             onClick={() => {
               send({ type: 'announce', text: text.trim() })
               setText('')
             }}
-            className="mono flex items-center gap-1.5 border border-ink/30 bg-ink/10 px-2.5 py-1.5 text-[11px] tracking-[0.08em] text-ink transition-colors hover:bg-ink/15 disabled:opacity-30"
+            className="mono h-auto gap-1.5 px-2.5 py-1.5 text-[11px] normal-case tracking-[0.08em] disabled:opacity-30"
           >
             <Megaphone size={11} /> {t('rd.cmdAnnounce')}
-          </button>
+          </Button>
         </div>
         {last && (
           <div className="mono flex items-center gap-2 text-[11px]">
@@ -321,12 +325,9 @@ export function RobotDetail() {
                     {robot.payloads.length} {t('rd.fitted')}
                   </span>
                   {canAdmin && (
-                  <button
-                    onClick={() => setAddOpen((v) => !v)}
-                    className="mono flex items-center gap-1 border border-line-2 px-1.5 py-0.5 text-[10px] tracking-[0.1em] text-ink-2 transition-colors hover:border-ink-3 hover:text-ink"
-                  >
+                  <Button variant="outline" size="sm" onClick={() => setAddOpen((v) => !v)} className="mono h-auto gap-1 px-1.5 py-0.5 text-[10px] normal-case tracking-[0.1em]">
                     <Plus size={10} /> {t('rd.addPayload')}
-                  </button>
+                  </Button>
                   )}
                 </span>
               }

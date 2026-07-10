@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -6,6 +7,9 @@ export default defineConfig({
   // sub-path deploys (e.g. m3rcyzzz.club/robots): WEB_BASE=/robots/ pnpm build
   base: process.env.WEB_BASE || '/',
   plugins: [react(), tailwindcss()],
+  resolve: {
+    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+  },
   server: {
     host: true,
     port: 5173,

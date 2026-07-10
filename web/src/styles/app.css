@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import 'tw-animate-css';
 
 @theme {
   /* IBM Carbon-style neutral layering; color is reserved for state. */
@@ -44,6 +45,60 @@
   --color-warn: #8e6a00;
   --color-crit: #da1e28;
   --color-low: #6f6f6f;
+}
+
+/* ---------- shadcn/ui token bridge ----------
+   shadcn semantic variables are DERIVED from the Carbon tokens above, so both
+   themes flip automatically and there is a single source of design truth.
+   Note: shadcn "accent" = hover tint (surface-3); the BRAND accent stays in
+   --color-accent / --signal. Radius is hard zero — Carbon has no curves. */
+:root {
+  --radius: 0rem;
+  --background: var(--color-bg);
+  --foreground: var(--color-ink);
+  --card: var(--color-surface);
+  --card-foreground: var(--color-ink);
+  --popover: var(--color-surface);
+  --popover-foreground: var(--color-ink);
+  --primary: var(--color-ink);
+  --primary-foreground: var(--color-bg);
+  --secondary: var(--color-surface-2);
+  --secondary-foreground: var(--color-ink);
+  --muted: var(--color-surface-2);
+  --muted-foreground: var(--color-ink-3);
+  --accent: var(--color-surface-3);
+  --accent-foreground: var(--color-ink);
+  --destructive: var(--color-crit);
+  --destructive-foreground: #ffffff;
+  --border: var(--color-line);
+  --input: var(--color-line-2);
+  --ring: var(--color-ink);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent-hover: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
 }
 
 @media (min-width: 1280px) {
@@ -273,39 +328,18 @@ textarea:focus-visible {
   background: var(--color-surface);
 }
 .site-switch .utility-label { color: var(--color-ink-3); }
-.site-switch select {
+.site-switch [data-slot='select-trigger'] {
   width: min(145px, 16vw);
-  border: 0;
-  background: transparent;
   color: var(--color-ink-2);
   font-family: var(--font-mono);
   font-size: 10px;
-  outline: none;
+  text-transform: none;
+  letter-spacing: 0;
 }
+.site-switch [data-slot='select-trigger']:hover { color: var(--color-ink); }
 
-.utility-button,
-.icon-button {
-  display: inline-flex;
-  height: 32px;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  border: 1px solid var(--color-line);
-  background: var(--color-surface);
-  color: var(--color-ink-3);
-  font-family: var(--font-condensed);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  transition: color 100ms ease, border-color 100ms ease, background 100ms ease;
-}
-.utility-button { padding: 0 10px; }
-.icon-button { width: 32px; padding: 0; }
-.utility-button:hover,
-.icon-button:hover { border-color: var(--color-ink-2); background: var(--color-surface-2); color: var(--color-ink); }
-.utility-button.is-on { border-color: var(--signal); background: var(--signal); color: #080808; }
-.icon-button.is-quiet { border-color: transparent; background: transparent; }
+/* (.utility-button / .icon-button / .segmented-control retired — Button and
+   ToggleGroup from components/ui carry the same skin as CVA variants.) */
 .eco-leaf { width: 6px; height: 9px; border: 1px solid currentColor; border-radius: 6px 1px 6px 1px; transform: rotate(-18deg); }
 .role-chip {
   border: 1px solid var(--color-line-2);
@@ -316,12 +350,6 @@ textarea:focus-visible {
   font-size: 9px;
   letter-spacing: .1em;
 }
-
-.segmented-control { display: flex; height: 32px; border: 1px solid var(--color-line); background: var(--color-surface); }
-.segmented-control button { min-width: 28px; border: 0; border-right: 1px solid var(--color-line); background: transparent; color: var(--color-ink-3); font-family: var(--font-mono); font-size: 9px; }
-.segmented-control button:last-child { border-right: 0; }
-.segmented-control button:hover { background: var(--color-surface-2); color: var(--color-ink); }
-.segmented-control button.is-selected { background: var(--color-ink); color: var(--color-bg); }
 
 .connection-chip {
   display: inline-flex;
@@ -337,24 +365,10 @@ textarea:focus-visible {
 .connection-chip.is-online > span:first-child { background: var(--signal); }
 .connection-chip.is-compact { min-width: 18px; justify-content: center; }
 
-.mobile-utility-menu { position: relative; }
-.mobile-utility-menu summary { list-style: none; }
-.mobile-utility-menu summary::-webkit-details-marker { display: none; }
-.mobile-utility-popover {
-  position: absolute;
-  top: 38px;
-  right: 0;
-  display: flex;
-  width: min(300px, calc(100vw - 24px));
-  flex-direction: column;
-  gap: 10px;
-  padding: 10px;
-  border: 1px solid var(--color-line-2);
-  background: var(--color-surface);
-  box-shadow: 8px 8px 0 rgba(0,0,0,.28);
-}
-.mobile-utility-popover::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 2px; background: var(--signal); }
-.mobile-utility-popover .site-switch select { width: 100%; flex: 1; }
+/* mobile utility tray (shadcn Popover instance) — signal left edge + fluid site switch */
+.mobile-utility-popover-signal::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 2px; background: var(--signal); }
+.mobile-utility-popover-signal .site-switch { width: 100%; }
+.mobile-utility-popover-signal .site-switch [data-slot='select-trigger'] { width: auto; flex: 1; justify-content: space-between; }
 
 .app-main { height: 100%; overflow-y: auto; padding-top: var(--top-height); padding-bottom: 60px; }
 
@@ -479,11 +493,8 @@ textarea:focus-visible {
 .mission-status-chip[data-status='active'] { border-color: var(--signal) !important; background: var(--signal) !important; color: #080808 !important; }
 .mode-chip[data-mode='navigating'] { border-color: var(--signal) !important; color: var(--signal) !important; }
 
-button[class*='bg-ink/10'],
-button[class*='bg-accent/10'] { border-color: var(--signal) !important; background: var(--signal) !important; color: #080808 !important; }
-button[class*='bg-ink/10']:hover,
-button[class*='bg-accent/10']:hover { background: #ddff60 !important; }
-[class*='bg-ink/70'] { background: var(--signal) !important; }
+/* (legacy tinted-button redirect removed — primary CTAs now use the shadcn
+   Button `signal` variant, filter chips carry explicit signal classes.) */
 
 /* status squares are intentionally rectangular, like a hardware indicator */
 .live-dot { width: 6px; height: 6px; border-radius: 0 !important; background: var(--signal); animation: status-pulse 1.8s steps(2, end) infinite; }

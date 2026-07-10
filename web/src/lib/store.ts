@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { BASE } from './base'
+import { notifyEvent } from './notify'
 import type {
   Building,
   Channel,
@@ -135,11 +136,9 @@ interface AppState {
   /** robotId|metric → recent readings ring */
   readings: Record<string, Reading[]>
   events: DetectionEvent[]
-  toast?: DetectionEvent
   clock: number
   setLifecycle: (id: string, to: EventLifecycle) => void
   ack: (id: string) => void
-  dismissToast: () => void
 }
 
 const EMPTY_HISTORY: HistoryPoint[] = []
@@ -193,7 +192,6 @@ export const useApp = create<AppState>((set) => ({
     }
   },
   ack: (id: string) => useApp.getState().setLifecycle(id, 'acked'),
-  dismissToast: () => set({ toast: undefined }),
 }))
 
 export const api = {
@@ -345,7 +343,6 @@ export function startRealtime() {
       history: {},
       readings: {},
       events: [],
-      toast: undefined,
     })
     ws?.close()
     connect()
@@ -401,10 +398,8 @@ function connect() {
       useApp.setState({ telemetry: tel, history: hist })
     } else if (msg.t === 'event') {
       const ev = msg.event as DetectionEvent
-      useApp.setState((s) => ({
-        events: [ev, ...s.events].slice(0, 400),
-        toast: ev.severity === 'critical' || ev.severity === 'high' ? ev : s.toast,
-      }))
+      useApp.setState((s) => ({ events: [ev, ...s.events].slice(0, 400) }))
+      if (ev.severity === 'critical' || ev.severity === 'high') notifyEvent(ev)
     } else if (msg.t === 'ack') {
       useApp.setState((s) => ({
         events: s.events.map((e) => (e.id === msg.id ? { ...e, acked: true, lifecycle: 'acked' } : e)),

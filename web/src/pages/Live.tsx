@@ -5,6 +5,7 @@ import { useApp, api } from '../lib/store'
 import { useT } from '../lib/i18n'
 import { FeedPlayer, VideoThumb } from '../components/StreamPlayer'
 import { Panel } from '../components/ui'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { utcClock } from '../lib/format'
 import type { Channel, StreamSession } from '../lib/types'
 
@@ -134,25 +135,19 @@ export function Live() {
             {mode === 'focus' ? feed?.name : `${t('live.allFeeds')} · ${feeds.length} ${t('live.channels')}`}
           </div>
         </div>
-        <div className="hidden overflow-hidden border border-line md:flex">
+        <ToggleGroup type="single" value={mode} onValueChange={(v) => v && setMode(v as typeof mode)} className="hidden md:flex">
           {(
             [
               ['focus', Focus, t('live.focus')],
               ['grid', Grid2X2, t('live.wall')],
             ] as const
           ).map(([m, Icon, label]) => (
-            <button
-              key={m}
-              onClick={() => setMode(m)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] transition-colors ${
-                mode === m ? 'bg-surface-2 text-ink' : 'text-ink-3 hover:text-ink-2'
-              }`}
-            >
+            <ToggleGroupItem key={m} value={m} className="gap-1.5 px-3 data-[state=on]:bg-surface-2 data-[state=on]:text-ink">
               <Icon size={13} strokeWidth={1.5} />
-              <span className="mono tracking-[0.08em]">{label}</span>
-            </button>
+              <span className="mono text-[12px] tracking-[0.08em]">{label}</span>
+            </ToggleGroupItem>
           ))}
-        </div>
+        </ToggleGroup>
       </div>
 
       {mode === 'focus' ? (

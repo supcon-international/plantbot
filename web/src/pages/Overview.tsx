@@ -4,6 +4,7 @@ import { ArrowUpRight } from 'lucide-react'
 import { useApp, useHistory } from '../lib/store'
 import { useT, useAgo } from '../lib/i18n'
 import { Panel, PanelHead, Spark, BatteryBar, SevDot, ModeChip, EmptyNote } from '../components/ui'
+import { Progress } from '@/components/ui/progress'
 import { OpsMap, type MapSel } from '../components/OpsMap'
 import type { RobotSpec } from '../lib/types'
 
@@ -173,9 +174,7 @@ function MissionLog() {
                   {m.currentStep}/{m.steps.length}
                 </span>
               </div>
-              <div className="mt-1 h-[3px] bg-surface-3">
-                <div className="h-full bg-ink/70 transition-[width] duration-700" style={{ width: `${m.progress * 100}%` }} />
-              </div>
+              <Progress value={m.progress * 100} className="mt-1 h-[3px] border-0 bg-surface-3" />
             </div>
           )
         })}

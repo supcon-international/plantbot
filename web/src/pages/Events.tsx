@@ -5,6 +5,15 @@ import { useApp, api, useCan } from '../lib/store'
 import { useT, useAgo } from '../lib/i18n'
 import { timeShort } from '../lib/format'
 import { Panel, SevTag, SevDot, EmptyNote, Modal } from '../components/ui'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Slider } from '@/components/ui/slider'
+import { Switch } from '@/components/ui/switch'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import type { DetectionEvent, DetectionModel, DetectionRule, EventCategory, Severity } from '../lib/types'
 import { SEVERITY_COLOR } from '../lib/types'
 
@@ -14,9 +23,9 @@ const CATEGORIES: EventCategory[] = ['security', 'fire', 'env', 'equipment', 'ro
 function CatChip({ cat }: { cat: EventCategory }) {
   const t = useT()
   return (
-    <span className="mono border border-line px-1 py-px text-[9.5px] uppercase tracking-[0.08em] text-ink-3">
+    <Badge variant="outline" className="px-1 py-px text-[9.5px] tracking-[0.08em]">
       {t(`cat.${cat}`)}
-    </span>
+    </Badge>
   )
 }
 
@@ -48,16 +57,16 @@ function DetailModal({ ev, onClose, onRule }: { ev: DetectionEvent; onClose: () 
   const ago = useAgo()
   const readingEv = ev.evidence.find((e) => e.kind === 'reading')?.reading
   return (
-    <Modal onClose={onClose}>
+    <Modal onClose={onClose} title={ev.label}>
       <div className="flex items-center justify-between border-b border-line px-4 py-3">
         <div className="flex items-center gap-2.5">
           <span className="mono text-[12px] text-ink-3">{ev.id}</span>
           <SevTag sev={ev.severity} />
           <CatChip cat={ev.category} />
         </div>
-        <button onClick={onClose} className="text-ink-3 hover:text-ink" aria-label="close">
+        <Button variant="ghost" size="iconSm" onClick={onClose} aria-label="close">
           <X size={16} />
-        </button>
+        </Button>
       </div>
       <div className="space-y-3 p-4">
         <div>
@@ -103,32 +112,35 @@ function DetailModal({ ev, onClose, onRule }: { ev: DetectionEvent; onClose: () 
         {canOp && (ev.lifecycle === 'new' || ev.lifecycle === 'acked') && (
           <div className="flex gap-2">
             {ev.lifecycle === 'new' && (
-              <button
+              <Button
+                variant="signal"
                 onClick={() => setLifecycle(ev.id, 'acked')}
-                className="mono flex flex-1 items-center justify-center gap-2 border border-ink/30 bg-ink/10 px-3 py-2 text-[12px] tracking-[0.1em] text-ink transition-colors hover:bg-ink/15"
+                className="mono h-auto flex-1 gap-2 py-2 text-[12px] normal-case tracking-[0.1em]"
               >
                 <Check size={13} /> {t('c.acknowledge')}
-              </button>
+              </Button>
             )}
-            <button
+            <Button
+              variant="signal"
               onClick={() => {
                 setLifecycle(ev.id, 'resolved')
                 onClose()
               }}
-              className="mono flex flex-1 items-center justify-center gap-2 border border-accent/40 bg-accent/10 px-3 py-2 text-[12px] tracking-[0.1em] text-accent transition-colors hover:bg-accent/20"
+              className="mono h-auto flex-1 py-2 text-[12px] normal-case tracking-[0.1em]"
             >
               {t('c.resolve')}
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="outline"
               onClick={() => {
                 setLifecycle(ev.id, 'dismissed')
                 onClose()
               }}
               title={t('ev.dismissHint')}
-              className="mono flex flex-1 items-center justify-center gap-2 border border-line-2 px-3 py-2 text-[12px] tracking-[0.1em] text-ink-3 transition-colors hover:border-ink-3 hover:text-ink"
+              className="mono h-auto flex-1 py-2 text-[12px] normal-case tracking-[0.1em]"
             >
               {t('c.dismiss')}
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -160,15 +172,17 @@ function BoardCard({ e, onOpen }: { e: DetectionEvent; onOpen: () => void }) {
       <div className="microlabel mt-1 truncate">{e.zone}</div>
       {e.snapshot && <img src={e.snapshot} alt="" loading="lazy" className="mt-2 h-20 w-full border border-line object-cover" />}
       {!e.acked && canOp && (
-        <button
+        <Button
+          variant="outline"
+          size="sm"
           onClick={(ev) => {
             ev.stopPropagation()
             ack(e.id)
           }}
-          className="mono mt-2 w-full border border-line-2 px-2 py-1 text-[10.5px] tracking-[0.1em] text-ink-3 opacity-0 transition-all hover:border-ink-3 hover:text-ink group-hover:opacity-100 max-md:opacity-100"
+          className="mono mt-2 w-full text-[10.5px] normal-case tracking-[0.1em] opacity-0 transition-all group-hover:opacity-100 max-md:opacity-100"
         >
           {t('c.ack')}
-        </button>
+        </Button>
       )}
     </div>
   )
@@ -226,21 +240,20 @@ function RuleRow({ r, hi, onViewEvents }: { r: DetectionRule; hi?: boolean; onVi
       className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line/70 px-3.5 py-3"
       style={hi ? { boxShadow: 'inset 2px 0 0 var(--color-accent)', background: 'var(--color-surface-2)' } : undefined}
     >
-      <button
-        onClick={canAdmin ? () => api.patchRule(r.id, { enabled: !r.enabled }) : undefined}
-        className="relative h-4 w-8 shrink-0 border border-line-2 transition-colors"
-        style={{ background: r.enabled ? 'var(--color-surface-3)' : 'transparent' }}
+      <Switch
+        checked={r.enabled}
+        disabled={!canAdmin}
+        onCheckedChange={(on) => api.patchRule(r.id, { enabled: on })}
         title={r.enabled ? 'disable' : 'enable'}
-      >
-        <span
-          className="absolute top-0.5 h-2.5 w-2.5 transition-all"
-          style={{ left: r.enabled ? 18 : 3, background: r.enabled ? 'var(--color-ink)' : 'var(--color-ink-3)' }}
-        />
-      </button>
+      />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className={`truncate text-[13.5px] ${r.enabled ? 'text-ink' : 'text-ink-3'}`}>{r.name}</span>
-          {!r.builtin && <span className="mono border border-line px-1 text-[9.5px] tracking-[0.1em] text-ink-3">{t('ev.custom')}</span>}
+          {!r.builtin && (
+            <Badge variant="outline" className="px-1 text-[9.5px]">
+              {t('ev.custom')}
+            </Badge>
+          )}
         </div>
         <div className="microlabel mt-0.5 truncate">
           {modelLabel(r.model)} · {r.sourceName}
@@ -248,15 +261,14 @@ function RuleRow({ r, hi, onViewEvents }: { r: DetectionRule; hi?: boolean; onVi
       </div>
       <div className="flex items-center gap-2">
         <span className="microlabel">conf ≥</span>
-        <input
-          type="range"
+        <Slider
           min={0.3}
           max={0.95}
           step={0.05}
-          defaultValue={r.threshold}
+          defaultValue={[r.threshold]}
           disabled={!canAdmin}
-          onChange={(e) => api.patchRule(r.id, { threshold: Number(e.target.value) })}
-          className="h-[3px] w-20 cursor-pointer appearance-none bg-line-2 accent-ink-2"
+          onValueCommit={([v]) => api.patchRule(r.id, { threshold: v })}
+          className="w-20"
         />
         <span className="mono w-8 text-[11.5px] text-ink-2">{Math.round(r.threshold * 100)}%</span>
       </div>
@@ -270,9 +282,9 @@ function RuleRow({ r, hi, onViewEvents }: { r: DetectionRule; hi?: boolean; onVi
         <span className="block text-[10px] opacity-80">{r.lastFiredAt ? ago(r.lastFiredAt) : '—'}</span>
       </button>
       {!r.builtin && canAdmin && (
-        <button onClick={() => api.deleteRule(r.id)} className="text-ink-3 transition-colors hover:text-crit" title="delete">
+        <Button variant="ghost" size="iconSm" onClick={() => api.deleteRule(r.id)} className="hover:bg-transparent hover:text-crit" title="delete">
           <Trash2 size={13} />
-        </button>
+        </Button>
       )}
     </div>
   )
@@ -285,7 +297,7 @@ function NewRuleModal({ onClose }: { onClose: () => void }) {
   const zonesList = useApp((s) => s.zones)
   const t = useT()
   const [name, setName] = useState('')
-  const [model, setModel] = useState<DetectionModel>('person')
+  const [model, setModel] = useState<string>('person')
   const [source, setSource] = useState('')
   const [zone, setZone] = useState('')
   const [threshold, setThreshold] = useState(0.7)
@@ -317,92 +329,112 @@ function NewRuleModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Modal onClose={onClose}>
+    <Modal onClose={onClose} title={t('ev.defineRule')}>
       <div className="flex items-center justify-between border-b border-line px-4 py-3">
         <span className="microlabel">{t('ev.defineRule')}</span>
-        <button onClick={onClose} className="text-ink-3 hover:text-ink" aria-label="close">
+        <Button variant="ghost" size="iconSm" onClick={onClose} aria-label="close">
           <X size={16} />
-        </button>
+        </Button>
       </div>
       <div className="space-y-3.5 p-4">
         <div>
-          <div className="microlabel mb-1.5">{t('ev.ruleName')}</div>
-          <input
+          <Label className="mb-1.5">{t('ev.ruleName')}</Label>
+          <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={t('ev.ruleNamePh')}
-            className="mono w-full border border-line-2 bg-surface-2 px-2.5 py-2 text-[13px] text-ink outline-none focus:border-ink-3"
+            className="mono bg-surface-2 py-2 text-[13px]"
           />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <div className="microlabel mb-1.5">{t('ev.model')}</div>
-            <select value={model} onChange={(e) => setModel(e.target.value as DetectionModel)} className="mono w-full border border-line-2 bg-surface-2 px-2 py-2 text-[12px] text-ink outline-none">
-              {MODEL_IDS.map((m) => (
-                <option key={m} value={m}>
-                  {t(`ev.m.${m}`)}
-                </option>
-              ))}
-              {customTypes.map((et) => (
-                <option key={et.id} value={et.id}>
-                  {et.label}
-                </option>
-              ))}
-            </select>
+            <Label className="mb-1.5">{t('ev.model')}</Label>
+            <Select value={model} onValueChange={setModel}>
+              <SelectTrigger className="mono w-full bg-surface-2 text-[12px] normal-case tracking-normal">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {MODEL_IDS.map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {t(`ev.m.${m}`)}
+                  </SelectItem>
+                ))}
+                {customTypes.map((et) => (
+                  <SelectItem key={et.id} value={et.id}>
+                    {et.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
-            <div className="microlabel mb-1.5">{t('ev.videoSource')}</div>
-            <select value={source} onChange={(e) => setSource(e.target.value)} className="mono w-full border border-line-2 bg-surface-2 px-2 py-2 text-[12px] text-ink outline-none">
-              <option value="">{t('ev.select')}</option>
-              {sources.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
+            <Label className="mb-1.5">{t('ev.videoSource')}</Label>
+            <Select value={source || undefined} onValueChange={setSource}>
+              <SelectTrigger className="mono w-full bg-surface-2 text-[12px] normal-case tracking-normal">
+                <SelectValue placeholder={t('ev.select')} />
+              </SelectTrigger>
+              <SelectContent>
+                {sources.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <div>
-          <div className="microlabel mb-1.5">{t('ev.zoneLabel')}</div>
-          <select value={zone} onChange={(e) => setZone(e.target.value)} className="mono w-full border border-line-2 bg-surface-2 px-2 py-2 text-[12px] text-ink outline-none">
-            <option value="">{t('ev.siteWide')}</option>
-            {zonesList.map((z) => (
-              <option key={z.id} value={z.name}>
-                {z.name}
-              </option>
-            ))}
-          </select>
+          <Label className="mb-1.5">{t('ev.zoneLabel')}</Label>
+          <Select value={zone || '__site__'} onValueChange={(v) => setZone(v === '__site__' ? '' : v)}>
+            <SelectTrigger className="mono w-full bg-surface-2 text-[12px] normal-case tracking-normal">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__site__">{t('ev.siteWide')}</SelectItem>
+              {zonesList.map((z) => (
+                <SelectItem key={z.id} value={z.name}>
+                  {z.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="grid grid-cols-2 items-end gap-3">
           <div>
-            <div className="microlabel mb-1.5">
+            <Label className="mb-1.5">
               {t('ev.minConf')} · {Math.round(threshold * 100)}%
-            </div>
-            <input type="range" min={0.3} max={0.95} step={0.05} value={threshold} onChange={(e) => setThreshold(Number(e.target.value))} className="h-[3px] w-full cursor-pointer appearance-none bg-line-2 accent-ink-2" />
+            </Label>
+            <Slider min={0.3} max={0.95} step={0.05} value={[threshold]} onValueChange={([v]) => setThreshold(v)} />
           </div>
           <div>
-            <div className="microlabel mb-1.5">{t('ev.severity')}</div>
-            <div className="flex overflow-hidden border border-line">
+            <Label className="mb-1.5">{t('ev.severity')}</Label>
+            <ToggleGroup
+              type="single"
+              value={severity}
+              onValueChange={(v) => v && setSeverity(v as Severity)}
+              className="w-full"
+            >
               {(['critical', 'high', 'info', 'low'] as Severity[]).map((s) => (
-                <button
+                <ToggleGroupItem
                   key={s}
-                  onClick={() => setSeverity(s)}
-                  className={`mono flex-1 px-1 py-1.5 text-[10px] uppercase tracking-[0.06em] transition-colors ${severity === s ? 'bg-surface-3' : 'hover:bg-surface-2'}`}
-                  style={{ color: severity === s ? SEVERITY_COLOR[s] : 'var(--color-ink-3)' }}
+                  value={s}
+                  className="mono flex-1 text-[10px] tracking-[0.06em] data-[state=on]:bg-surface-3"
+                  style={{ color: severity === s ? SEVERITY_COLOR[s] : undefined }}
                 >
                   {t(`sev.${s}`)}
-                </button>
+                </ToggleGroupItem>
               ))}
-            </div>
+            </ToggleGroup>
           </div>
         </div>
-        <button
+        <Button
+          variant="signal"
           disabled={!name.trim() || !source}
           onClick={submit}
-          className="mono w-full border border-ink/30 bg-ink/10 px-3 py-2.5 text-[12px] tracking-[0.12em] text-ink transition-colors hover:bg-ink/15 disabled:opacity-30"
+          className="mono h-auto w-full py-2.5 text-[12px] normal-case tracking-[0.12em] disabled:opacity-30"
         >
           {t('ev.activate')}
-        </button>
+        </Button>
       </div>
     </Modal>
   )
@@ -471,7 +503,7 @@ export function Events() {
                   key={c}
                   onClick={() => setCatFilter(on ? null : c)}
                   className={`mono border px-1.5 py-0.5 text-[10px] uppercase tracking-[0.08em] transition-colors ${
-                    on ? 'border-accent/50 bg-accent/10 text-accent' : 'border-line text-ink-3 hover:border-line-2 hover:text-ink-2'
+                    on ? 'border-(--signal) bg-(--signal) text-[#080808]' : 'border-line text-ink-3 hover:border-line-2 hover:text-ink-2'
                   }`}
                 >
                   {t(`cat.${c}`)}
@@ -482,7 +514,7 @@ export function Events() {
             {filterRule && (
               <button
                 onClick={() => setRuleFilter(null)}
-                className="mono flex items-center gap-1.5 border border-accent/40 bg-accent/10 px-2 py-0.5 text-[10.5px] tracking-[0.06em] text-accent transition-colors hover:bg-accent/20"
+                className="mono flex items-center gap-1.5 border border-(--signal) bg-(--signal) px-2 py-0.5 text-[10.5px] tracking-[0.06em] text-[#080808] transition-colors hover:brightness-95"
               >
                 {filterRule.name} <X size={11} />
               </button>
@@ -491,14 +523,15 @@ export function Events() {
         </div>
         <div className="flex items-center gap-2">
           {view === 'rules' && canAdmin && (
-            <button
+            <Button
+              variant="signal"
               onClick={() => setNewRule(true)}
-              className="mono flex items-center gap-1.5 border border-ink/30 bg-ink/10 px-2.5 py-1.5 text-[11.5px] tracking-[0.1em] text-ink transition-colors hover:bg-ink/15"
+              className="mono text-[11.5px] normal-case tracking-[0.1em]"
             >
               <Plus size={13} /> {t('ev.newRule')}
-            </button>
+            </Button>
           )}
-          <div className="flex overflow-hidden border border-line">
+          <ToggleGroup type="single" value={view} onValueChange={(v) => v && setView(v as View)}>
             {(
               [
                 ['board', Columns3, t('ev.board')],
@@ -506,16 +539,12 @@ export function Events() {
                 ['rules', SlidersHorizontal, t('ev.rules')],
               ] as const
             ).map(([v, Icon, label]) => (
-              <button
-                key={v}
-                onClick={() => setView(v)}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] transition-colors ${view === v ? 'bg-surface-2 text-ink' : 'text-ink-3 hover:text-ink-2'}`}
-              >
+              <ToggleGroupItem key={v} value={v} className="gap-1.5 px-2.5 data-[state=on]:bg-surface-2 data-[state=on]:text-ink">
                 <Icon size={13} strokeWidth={1.5} />
                 <span className="mono hidden text-[11px] tracking-[0.08em] sm:block">{label}</span>
-              </button>
+              </ToggleGroupItem>
             ))}
-          </div>
+          </ToggleGroup>
         </div>
       </div>
 
@@ -523,59 +552,61 @@ export function Events() {
 
       {view === 'table' && (
         <Panel className="rise overflow-x-auto">
-          <table className="w-full min-w-[820px] border-collapse text-left">
-            <thead>
-              <tr className="border-b border-line">
+          <Table className="min-w-[820px]">
+            <TableHeader>
+              <TableRow className="border-line">
                 {[t('c.time'), t('ev.severity'), t('ev.event'), t('ev.zoneSource'), t('ev.conf'), t('ev.frame'), ''].map((h, i) => (
-                  <th key={i} className="microlabel px-3.5 py-2.5 font-medium">
+                  <TableHead key={i} className="px-3.5 py-2.5">
                     {h}
-                  </th>
+                  </TableHead>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {shown.map((e) => (
-                <tr
+                <TableRow
                   key={e.id}
                   onClick={() => setSel(e)}
-                  className={`cursor-pointer border-b border-line/60 transition-colors hover:bg-surface-2 ${Date.now() - e.ts < 8000 ? 'flash-new' : ''} ${e.acked ? 'opacity-50' : ''}`}
+                  className={`cursor-pointer border-line/60 hover:bg-surface-2 ${Date.now() - e.ts < 8000 ? 'flash-new' : ''} ${e.acked ? 'opacity-50' : ''}`}
                 >
-                  <td className="mono whitespace-nowrap px-3.5 py-2.5 align-top text-[12px] text-ink-3">
+                  <TableCell className="mono px-3.5 py-2.5 align-top text-[12px] text-ink-3">
                     {timeShort(e.ts)}
                     <div className="text-[11px] opacity-70">{ago(e.ts, clock)}</div>
-                  </td>
-                  <td className="px-3.5 py-2.5 align-top">
+                  </TableCell>
+                  <TableCell className="px-3.5 py-2.5 align-top">
                     <SevTag sev={e.severity} />
-                  </td>
-                  <td className="max-w-[320px] px-3.5 py-2.5 align-top">
+                  </TableCell>
+                  <TableCell className="max-w-[320px] whitespace-normal px-3.5 py-2.5 align-top">
                     <div className="truncate text-[13.5px] text-ink">{e.label}</div>
                     <div className="truncate text-[12px] text-ink-3">{e.detail}</div>
-                  </td>
-                  <td className="px-3.5 py-2.5 align-top">
+                  </TableCell>
+                  <TableCell className="px-3.5 py-2.5 align-top">
                     <div className="text-[12.5px] text-ink-2">{e.zone}</div>
                     <div className="microlabel mt-0.5">{e.sourceName}</div>
-                  </td>
-                  <td className="mono px-3.5 py-2.5 align-top text-[12px] text-ink-2">{Math.round(e.confidence * 100)}%</td>
-                  <td className="px-3.5 py-2.5 align-top">
+                  </TableCell>
+                  <TableCell className="mono px-3.5 py-2.5 align-top text-[12px] text-ink-2">{Math.round(e.confidence * 100)}%</TableCell>
+                  <TableCell className="px-3.5 py-2.5 align-top">
                     <Snapshot ev={e} />
-                  </td>
-                  <td className="px-3.5 py-2.5 align-top">
+                  </TableCell>
+                  <TableCell className="px-3.5 py-2.5 align-top">
                     {!e.acked && canOp && (
-                      <button
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={(ev) => {
                           ev.stopPropagation()
                           ack(e.id)
                         }}
-                        className="mono border border-line-2 px-2 py-1 text-[11px] tracking-[0.08em] text-ink-2 transition-colors hover:border-ink-3 hover:text-ink"
+                        className="mono text-[11px] normal-case tracking-[0.08em]"
                       >
                         {t('c.ack')}
-                      </button>
+                      </Button>
                     )}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
           {shown.length === 0 && <EmptyNote>{t('ev.noEvents')}</EmptyNote>}
         </Panel>
       )}

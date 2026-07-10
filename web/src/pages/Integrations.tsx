@@ -6,6 +6,10 @@ import { api, useApp, useCan, useSite } from '../lib/store'
 import { BASE } from '../lib/base'
 import { useT } from '../lib/i18n'
 import { Panel, PanelHead } from '../components/ui'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table'
 import type { AdapterOrder, ApiKeyRec, EventTypeDef, ExternalUnit, Severity, SiteMapMeta } from '../lib/types'
 import { SEVERITY_COLOR } from '../lib/types'
 
@@ -114,29 +118,30 @@ export function Integrations() {
           } />
           <div className="space-y-2 p-3">
             <div className="flex gap-2">
-              <input
+              <Input
                 value={keyLabel}
                 onChange={(e) => setKeyLabel(e.target.value)}
                 placeholder={t('integ.keyLabel')}
-                className="mono min-w-0 flex-1 border border-line-2 bg-surface-2 px-2 py-1.5 text-[12px] text-ink outline-none"
+                className="mono h-auto min-w-0 flex-1 bg-surface-2 py-1.5 text-[12px]"
               />
-              <button
+              <Button
+                variant="signal"
                 onClick={() => api.createApiKey(keyLabel).then(() => (setKeyLabel(''), reload()))}
-                className="mono shrink-0 border border-ink/30 bg-ink/10 px-2.5 py-1.5 text-[11px] tracking-[0.1em] text-ink hover:bg-ink/15"
+                className="mono h-auto shrink-0 py-1.5 text-[11px] normal-case tracking-[0.1em]"
               >
                 {t('integ.newKey')}
-              </button>
+              </Button>
             </div>
             {(sum?.apiKeys ?? []).map((k) => (
               <div key={k.id} className="border border-line bg-surface-2 p-2.5">
                 <div className="flex items-center gap-2">
                   <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink-2">{k.label}</span>
-                  <button onClick={() => copy(k.key, k.id)} className="mono flex items-center gap-1 text-[10.5px] text-ink-3 hover:text-ink">
+                  <Button variant="ghost" size="sm" onClick={() => copy(k.key, k.id)} className="mono h-auto gap-1 px-1 py-0.5 text-[10.5px] normal-case tracking-normal hover:bg-transparent">
                     <Copy size={11} /> {copied === k.id ? 'copied' : 'copy'}
-                  </button>
-                  <button onClick={() => api.deleteApiKey(k.id).then(reload)} title={t('integ.revoke')} className="text-ink-3 hover:text-crit">
+                  </Button>
+                  <Button variant="ghost" size="iconSm" onClick={() => api.deleteApiKey(k.id).then(reload)} title={t('integ.revoke')} className="size-6 hover:bg-transparent hover:text-crit">
                     <Trash2 size={12} />
-                  </button>
+                  </Button>
                 </div>
                 <div className="mono mt-1 truncate text-[11px] text-ink-3">{k.key}</div>
                 <div className="microlabel mt-1">
@@ -153,9 +158,9 @@ export function Integrations() {
           <PanelHead label={
             <span className="flex items-center gap-2">
               <Plug size={13} /> {t('integ.externals')}
-              <button onClick={reload} className="ml-auto text-ink-3 hover:text-ink" aria-label="refresh">
+              <Button variant="ghost" size="iconSm" onClick={reload} className="ml-auto size-6 hover:bg-transparent" aria-label="refresh">
                 <RefreshCw size={12} />
-              </button>
+              </Button>
             </span>
           } />
           <div className="space-y-2 p-3">
@@ -173,9 +178,9 @@ export function Integrations() {
                     {fmtAgo(u.lastSeen, clock)}
                   </div>
                 </div>
-                <button onClick={() => api.removeExternal(u.id).then(reload)} className="mono text-[10.5px] text-ink-3 hover:text-crit">
+                <Button variant="ghost" size="sm" onClick={() => api.removeExternal(u.id).then(reload)} className="mono h-auto px-1 py-0.5 text-[10.5px] normal-case tracking-normal hover:bg-transparent hover:text-crit">
                   {t('integ.remove')}
-                </button>
+                </Button>
               </div>
             ))}
           </div>
@@ -190,36 +195,38 @@ export function Integrations() {
           } />
           <div className="space-y-2 p-3">
             <div className="flex flex-wrap gap-2">
-              <input
+              <Input
                 value={typeDraft.id}
                 onChange={(e) => setTypeDraft({ ...typeDraft, id: e.target.value })}
                 placeholder={t('integ.typeId')}
-                className="mono w-36 border border-line-2 bg-surface-2 px-2 py-1.5 text-[12px] text-ink outline-none"
+                className="mono h-auto w-36 bg-surface-2 py-1.5 text-[12px]"
               />
-              <input
+              <Input
                 value={typeDraft.label}
                 onChange={(e) => setTypeDraft({ ...typeDraft, label: e.target.value })}
                 placeholder={t('integ.typeLabel')}
-                className="mono min-w-0 flex-1 border border-line-2 bg-surface-2 px-2 py-1.5 text-[12px] text-ink outline-none"
+                className="mono h-auto min-w-0 flex-1 bg-surface-2 py-1.5 text-[12px]"
               />
-              <select
-                value={typeDraft.severity}
-                onChange={(e) => setTypeDraft({ ...typeDraft, severity: e.target.value as Severity })}
-                className="mono border border-line-2 bg-surface-2 px-1.5 py-1.5 text-[11px] text-ink outline-none"
-              >
-                {(['critical', 'high', 'info', 'low'] as Severity[]).map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-              <button
+              <Select value={typeDraft.severity} onValueChange={(v) => setTypeDraft({ ...typeDraft, severity: v as Severity })}>
+                <SelectTrigger size="sm" className="mono bg-surface-2 text-[11px] normal-case tracking-normal">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(['critical', 'high', 'info', 'low'] as Severity[]).map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="signal"
                 disabled={!typeDraft.id || !typeDraft.label}
                 onClick={() => api.createEventType(typeDraft).then(() => (setTypeDraft({ id: '', label: '', severity: 'info' }), reload()))}
-                className="mono border border-ink/30 bg-ink/10 px-2.5 py-1.5 text-[11px] tracking-[0.1em] text-ink hover:bg-ink/15 disabled:opacity-30"
+                className="mono h-auto py-1.5 text-[11px] normal-case tracking-[0.1em] disabled:opacity-30"
               >
                 {t('integ.newType')}
-              </button>
+              </Button>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {(sum?.eventTypes ?? []).map((et) => (
@@ -229,9 +236,9 @@ export function Integrations() {
                   {et.builtin ? (
                     <span className="text-[9.5px] tracking-[0.1em] text-ink-3/70">{t('integ.builtin')}</span>
                   ) : (
-                    <button onClick={() => api.deleteEventType(et.id).then(reload)} className="text-ink-3 hover:text-crit" aria-label="delete type">
+                    <Button variant="ghost" size="iconSm" onClick={() => api.deleteEventType(et.id).then(reload)} className="size-4 hover:bg-transparent hover:text-crit" aria-label="delete type">
                       <Trash2 size={10} />
-                    </button>
+                    </Button>
                   )}
                 </span>
               ))}
@@ -262,25 +269,26 @@ export function Integrations() {
             )}
             <div className="flex flex-wrap items-end gap-2">
               <input ref={fileRef} type="file" accept="image/png" onChange={(e) => setMapFile(e.target.files?.[0] ?? null)} className="mono w-full text-[11px] text-ink-3 file:mr-2 file:border file:border-line file:bg-surface-2 file:px-2 file:py-1 file:text-ink-2" />
-              <label className="mono text-[10.5px] text-ink-3">
+              <label className="mono flex items-center text-[10.5px] text-ink-3">
                 {t('integ.resolution')}
-                <input type="number" step="0.01" value={mapDraft.resolution} onChange={(e) => setMapDraft({ ...mapDraft, resolution: Number(e.target.value) })} className="ml-1 w-16 border border-line-2 bg-surface-2 px-1.5 py-1 text-[11px] text-ink outline-none" />
+                <Input type="number" step="0.01" value={mapDraft.resolution} onChange={(e) => setMapDraft({ ...mapDraft, resolution: Number(e.target.value) })} className="mono ml-1 h-auto w-16 bg-surface-2 px-1.5 py-1 text-[11px]" />
               </label>
-              <label className="mono text-[10.5px] text-ink-3">
+              <label className="mono flex items-center text-[10.5px] text-ink-3">
                 {t('integ.originX')}
-                <input type="number" step="0.5" value={mapDraft.originX} onChange={(e) => setMapDraft({ ...mapDraft, originX: Number(e.target.value) })} className="ml-1 w-16 border border-line-2 bg-surface-2 px-1.5 py-1 text-[11px] text-ink outline-none" />
+                <Input type="number" step="0.5" value={mapDraft.originX} onChange={(e) => setMapDraft({ ...mapDraft, originX: Number(e.target.value) })} className="mono ml-1 h-auto w-16 bg-surface-2 px-1.5 py-1 text-[11px]" />
               </label>
-              <label className="mono text-[10.5px] text-ink-3">
+              <label className="mono flex items-center text-[10.5px] text-ink-3">
                 {t('integ.originZ')}
-                <input type="number" step="0.5" value={mapDraft.originZ} onChange={(e) => setMapDraft({ ...mapDraft, originZ: Number(e.target.value) })} className="ml-1 w-16 border border-line-2 bg-surface-2 px-1.5 py-1 text-[11px] text-ink outline-none" />
+                <Input type="number" step="0.5" value={mapDraft.originZ} onChange={(e) => setMapDraft({ ...mapDraft, originZ: Number(e.target.value) })} className="mono ml-1 h-auto w-16 bg-surface-2 px-1.5 py-1 text-[11px]" />
               </label>
-              <button
+              <Button
+                variant="signal"
                 disabled={!mapFile || busy}
                 onClick={uploadMap}
-                className="mono border border-ink/30 bg-ink/10 px-2.5 py-1.5 text-[11px] tracking-[0.1em] text-ink hover:bg-ink/15 disabled:opacity-30"
+                className="mono h-auto py-1.5 text-[11px] normal-case tracking-[0.1em] disabled:opacity-30"
               >
                 {t('integ.upload')}
-              </button>
+              </Button>
             </div>
           </div>
         </Panel>
@@ -297,19 +305,19 @@ export function Integrations() {
           {!sum?.orders.length ? (
             <p className="mono p-2 text-[11px] text-ink-3/80">—</p>
           ) : (
-            <table className="w-full text-left text-[12px]">
-              <tbody>
+            <Table className="text-[12px]">
+              <TableBody>
                 {sum.orders.map((o) => (
-                  <tr key={o.id} className="border-b border-line/60 last:border-0">
-                    <td className="mono px-2 py-1.5 text-ink-3">{o.id}</td>
-                    <td className="mono px-2 py-1.5 text-ink-2">{o.robotId}</td>
-                    <td className="mono px-2 py-1.5 text-ink-2">{o.kind}{o.payload.name ? ` · ${o.payload.name}` : o.kind === 'goto' ? ` · (${o.payload.x}, ${o.payload.z})` : ''}</td>
-                    <td className="mono px-2 py-1.5" style={{ color: o.state === 'failed' ? 'var(--color-crit)' : o.state === 'done' ? 'var(--color-ok)' : 'var(--color-ink-3)' }}>{o.state}</td>
-                    <td className="mono px-2 py-1.5 text-ink-3">{fmtAgo(o.updatedAt, clock)}</td>
-                  </tr>
+                  <TableRow key={o.id} className="border-line/60 last:border-0">
+                    <TableCell className="mono px-2 py-1.5 text-ink-3">{o.id}</TableCell>
+                    <TableCell className="mono px-2 py-1.5 text-ink-2">{o.robotId}</TableCell>
+                    <TableCell className="mono px-2 py-1.5 text-ink-2">{o.kind}{o.payload.name ? ` · ${o.payload.name}` : o.kind === 'goto' ? ` · (${o.payload.x}, ${o.payload.z})` : ''}</TableCell>
+                    <TableCell className="mono px-2 py-1.5" style={{ color: o.state === 'failed' ? 'var(--color-crit)' : o.state === 'done' ? 'var(--color-ok)' : 'var(--color-ink-3)' }}>{o.state}</TableCell>
+                    <TableCell className="mono px-2 py-1.5 text-ink-3">{fmtAgo(o.updatedAt, clock)}</TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           )}
         </div>
       </Panel>
