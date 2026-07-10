@@ -4,8 +4,7 @@
 // pullOrders / setOrderStatus). Everything an on-prem vendor adapter would do
 // over /api/integration/v1 happens here in-process, so the demo always shows a
 // live third-party fleet: motion, ambient readings, order round-trips, and the
-// signature "unattended bag" reports (low-confidence ones hit the LLM trust
-// gate before operators ever see them).
+// signature "unattended bag" reports.
 
 import type { World } from './world.js'
 import type { RobotSpec } from './fleet.js'
@@ -166,12 +165,12 @@ export function startGosim(w: World) {
     const u = units[0] // the dispatchable unit carries the rear analytics camera
     const nav = w.nav.get(u.robot.id)
     const snap = await w.missionSnapshot('gs1-rear', 'GS-BAG').catch(() => undefined)
-    const confidence = +(0.58 + Math.random() * 0.34).toFixed(2) // low ones hit the trust gate
+    const confidence = +(0.58 + Math.random() * 0.34).toFixed(2)
     w.ingestEvent({
       type: 'unattended-bag',
       robotId: u.robot.id,
       sourceName: 'GS·F2-01 · rear cam',
-      detail: `Backpack static ${(2 + Math.random() * 6).toFixed(0)} min on patrol pass · no owner within ${(3 + Math.random() * 5).toFixed(0)} m · re-check queued`,
+      detail: `Backpack static ${(2 + Math.random() * 6).toFixed(0)} min on patrol pass · no owner within ${(3 + Math.random() * 5).toFixed(0)} m`,
       severity: 'high',
       confidence,
       snapshotUrl: snap,

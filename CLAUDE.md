@@ -29,4 +29,4 @@ cd server && node_modules/.bin/tsc --noEmit   # 服务端类型检查（无独�
 - 权限：匿名=viewer 只读；种子账户 `admin/operator/viewer`（默认密码 `plantbot`，生产用 `PB_*_PASSWORD` 环境变量覆盖）。写接口按 `viewer<operator<admin` × 场站授权。
 - 多场站：一个 `World` 实例一个场站（`server/src/world.ts`），新场站在 `server/src/sites.ts` 加 `SiteDef` 即可（含规划器障碍、种子机队/规则/任务/自定义事件词表 `eventTypeSeeds`/排程周期 `everyMin`）。三站：plant-07 / plant-12 / campus-east（校园安防,10 台含 2 台虚拟高新兴 GS F2——`server/src/gosim.ts` 内嵌 adapter,走与 HTTP 集成 API 相同的 World 入口）。
 - 集成 API 见 `docs/integration.md`；部署运维见 `docs/deploy.md`。
-- 集成层六域模型（视频流 Channel+StreamSession / payload Reading+metric 注册表 / 事件 Detector+lifecycle+LLM 复核 / 任务 Template-Schedule-Run / 建图 Map+Transform / 控制语义化 Command）**已全量落地**，设计与落地状态见 `docs/platform-model.md`，输入调研见 `docs/gorobot-study.md`。动这六个域先对照该文档；关键不变式：站点中心（路线/地图/检测器属于 World 不属于机器人）、事件默认队列只看复核 confirmed、流地址是会话资源、schedule 创建即生效（无「下发」步骤）。
+- 集成层六域模型（视频流 Channel+StreamSession / payload Reading+metric 注册表 / 事件 Detector+lifecycle / 任务 Template-Schedule-Run / 建图 Map+Transform / 控制语义化 Command）**已全量落地**，设计与落地状态见 `docs/platform-model.md`，输入调研见 `docs/gorobot-study.md`。动这六个域先对照该文档；关键不变式：站点中心（路线/地图/检测器属于 World 不属于机器人）、流地址是会话资源、schedule 创建即生效（无「下发」步骤）。

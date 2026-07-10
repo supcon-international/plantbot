@@ -15,7 +15,7 @@
 | **MAP** 地图 | 双模式：**OPS MAP**（SLAM OccupancyGrid 栅格底图 → 主题化 canvas 渲染 + waypoint/zone/实时位姿/规划路径矢量层，点击航点即可 teleop 派遣）/ **3D SCAN**（高斯 splat 场景 + 实时 marker） |
 | **EVENTS** 事件 | **三列看板**（Critical / High / Routine）+ 表格视图 + **规则定义**：检测模型 × 视频源 × 置信度阈值 × severity，可新建/启停/调阈值——规则实时约束事件生成器;规则模型下拉同时提供**自定义事件类型** |
 | **多场站** | 顶栏一键切换场站（Plant 07 工业园区 / Plant 12 海港储运站 / **Campus East 校园安防**）。每站独立 World 实例：机队、任务调度、A* 规划网格、规则、事件流、WebSocket 房间全部隔离 |
-| **Campus East 安防场景** | 10 台 · 6 型号协同（Go2×2 / Lite3 / X30×2 / Husky×2 / ANYmal + **高新兴 GS Patrol F2 ×2 经集成 API 虚拟接入**）。Checkpoint 停顿巡逻（大门→图书馆→食堂→宿舍）、周界夜巡（热成像）、停车场与消防通道、实验楼气体轮巡全部由排程驱动;机器人直报**可疑背包**事件（低置信自动进 LLM 复核闸）;安防词表：翻越围栏 / 跌倒 / 尾随 / 人员聚集 / 电动车占道,16 路真实巡逻画面 |
+| **Campus East 安防场景** | 10 台 · 6 型号协同（Go2×2 / Lite3 / X30×2 / Husky×2 / ANYmal + **高新兴 GS Patrol F2 ×2 经集成 API 虚拟接入**）。Checkpoint 停顿巡逻（大门→图书馆→食堂→宿舍）、周界夜巡（热成像）、停车场与消防通道、实验楼气体轮巡全部由排程驱动;机器人直报**可疑背包**事件;安防词表：翻越围栏 / 跌倒 / 尾随 / 人员聚集 / 电动车占道,16 路真实巡逻画面 |
 | **用户与角色** | 匿名即可浏览（公开演示保留）;登录升权。三档角色 × 场站授权矩阵（Orbit/InOrbit 式）：`viewer` 只读 / `operator` 建任务·派遣·ACK / `admin` 规则·开通·集成配置。演示账户 `admin / operator / viewer`,密码 `plantbot`（生产用 `PB_*_PASSWORD` 环境变量轮换） |
 | **集成开放 API** | 语义对齐 **VDA 5050**（factsheet/state/order），接入级别学 **Open-RMF**（`state-only` / `dispatchable`），地图上传走 **ROS map_server** 约定（PNG+resolution+origin,上传即在 3D 地图渲染底图）;自定义事件类型注册 + ingest。场站级 API Key,admin 面板管理。详见 [docs/integration.md](docs/integration.md) |
 

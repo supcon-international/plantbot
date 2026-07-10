@@ -401,20 +401,9 @@ function connect() {
       useApp.setState({ telemetry: tel, history: hist })
     } else if (msg.t === 'event') {
       const ev = msg.event as DetectionEvent
-      // pending-verification events stay out of the toast lane — the verdict decides
-      const loud = (ev.severity === 'critical' || ev.severity === 'high') && ev.verification?.state !== 'pending'
       useApp.setState((s) => ({
         events: [ev, ...s.events].slice(0, 400),
-        toast: loud ? ev : s.toast,
-      }))
-    } else if (msg.t === 'verification') {
-      const ev = msg.event as DetectionEvent
-      useApp.setState((s) => ({
-        events: s.events.map((e) => (e.id === ev.id ? ev : e)),
-        toast:
-          ev.verification?.state === 'confirmed' && (ev.severity === 'critical' || ev.severity === 'high')
-            ? ev
-            : s.toast,
+        toast: ev.severity === 'critical' || ev.severity === 'high' ? ev : s.toast,
       }))
     } else if (msg.t === 'ack') {
       useApp.setState((s) => ({

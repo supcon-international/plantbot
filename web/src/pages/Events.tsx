@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
-import { Check, X, Plus, Trash2, Columns3, Table2, SlidersHorizontal, ShieldCheck, Download, Sparkles } from 'lucide-react'
+import { Check, X, Plus, Trash2, Columns3, Table2, SlidersHorizontal } from 'lucide-react'
 import { useApp, api, useCan } from '../lib/store'
 import { useT, useAgo } from '../lib/i18n'
 import { timeShort } from '../lib/format'
@@ -10,24 +10,6 @@ import { SEVERITY_COLOR } from '../lib/types'
 
 const MODEL_IDS: DetectionModel[] = ['person', 'smoking', 'thermal', 'ogi', 'gauge', 'ppe', 'motion', 'acoustic']
 const CATEGORIES: EventCategory[] = ['security', 'fire', 'env', 'equipment', 'robot-fault']
-
-/** amber “verifying” / lime “LLM ✓” / struck “LLM ✕” chip */
-function VerifyBadge({ ev }: { ev: DetectionEvent }) {
-  const t = useT()
-  if (!ev.verification) return null
-  const v = ev.verification
-  const tone = v.state === 'pending' ? 'var(--color-warn)' : v.state === 'confirmed' ? 'var(--color-accent)' : 'var(--color-ink-3)'
-  return (
-    <span
-      className="mono inline-flex items-center gap-1 border px-1.5 py-0.5 text-[10px] uppercase tracking-[0.08em]"
-      style={{ color: tone, borderColor: `color-mix(in srgb, ${tone} 35%, transparent)`, background: `color-mix(in srgb, ${tone} 8%, transparent)` }}
-      title={v.note}
-    >
-      <Sparkles size={9} />
-      {v.state === 'pending' ? t('ev.verifying') : v.state === 'confirmed' ? t('ev.llmConfirmed') : t('ev.llmRejected')}
-    </span>
-  )
-}
 
 function CatChip({ cat }: { cat: EventCategory }) {
   const t = useT()
@@ -72,7 +54,6 @@ function DetailModal({ ev, onClose, onRule }: { ev: DetectionEvent; onClose: () 
           <span className="mono text-[12px] text-ink-3">{ev.id}</span>
           <SevTag sev={ev.severity} />
           <CatChip cat={ev.category} />
-          <VerifyBadge ev={ev} />
         </div>
         <button onClick={onClose} className="text-ink-3 hover:text-ink" aria-label="close">
           <X size={16} />
@@ -91,23 +72,6 @@ function DetailModal({ ev, onClose, onRule }: { ev: DetectionEvent; onClose: () 
               {readingEv.metric} = {readingEv.value}
               {readingEv.unit}
             </span>
-          </div>
-        )}
-        {ev.verification && (
-          <div
-            className="border px-3 py-2"
-            style={{
-              borderColor: 'color-mix(in srgb, var(--color-accent) 25%, transparent)',
-              background: 'color-mix(in srgb, var(--color-accent) 5%, transparent)',
-            }}
-          >
-            <div className="microlabel mb-1 flex items-center gap-1.5">
-              <ShieldCheck size={11} /> {t('ev.verification')} · {ev.verification.by}
-            </div>
-            {rule?.verify?.promptTemplate && (
-              <div className="text-[12.5px] italic text-ink-3">“{rule.verify.promptTemplate}”</div>
-            )}
-            <div className="mono mt-1 text-[12px] text-ink-2">{ev.verification.note ?? t(`ev.${ev.verification.state}`)}</div>
           </div>
         )}
         <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-3">
@@ -193,12 +157,7 @@ function BoardCard({ e, onOpen }: { e: DetectionEvent; onOpen: () => void }) {
         <span className="mono ml-auto text-[10px] text-ink-3">{Math.round(e.confidence * 100)}%</span>
       </div>
       <div className="mt-1.5 line-clamp-2 text-[13.5px] leading-snug text-ink">{e.label}</div>
-      <div className="mt-1 flex items-center gap-1.5">
-        <span className="microlabel min-w-0 truncate">{e.zone}</span>
-        <span className="ml-auto flex shrink-0 items-center gap-1">
-          <VerifyBadge ev={e} />
-        </span>
-      </div>
+      <div className="microlabel mt-1 truncate">{e.zone}</div>
       {e.snapshot && <img src={e.snapshot} alt="" loading="lazy" className="mt-2 h-20 w-full border border-line object-cover" />}
       {!e.acked && canOp && (
         <button
@@ -449,79 +408,9 @@ function NewRuleModal({ onClose }: { onClose: () => void }) {
   )
 }
 
-// ---------- verify queue (the false-positive floodgate) ----------
-
-function VerifyPanel({ events, onOpen }: { events: DetectionEvent[]; onOpen: (e: DetectionEvent) => void }) {
-  const t = useT()
-  const ago = useAgo()
-  const clock = useApp((s) => s.clock)
-  const pending = events.filter((e) => e.verification?.state === 'pending')
-  const decided = events.filter((e) => e.verification && e.verification.state !== 'pending').slice(0, 30)
-  const rejected = decided.filter((e) => e.verification!.state === 'rejected').length
-  const download = async () => {
-    const r = await api.exportEvents('dismissed')
-    const blob = await r.blob()
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = 'events-dismissed.jsonl'
-    a.click()
-    URL.revokeObjectURL(a.href)
-  }
-  return (
-    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-      <Panel>
-        <div className="flex items-center gap-2 border-b border-line px-3.5 py-2.5">
-          <span className="h-2 w-2" style={{ background: 'var(--color-warn)' }} />
-          <span className="microlabel">{t('ev.verifyPending')}</span>
-          <span className="mono ml-auto text-[11px] text-ink-3">{pending.length}</span>
-        </div>
-        <div className="max-h-[calc(100vh-280px)] space-y-2 overflow-y-auto p-2.5">
-          {pending.length === 0 && <EmptyNote>{t('ev.verifyEmpty')}</EmptyNote>}
-          {pending.map((e) => (
-            <div key={e.id} onClick={() => onOpen(e)} className="cursor-pointer border border-warn/25 bg-surface-2/60 p-2.5 transition-colors hover:border-warn/50">
-              <div className="flex items-center gap-2">
-                <SevDot sev={e.severity} />
-                <span className="truncate text-[13px] text-ink">{e.label}</span>
-                <span className="mono ml-auto shrink-0 text-[10.5px] text-ink-3">{ago(e.ts, clock)}</span>
-              </div>
-              <div className="microlabel mt-1">{t('ev.verifying')} · {e.sourceName}</div>
-            </div>
-          ))}
-        </div>
-      </Panel>
-      <Panel>
-        <div className="flex items-center gap-2 border-b border-line px-3.5 py-2.5">
-          <ShieldCheck size={12} className="text-ink-3" />
-          <span className="microlabel">{t('ev.verdicts')}</span>
-          <span className="mono ml-auto text-[11px] text-ink-3">
-            {rejected} {t('ev.autoDismissed')}
-          </span>
-          <button onClick={download} title={t('ev.exportHint')} className="mono flex items-center gap-1 border border-line-2 px-1.5 py-0.5 text-[10px] tracking-[0.08em] text-ink-3 transition-colors hover:text-ink">
-            <Download size={10} /> JSONL
-          </button>
-        </div>
-        <div className="max-h-[calc(100vh-280px)] overflow-y-auto">
-          {decided.length === 0 && <EmptyNote>{t('ev.verifyEmpty')}</EmptyNote>}
-          {decided.map((e) => (
-            <div key={e.id} onClick={() => onOpen(e)} className={`cursor-pointer border-b border-line/60 px-3.5 py-2.5 transition-colors hover:bg-surface-2 ${e.verification!.state === 'rejected' ? 'opacity-55' : ''}`}>
-              <div className="flex items-center gap-2">
-                <span className="truncate text-[13px] text-ink">{e.label}</span>
-                <span className="ml-auto shrink-0">
-                  <VerifyBadge ev={e} />
-                </span>
-              </div>
-              <div className="mono mt-1 truncate text-[11.5px] text-ink-3">{e.verification!.note}</div>
-            </div>
-          ))}
-        </div>
-      </Panel>
-    </div>
-  )
-}
-
 // ---------- page ----------
 
-type View = 'board' | 'verify' | 'table' | 'rules'
+type View = 'board' | 'table' | 'rules'
 
 export function Events() {
   const canOp = useCan('operator')
@@ -534,13 +423,12 @@ export function Events() {
   const ago = useAgo()
   const [view, setView] = useState<View>(() => {
     const v = new URLSearchParams(window.location.search).get('view')
-    return v === 'rules' || v === 'table' || v === 'verify' ? v : 'board'
+    return v === 'rules' || v === 'table' ? v : 'board'
   })
   const [sel, setSel] = useState<DetectionEvent | null>(null)
   const [params, setParams] = useSearchParams()
   // deep link: /events?ev=EV-0042 lands with that event's detail already open
-  // (toasts, the overview feed and map pins all arrive here) — and keeps the
-  // modal in sync as verification verdicts stream in
+  // (toasts, the overview feed and map pins all arrive here)
   useEffect(() => {
     const id = params.get('ev')
     if (!id) return
@@ -559,12 +447,11 @@ export function Events() {
   const [hiRule, setHiRule] = useState<string | null>(null)
   const [catFilter, setCatFilter] = useState<EventCategory | null>(null)
 
-  const unacked = events.filter((e) => e.lifecycle === 'new' && e.verification?.state !== 'pending').length
-  const pendingVerify = events.filter((e) => e.verification?.state === 'pending').length
+  const unacked = events.filter((e) => e.lifecycle === 'new').length
   let shown = ruleFilter ? events.filter((e) => e.ruleId === ruleFilter) : events
   if (catFilter) shown = shown.filter((e) => e.category === catFilter)
-  // the operator board only shows vetted work: no pending verdicts, no dismissed noise
-  const boardShown = shown.filter((e) => e.verification?.state !== 'pending' && e.lifecycle !== 'dismissed')
+  // the operator board hides dismissed noise; the table keeps everything for audit
+  const boardShown = shown.filter((e) => e.lifecycle !== 'dismissed')
   const filterRule = ruleFilter ? rules.find((r) => r.id === ruleFilter) : null
 
   return (
@@ -573,14 +460,6 @@ export function Events() {
         <div>
           <div className="mono text-[14px] text-ink-2">
             {events.length} {t('c.events')} · <span style={{ color: unacked ? 'var(--color-warn)' : 'var(--color-ok)' }}>{unacked} {t('c.open')}</span>
-            {pendingVerify > 0 && (
-              <>
-                {' · '}
-                <button onClick={() => setView('verify')} className="underline decoration-warn/50 underline-offset-2" style={{ color: 'var(--color-warn)' }}>
-                  {pendingVerify} {t('ev.verifying')}
-                </button>
-              </>
-            )}
             {' · '}{rules.filter((r) => r.enabled).length}/{rules.length} {t('ev.rulesArmed')}
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
@@ -623,7 +502,6 @@ export function Events() {
             {(
               [
                 ['board', Columns3, t('ev.board')],
-                ['verify', ShieldCheck, t('ev.verify')],
                 ['table', Table2, t('ev.table')],
                 ['rules', SlidersHorizontal, t('ev.rules')],
               ] as const
@@ -631,13 +509,10 @@ export function Events() {
               <button
                 key={v}
                 onClick={() => setView(v)}
-                className={`relative flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] transition-colors ${view === v ? 'bg-surface-2 text-ink' : 'text-ink-3 hover:text-ink-2'}`}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] transition-colors ${view === v ? 'bg-surface-2 text-ink' : 'text-ink-3 hover:text-ink-2'}`}
               >
                 <Icon size={13} strokeWidth={1.5} />
                 <span className="mono hidden text-[11px] tracking-[0.08em] sm:block">{label}</span>
-                {v === 'verify' && pendingVerify > 0 && (
-                  <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5" style={{ background: 'var(--color-warn)' }} />
-                )}
               </button>
             ))}
           </div>
@@ -645,8 +520,6 @@ export function Events() {
       </div>
 
       {view === 'board' && <Board events={boardShown} onOpen={setSel} />}
-
-      {view === 'verify' && <VerifyPanel events={shown} onOpen={setSel} />}
 
       {view === 'table' && (
         <Panel className="rise overflow-x-auto">

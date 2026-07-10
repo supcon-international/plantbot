@@ -104,7 +104,6 @@ wss.on('connection', (ws, req) => {
 for (const w of worlds.values()) {
   w.onResult = (m, res) => broadcast(w.id, { t: 'missionResult', missionId: m.id, result: res, missions: w.missions })
   w.onEvent = (ev) => broadcast(w.id, { t: 'event', event: ev })
-  w.onVerify = (ev) => broadcast(w.id, { t: 'verification', event: ev })
   w.onReadings = (batch) => broadcast(w.id, { t: 'readings', items: batch })
   for (const r of w.robots) {
     const s = w.nav.get(r.id)
@@ -174,9 +173,7 @@ app.get('/api/sites', async (req) => {
         operator: s.operator,
         role: roleFor(u, s.id),
         robots: w.robots.length,
-        openAlerts: w.events.filter(
-          (e) => e.lifecycle === 'new' && e.verification?.state !== 'pending' && (e.severity === 'critical' || e.severity === 'high'),
-        ).length,
+        openAlerts: w.events.filter((e) => e.lifecycle === 'new' && (e.severity === 'critical' || e.severity === 'high')).length,
       }
     }),
   }

@@ -235,8 +235,9 @@ type Command =
 **✅ P0 — 已落地**
 1. Event 升级:lifecycle 四态(ack/resolve/dismiss 端点)+ category(含 robot-fault 流)+ evidence[]
    + runId 回链(MissionResult 异常项自动生成带 runId 的 Event)。
-2. Detector.verify(llm 模拟复核,3-9s 裁决;confirmed 进队列,rejected 自动 dismissed)
-   + Events 页 VERIFY 视图(待复核/最近裁决/JSONL 负样本导出)。
+2. ~~Detector.verify(LLM 二次复核)~~ **已实现后于 2026-07-10 按产品决定移除**——demo 阶段
+   模拟裁决价值有限;误报治理由 lifecycle 的 dismiss(证据保留,`GET /events/export` 仍可导负样本)
+   承担。未来接真实多模态复核时按原设计恢复:Detector 加 verify 字段 + Event 加 verification 态。
 3. Mission 拆 Template/Schedule/Run:种子 recurring 任务全部改由 schedule 驱动;
    requires 能力匹配进入 auto 指派;pause/resume。
 

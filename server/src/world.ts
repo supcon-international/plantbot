@@ -97,8 +97,6 @@ export interface DetectionRule {
   metric?: string
   op?: '>' | '<'
   bound?: number
-  /** second-stage vetting before an event reaches the operator queue */
-  verify?: { mode: 'none' | 'llm' | 'human'; promptTemplate?: string; referenceImage?: string }
   lastFiredAt?: number
   firedCount: number
 }
@@ -132,8 +130,6 @@ export interface DetectionEvent {
   lifecycle: EventLifecycle
   /** legacy mirror: lifecycle !== 'new' */
   acked: boolean
-  /** present when the detector requires vetting; operators triage confirmed ones */
-  verification?: { state: 'pending' | 'confirmed' | 'rejected'; by: string; note?: string }
   /** mission run this event was captured in (GoRobot patrolId, made explicit) */
   runId?: string
   x: number
@@ -301,7 +297,6 @@ export class World {
   sessions = new Map<string, StreamSession>()
   onResult?: (m: Mission, r: MissionResult) => void
   onEvent?: (ev: DetectionEvent) => void
-  onVerify?: (ev: DetectionEvent) => void
   onReadings?: (batch: Reading[]) => void
 
   private wpById: Map<string, SiteDef['waypoints'][number]>
@@ -315,8 +310,6 @@ export class World {
   private sessSeq = 1
   private readingClock = 0
   private faultClock = 0
-  /** events awaiting the (simulated) LLM verdict: eventId -> decide-at ts */
-  private verifyDue = new Map<string, number>()
   private thresholdLastFired = new Map<string, number>()
 
   constructor(def: SiteDef) {
@@ -745,7 +738,6 @@ export class World {
     metric?: string
     op?: '>' | '<'
     bound?: number
-    verify?: DetectionRule['verify']
   }) {
     return this.addRule({
       name: input.name,
@@ -761,12 +753,11 @@ export class World {
       metric: input.metric,
       op: input.op,
       bound: input.bound,
-      verify: input.verify,
       builtin: false,
     })
   }
 
-  patchRule(id: string, patch: Partial<Pick<DetectionRule, 'enabled' | 'threshold' | 'severity' | 'name' | 'bound' | 'verify'>>) {
+  patchRule(id: string, patch: Partial<Pick<DetectionRule, 'enabled' | 'threshold' | 'severity' | 'name' | 'bound'>>) {
     const r = this.rules.find((x) => x.id === id)
     if (!r) return undefined
     Object.assign(r, patch)
@@ -835,7 +826,6 @@ export class World {
         }
     const confidence = +(r.threshold + Math.random() * (1 - r.threshold) * 0.9).toFixed(2)
     const typeDef = this.eventTypes.find((t) => t.id === r.model)
-    const needsVerify = r.verify && r.verify.mode !== 'none'
 
     const ev: DetectionEvent = {
       id,
@@ -854,7 +844,6 @@ export class World {
       evidence: opts?.evidence ?? [],
       lifecycle: 'new',
       acked: false,
-      verification: needsVerify ? { state: 'pending', by: r.verify!.mode } : undefined,
       runId: opts?.runId,
       x: +pos.x.toFixed(2),
       z: +pos.z.toFixed(2),
@@ -870,32 +859,8 @@ export class World {
       ev.evidence.unshift({ kind: 'image', url: ev.snapshot, channelId: this.channels().find((c) => c.streamKey === r.source)?.id })
     }
 
-    // queue the simulated second-stage verdict (live events only, not backdated seeds)
-    if (needsVerify && Date.now() - ts < 60_000) this.verifyDue.set(ev.id, Date.now() + 3000 + Math.random() * 6000)
-
     this.pushEvent(ev)
     return ev
-  }
-
-  /** simulated LLM verdicts — confirmed events reach the operator queue, rejected ones are auto-dismissed */
-  private decideVerifications(now: number) {
-    for (const [evId, due] of this.verifyDue) {
-      if (now < due) continue
-      this.verifyDue.delete(evId)
-      const ev = this.events.find((e) => e.id === evId)
-      if (!ev || !ev.verification || ev.verification.state !== 'pending') continue
-      const rule = this.rules.find((r) => r.id === ev.ruleId)
-      const confirmed = ev.confidence >= (ev.ruleId === 'EXT' ? 0.65 : 0.75)
-      const prompt = rule?.verify?.promptTemplate
-      ev.verification = confirmed
-        ? { state: 'confirmed', by: 'llm', note: prompt ? `Matches “${prompt}” · frame re-checked` : 'External claim re-checked against evidence · subject present' }
-        : { state: 'rejected', by: 'llm', note: ev.ruleId === 'EXT' ? 'External claim not reproducible from evidence — auto-dismissed' : 'Subject not present on re-check — likely false positive' }
-      if (!confirmed) {
-        ev.lifecycle = 'dismissed'
-        ev.acked = true
-      }
-      this.onVerify?.(ev)
-    }
   }
 
   /** occasional robot-health faults — the second event stream (GoRobot AlarmRunInfo) */
@@ -981,12 +946,6 @@ export class World {
       x: +(input.x ?? pos.x).toFixed(2),
       z: +(input.z ?? pos.z).toFixed(2),
     }
-    // trust gate: low-confidence claims from external systems get the same
-    // second-stage vetting as our own detectors before reaching operators
-    if (input.confidence !== undefined && input.confidence < 0.8) {
-      ev.verification = { state: 'pending', by: 'llm' }
-      this.verifyDue.set(ev.id, Date.now() + 3000 + Math.random() * 6000)
-    }
     this.pushEvent(ev)
     this.onEvent?.(ev) // external events are always live — broadcast at the source
     return ev
@@ -1007,7 +966,6 @@ export class World {
     if (!ev) return undefined
     ev.lifecycle = to
     ev.acked = true
-    this.verifyDue.delete(id)
     return ev
   }
 
@@ -1031,19 +989,6 @@ export class World {
     for (let i = 0; i < Math.min(4, bySeverity.length); i++) if (plan[i + 1]) plan[i + 1].rule = bySeverity[i]
     plan.sort((a, b) => b.ago - a.ago)
     for (const p of plan) await this.generateEvent(p.rule, now - p.ago)
-    // backdated history arrives pre-verdicted and mostly triaged
-    for (const e of this.events) {
-      if (e.verification?.state === 'pending') {
-        const confirmed = e.confidence >= 0.75
-        e.verification = confirmed
-          ? { state: 'confirmed', by: 'llm', note: 'Frame re-checked · subject present' }
-          : { state: 'rejected', by: 'llm', note: 'Subject not present on re-check — likely false positive' }
-        if (!confirmed) {
-          e.lifecycle = 'dismissed'
-          e.acked = true
-        }
-      }
-    }
     for (const e of this.events.slice(6)) {
       if (e.lifecycle === 'new') {
         e.lifecycle = Math.random() < 0.3 ? 'dismissed' : 'resolved'
@@ -1698,7 +1643,6 @@ export class World {
     this.tickSchedules(nowPre)
     this.tickMissions(dt)
     this.applyVelocity(dt, nowPre)
-    this.decideVerifications(nowPre)
     this.maybeFault(nowPre)
     if (nowPre - this.readingClock >= 3000) {
       this.readingClock = nowPre

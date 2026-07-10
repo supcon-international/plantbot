@@ -35,8 +35,6 @@ export interface RuleSeed {
   metric?: string
   op?: '>' | '<'
   bound?: number
-  /** second-stage vetting gate (LLM re-check before the operator queue) */
-  verify?: { mode: 'none' | 'llm' | 'human'; promptTemplate?: string }
 }
 
 export interface SeedMissionDef {
@@ -432,13 +430,13 @@ const plant07: SiteDef = {
     },
   ],
   ruleSeeds: [
-    { name: 'Unbadged person in substation', model: 'person', kind: 'onboard-cv', source: 'x30-optical', sourceName: 'X30-01 · Optical', zone: 'Substation bay S-1', threshold: 0.7, severity: 'critical', robotId: 'x30-01', verify: { mode: 'llm', promptTemplate: 'Is there a person without a badge inside the substation bay?' } },
-    { name: 'Smoking behavior', model: 'smoking', kind: 'cloud-cv', source: 'workshop-cam', sourceName: 'Dock Camera', zone: 'Robot staging area', threshold: 0.75, severity: 'critical', verify: { mode: 'llm', promptTemplate: 'Is someone smoking in this frame? The zone is ATEX-rated.' } },
+    { name: 'Unbadged person in substation', model: 'person', kind: 'onboard-cv', source: 'x30-optical', sourceName: 'X30-01 · Optical', zone: 'Substation bay S-1', threshold: 0.7, severity: 'critical', robotId: 'x30-01' },
+    { name: 'Smoking behavior', model: 'smoking', kind: 'cloud-cv', source: 'workshop-cam', sourceName: 'Dock Camera', zone: 'Robot staging area', threshold: 0.75, severity: 'critical' },
     { name: 'Stack thermal anomaly', model: 'thermal', kind: 'onboard-cv', source: 'lite3-thermal', sourceName: 'Lite3-01 · Thermal', zone: 'Boiler stack, sector N', threshold: 0.65, severity: 'high', robotId: 'lite3-01' },
     { name: 'Fugitive emission (OGI)', model: 'ogi', kind: 'onboard-cv', source: 'agx-ogi', sourceName: 'HSK·W1 · OGI', zone: 'Tank farm — ATEX', threshold: 0.6, severity: 'high', robotId: 'agx-w1' },
     { name: 'Analog gauge OCR', model: 'gauge', kind: 'onboard-cv', source: 'lite3-front', sourceName: 'Lite3-01 · PTZ', zone: 'Valve manifold VM-4', threshold: 0.6, severity: 'info', robotId: 'lite3-01' },
     { name: 'PPE compliance', model: 'ppe', kind: 'cloud-cv', source: 'workshop-cam', sourceName: 'Dock Camera', zone: 'Robot staging area', threshold: 0.6, severity: 'info' },
-    { name: 'Perimeter motion', model: 'motion', kind: 'sim', source: 'perimeter-cam', sourceName: 'Perimeter — Reservoir Gate', zone: 'North fence, waterline', threshold: 0.55, severity: 'low', verify: { mode: 'llm', promptTemplate: 'Is the motion caused by a person or vehicle (not wildlife / vegetation)?' } },
+    { name: 'Perimeter motion', model: 'motion', kind: 'sim', source: 'perimeter-cam', sourceName: 'Perimeter — Reservoir Gate', zone: 'North fence, waterline', threshold: 0.55, severity: 'low' },
     { name: 'Partial discharge signature', model: 'acoustic', kind: 'onboard-cv', source: 'x30-optical', sourceName: 'X30-01 · Acoustic imager', zone: 'Transformer bay T-1', threshold: 0.7, severity: 'high', robotId: 'x30-01' },
     { name: 'CH₄ ceiling — tank farm', model: 'ogi', kind: 'threshold', source: 'agx-ogi', sourceName: 'HSK·W1 · Gas detector', zone: 'Tank farm — ATEX', threshold: 1, severity: 'high', robotId: 'agx-w1', metric: 'ch4.ppm', op: '>', bound: 6 },
     { name: 'ΔT ceiling — thermal imager', model: 'thermal', kind: 'threshold', source: 'lite3-thermal', sourceName: 'Lite3-01 · Thermal', zone: 'Boiler stack, sector N', threshold: 1, severity: 'high', robotId: 'lite3-01', metric: 'dt.max.c', op: '>', bound: 14 },
@@ -721,7 +719,7 @@ const plant12: SiteDef = {
   ],
   ruleSeeds: [
     { name: 'Tank row thermal anomaly', model: 'thermal', kind: 'onboard-cv', source: 'x30b-thermal', sourceName: 'X30-02 · Thermal', zone: 'Tank row — ATEX', threshold: 0.65, severity: 'high', robotId: 'x30-02' },
-    { name: 'Person on berth apron', model: 'person', kind: 'cloud-cv', source: 'berth-cam', sourceName: 'Berth camera', zone: 'Berth — exclusion', threshold: 0.7, severity: 'critical', verify: { mode: 'llm', promptTemplate: 'Is there a person inside the berth exclusion zone?' } },
+    { name: 'Person on berth apron', model: 'person', kind: 'cloud-cv', source: 'berth-cam', sourceName: 'Berth camera', zone: 'Berth — exclusion', threshold: 0.7, severity: 'critical' },
     { name: 'Berth motion watch', model: 'motion', kind: 'sim', source: 'berth-cam', sourceName: 'Berth camera', zone: 'Berth — exclusion', threshold: 0.55, severity: 'low' },
     { name: 'Warehouse PPE compliance', model: 'ppe', kind: 'cloud-cv', source: 'go2b-front', sourceName: 'GO2-02 · Front', zone: 'Warehouse aisle', threshold: 0.6, severity: 'info', robotId: 'go2-02' },
     { name: 'Manifold gauge OCR', model: 'gauge', kind: 'onboard-cv', source: 'x30b-optical', sourceName: 'X30-02 · Optical', zone: 'Manifold skid', threshold: 0.6, severity: 'info', robotId: 'x30-02' },
@@ -1188,14 +1186,14 @@ const campus: SiteDef = {
     },
   ],
   ruleSeeds: [
-    { name: 'Perimeter crossing at night', model: 'person', kind: 'onboard-cv', source: 'x30c1-optical', sourceName: 'X30-C1 · Optical', zone: 'North fence — restricted', threshold: 0.7, severity: 'critical', robotId: 'x30-c1', verify: { mode: 'llm', promptTemplate: 'Is a person climbing or crossing the fence line (not a shadow or animal)?' } },
-    { name: 'Unattended bag — gate', model: 'unattended-bag', kind: 'cloud-cv', source: 'gate-cam', sourceName: 'Main gate camera', zone: 'Main gate check', threshold: 0.6, severity: 'high', verify: { mode: 'llm', promptTemplate: 'Is there a bag left unattended with no owner within 3 m?' } },
+    { name: 'Perimeter crossing at night', model: 'person', kind: 'onboard-cv', source: 'x30c1-optical', sourceName: 'X30-C1 · Optical', zone: 'North fence — restricted', threshold: 0.7, severity: 'critical', robotId: 'x30-c1' },
+    { name: 'Unattended bag — gate', model: 'unattended-bag', kind: 'cloud-cv', source: 'gate-cam', sourceName: 'Main gate camera', zone: 'Main gate check', threshold: 0.6, severity: 'high' },
     { name: 'Crowding — canteen rush', model: 'crowding', kind: 'cloud-cv', source: 'hskc2-front', sourceName: 'HSK·C2 · Front', zone: 'Canteen plaza', threshold: 0.55, severity: 'info', robotId: 'hsk-c2' },
-    { name: 'Fall detection — walkways', model: 'fall', kind: 'onboard-cv', source: 'go2c1-front', sourceName: 'GO2·C1 · Front', zone: 'Main walk', threshold: 0.65, severity: 'high', robotId: 'go2-c1', verify: { mode: 'llm', promptTemplate: 'Has a person fallen and remained on the ground?' } },
+    { name: 'Fall detection — walkways', model: 'fall', kind: 'onboard-cv', source: 'go2c1-front', sourceName: 'GO2·C1 · Front', zone: 'Main walk', threshold: 0.65, severity: 'high', robotId: 'go2-c1' },
     { name: 'E-bike in fire lane', model: 'ebike-blocking', kind: 'cloud-cv', source: 'lot-cam', sourceName: 'Parking P1 camera', zone: 'Fire lane — keep clear', threshold: 0.6, severity: 'high' },
     { name: 'Tailgating at gate', model: 'tailgating', kind: 'onboard-cv', source: 'x30c2-optical', sourceName: 'X30-C2 · Optical', zone: 'Main gate check', threshold: 0.65, severity: 'high', robotId: 'x30-c2' },
-    { name: 'Smoking near lab dock', model: 'smoking', kind: 'onboard-cv', source: 'anyc-front', sourceName: 'ANY·C1 · Camera', zone: 'Chemical storage', threshold: 0.75, severity: 'critical', robotId: 'any-c1', verify: { mode: 'llm', promptTemplate: 'Is someone smoking within the chemical-storage apron?' } },
-    { name: 'After-hours motion — library', model: 'motion', kind: 'sim', source: 'go2c2-front', sourceName: 'GO2·C2 · Front', zone: 'Library entrance', threshold: 0.55, severity: 'low', robotId: 'go2-c2', verify: { mode: 'llm', promptTemplate: 'Is the motion a person (not HVAC drafts moving posters)?' } },
+    { name: 'Smoking near lab dock', model: 'smoking', kind: 'onboard-cv', source: 'anyc-front', sourceName: 'ANY·C1 · Camera', zone: 'Chemical storage', threshold: 0.75, severity: 'critical', robotId: 'any-c1' },
+    { name: 'After-hours motion — library', model: 'motion', kind: 'sim', source: 'go2c2-front', sourceName: 'GO2·C2 · Front', zone: 'Library entrance', threshold: 0.55, severity: 'low', robotId: 'go2-c2' },
     { name: 'Gauge — lab gas manifold', model: 'gauge', kind: 'onboard-cv', source: 'anyc-gas', sourceName: 'ANY·C1 · Gas', zone: 'Chemical storage', threshold: 0.6, severity: 'info', robotId: 'any-c1' },
     { name: 'VOC ceiling — chem storage', model: 'ogi', kind: 'threshold', source: 'anyc-gas', sourceName: 'ANY·C1 · Gas detector', zone: 'Chemical storage', threshold: 1, severity: 'high', robotId: 'any-c1', metric: 'ch4.ppm', op: '>', bound: 6 },
   ],

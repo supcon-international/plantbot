@@ -208,7 +208,6 @@ export interface DetectionEvent {
   evidence: EventEvidence[]
   lifecycle: EventLifecycle
   acked: boolean
-  verification?: { state: 'pending' | 'confirmed' | 'rejected'; by: string; note?: string }
   runId?: string
   x: number
   z: number
@@ -230,7 +229,6 @@ export interface DetectionRule {
   metric?: string
   op?: '>' | '<'
   bound?: number
-  verify?: { mode: 'none' | 'llm' | 'human'; promptTemplate?: string; referenceImage?: string }
   lastFiredAt?: number
   firedCount: number
 }

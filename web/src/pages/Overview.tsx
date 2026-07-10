@@ -17,9 +17,7 @@ function KpiRow() {
   const ready = Object.values(telemetry).filter((x) => x.battery > 20).length
   const activeMissions = missions.filter((m) => m.status === 'active').length
   const queued = missions.filter((m) => m.status === 'queued').length
-  const open = events.filter(
-    (e) => e.lifecycle === 'new' && e.verification?.state !== 'pending' && (e.severity === 'critical' || e.severity === 'high'),
-  ).length
+  const open = events.filter((e) => e.lifecycle === 'new' && (e.severity === 'critical' || e.severity === 'high')).length
   const detections24h = events.filter((e) => Date.now() - e.ts < 24 * 3600_000).length
   const tel = Object.values(telemetry)
   const rssi = tel.length ? Math.round(tel.reduce((a, x) => a + x.rssi, 0) / tel.length) : null
