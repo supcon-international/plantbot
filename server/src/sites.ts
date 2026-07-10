@@ -803,7 +803,7 @@ const campus: SiteDef = {
     { id: 'gatehouse', kind: 'box', x0: -1.8, z0: 8.9, x1: 1.8, z1: 10.4, h: 1.6, name: 'MAIN GATE' },
     { id: 'charge-c', kind: 'box', x0: -19.4, z0: -1.2, x1: -17.4, z1: 1.8, h: 1.3, name: 'CHARGE' },
     { id: 'kiosk', kind: 'box', x0: 4.4, z0: 1.4, x1: 5.6, z1: 2.4, h: 1.0, tone: 'mid' },
-    { id: 'bikes', kind: 'box', x0: -6.2, z0: 6.8, x1: -3.4, z1: 7.7, h: 0.7, tone: 'mid' },
+    { id: 'bikes', kind: 'box', x0: -2.4, z0: 6.9, x1: 0.4, z1: 7.8, h: 0.7, tone: 'mid' },
   ],
   zones: [
     {
@@ -880,7 +880,7 @@ const campus: SiteDef = {
       [9.4, 2.2, 18.2, 3.2], // stadium stand
       [-1.8, 8.9, 1.8, 10.4], // gatehouse
       [-19.4, -1.2, -17.4, 1.8], // charge shed walls
-      [-6.2, 6.8, -3.4, 7.7], // bike racks
+      [-2.4, 6.9, 0.4, 7.8], // bike racks (south of the library, clear of the fire lane)
     ],
     circles: [[13.4, -3.4, 1.1]],
     carve: [[-18.9, -0.6, -17.4, 1.2]], // dock approach

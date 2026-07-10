@@ -347,6 +347,7 @@ const D: Record<string, [string, string, string]> = {
   'map.opsMap': ['OPS MAP', '作业地图', 'MAPA OPS'],
   'map.3dScan': ['3D SCAN', '3D 扫描', 'ESCANEO 3D'],
   'map.noScan': ['No 3DGS scan registered for this site', '该场站未登记 3DGS 扫描', 'Sin escaneo 3DGS en este sitio'],
+  'map.lg.checkpoint': ['checkpoint', '检查点', 'punto de control'],
   'map.streaming': ['STREAMING GAUSSIAN SPLATS', '高斯泼溅加载中', 'CARGANDO GAUSSIAN SPLATS'],
   'map.wpDispatch': ['select a unit above to dispatch', '在上方选择机器人以派遣', 'elige una unidad arriba para despachar'],
 

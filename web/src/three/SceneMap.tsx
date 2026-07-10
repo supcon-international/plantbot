@@ -83,13 +83,26 @@ function SplatStage({ url }: { url: string }) {
 function RobotMarker({ r, selected, onSelect }: { r: RobotSpec; selected: boolean; onSelect: () => void }) {
   const group = useRef<THREE.Group>(null)
   const pulse = useRef<THREE.Mesh>(null)
-  const pathRef = useRef<any>(null)
+  const inited = useRef(false)
 
-  useFrame(({ clock }) => {
+  useFrame(({ clock }, dt) => {
     const tel = useApp.getState().telemetry[r.id]
-    if (!tel || !group.current) return
-    group.current.position.lerp(new THREE.Vector3(tel.x, 0, tel.z), 0.12)
-    group.current.rotation.y = THREE.MathUtils.lerp(group.current.rotation.y, tel.heading, 0.15)
+    const g = group.current
+    if (!g) return
+    g.visible = !!tel
+    if (!tel) return
+    // frame-rate-independent glide over the 4 Hz telemetry beat; snap on (re)spawn
+    if (!inited.current || Math.hypot(g.position.x - tel.x, g.position.z - tel.z) > 5) {
+      g.position.set(tel.x, 0, tel.z)
+      g.rotation.y = tel.heading
+      inited.current = true
+    } else {
+      const a = 1 - Math.exp(-Math.min(0.1, dt) * 9)
+      g.position.x += (tel.x - g.position.x) * a
+      g.position.z += (tel.z - g.position.z) * a
+      const diff = ((((tel.heading - g.rotation.y + Math.PI) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) - Math.PI
+      g.rotation.y += diff * a
+    }
     const t = clock.elapsedTime
     if (pulse.current) {
       const k = (t % 1.8) / 1.8
@@ -101,7 +114,7 @@ function RobotMarker({ r, selected, onSelect }: { r: RobotSpec; selected: boolea
   const color = selected ? '#b8ee46' : r.color
 
   return (
-    <group ref={group} onClick={(e) => (e.stopPropagation(), onSelect())}>
+    <group ref={group} visible={false} onClick={(e) => (e.stopPropagation(), onSelect())}>
       {r.family === 'ugv' ? (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
           <ringGeometry args={[0.4, 0.48, 4]} />

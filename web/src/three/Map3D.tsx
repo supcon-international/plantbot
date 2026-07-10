@@ -9,7 +9,7 @@ import * as THREE from 'three'
 import { Plus, Minus, Maximize2 } from 'lucide-react'
 import { useApp, api, useCan } from '../lib/store'
 import { useT } from '../lib/i18n'
-import type { Building, Telemetry, Waypoint } from '../lib/types'
+import type { Building, Waypoint } from '../lib/types'
 import { SEVERITY_COLOR } from '../lib/types'
 import { RafResizeObserver } from './rafResizeObserver'
 
@@ -78,21 +78,26 @@ function OccupancyUnderlay({ map }: { map: NonNullable<ReturnType<typeof useApp.
   )
 }
 
-function Ground() {
+function Ground({ bounds }: { bounds: { x: [number, number]; z: [number, number] } }) {
+  const [x0, x1] = bounds.x
+  const [z0, z1] = bounds.z
+  const w = x1 - x0
+  const d = z1 - z0
   const grid = useMemo(() => {
     const pts: THREE.Vector3[] = []
-    for (let x = -16; x <= 16; x += 4) pts.push(new THREE.Vector3(x, 0, -9), new THREE.Vector3(x, 0, 9))
-    for (let z = -9; z <= 9; z += 4) pts.push(new THREE.Vector3(-16, 0, z), new THREE.Vector3(16, 0, z))
+    for (let x = Math.ceil(x0 / 4) * 4; x <= x1; x += 4) pts.push(new THREE.Vector3(x, 0, z0), new THREE.Vector3(x, 0, z1))
+    for (let z = Math.ceil(z0 / 4) * 4; z <= z1; z += 4) pts.push(new THREE.Vector3(x0, 0, z), new THREE.Vector3(x1, 0, z))
     return new THREE.BufferGeometry().setFromPoints(pts)
-  }, [])
+  }, [x0, x1, z0, z1])
+  const inset = 0.35
   return (
     <group>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
-        <planeGeometry args={[44, 30]} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[(x0 + x1) / 2, -0.02, (z0 + z1) / 2]} receiveShadow>
+        <planeGeometry args={[w + 12, d + 12]} />
         <meshStandardMaterial color="#101010" roughness={1} metalness={0} />
       </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
-        <planeGeometry args={[32, 18]} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[(x0 + x1) / 2, -0.01, (z0 + z1) / 2]} receiveShadow>
+        <planeGeometry args={[w, d]} />
         <meshStandardMaterial color="#161615" roughness={1} metalness={0} />
       </mesh>
       <lineSegments geometry={grid} position={[0, 0.005, 0]}>
@@ -101,11 +106,11 @@ function Ground() {
       {/* site boundary */}
       <Line
         points={[
-          [-15.65, 0.01, -8.65],
-          [15.65, 0.01, -8.65],
-          [15.65, 0.01, 8.65],
-          [-15.65, 0.01, 8.65],
-          [-15.65, 0.01, -8.65],
+          [x0 + inset, 0.01, z0 + inset],
+          [x1 - inset, 0.01, z0 + inset],
+          [x1 - inset, 0.01, z1 - inset],
+          [x0 + inset, 0.01, z1 - inset],
+          [x0 + inset, 0.01, z0 + inset],
         ]}
         color="#4a4a46"
         lineWidth={1}
@@ -211,10 +216,13 @@ function ZoneFlat({ z, labels }: { z: ReturnType<typeof useApp.getState>['zones'
           font={MONO}
           position={[lp.x, 0.02, lp.z]}
           rotation={[-Math.PI / 2, 0, 0]}
-          fontSize={0.42}
-          letterSpacing={0.08}
+          fontSize={0.46}
+          letterSpacing={0.09}
           color={tone}
-          fillOpacity={0.9}
+          fillOpacity={0.95}
+          outlineWidth={0.05}
+          outlineColor="#0c0c0b"
+          outlineOpacity={0.85}
           anchorX={lp.anchor === 'end' ? 'right' : lp.anchor === 'start' ? 'left' : 'center'}
           anchorY="middle"
         >
@@ -238,6 +246,62 @@ function Zones({ labels }: { labels: boolean }) {
 
 // ---------- dynamic layer ----------
 
+/** billboarded label with a dark backing plate — readable over any surface */
+function LabelChip({
+  text,
+  tone = '#d8d8d2',
+  edge,
+  active = false,
+  y = 0.7,
+  size = 0.3,
+  pointer = false,
+}: {
+  text: string
+  tone?: string
+  edge?: string
+  active?: boolean
+  y?: number
+  size?: number
+  pointer?: boolean
+}) {
+  const w = text.length * size * 0.64 + size * 1.1
+  const h = size * 1.7
+  const bg = active ? ACCENT : '#0d0d0c'
+  const fg = active ? '#0c0c0b' : tone
+  return (
+    <Billboard position={[0, y, 0]}>
+      <group raycast={NO_RAYCAST}>
+        {/* backing plate + hairline edge */}
+        <mesh raycast={NO_RAYCAST}>
+          <planeGeometry args={[w, h]} />
+          <meshBasicMaterial color={bg} transparent opacity={active ? 0.96 : 0.82} depthWrite={false} />
+        </mesh>
+        <mesh raycast={NO_RAYCAST} position={[0, 0, -0.001]}>
+          <planeGeometry args={[w + 0.05, h + 0.05]} />
+          <meshBasicMaterial color={edge ?? (active ? ACCENT : '#3a3a36')} transparent opacity={active ? 1 : 0.9} depthWrite={false} />
+        </mesh>
+        {pointer && (
+          <mesh raycast={NO_RAYCAST} position={[0, -h / 2 - 0.07, 0]} rotation={[0, 0, Math.PI]}>
+            <circleGeometry args={[0.09, 3, Math.PI / 2]} />
+            <meshBasicMaterial color={edge ?? '#3a3a36'} transparent opacity={0.95} depthWrite={false} />
+          </mesh>
+        )}
+        <Text
+          raycast={NO_RAYCAST}
+          font={MONO}
+          fontSize={size}
+          color={fg}
+          anchorX="center"
+          anchorY="middle"
+          letterSpacing={0.08}
+        >
+          {text}
+        </Text>
+      </group>
+    </Billboard>
+  )
+}
+
 function WaypointMark({
   wp,
   state,
@@ -250,9 +314,11 @@ function WaypointMark({
   onClick?: () => void
 }) {
   const hot = state !== 'normal'
-  const tone = hot || wp.kind === 'dock' ? ACCENT : '#a8a8a2'
+  const checkpoint = wp.id.startsWith('CP')
+  const tone = hot ? ACCENT : wp.kind === 'dock' ? ACCENT : checkpoint ? '#c9c9c2' : '#8a8a82'
   const [hover, setHover] = useState(false)
-  const s = hover ? 1.25 : 1
+  const s = hover ? 1.2 : 1
+  const shortId = wp.id.replace('WP-', 'W·').replace('CP-', 'CP·').replace('LOT-', 'LOT·')
   return (
     <group position={[wp.x, 0, wp.z]}>
       <group
@@ -282,58 +348,101 @@ function WaypointMark({
         </mesh>
         {wp.kind === 'dock' && (
           <>
-            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
-              <ringGeometry args={[0.26, 0.33, 28]} />
+            {/* charge pad: dark disc, lime bolt */}
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.015, 0]}>
+              <circleGeometry args={[0.4, 28]} />
+              <meshBasicMaterial color="#0d0d0c" transparent opacity={0.9} />
+            </mesh>
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.025, 0]}>
+              <ringGeometry args={[0.34, 0.4, 28]} />
+              <meshBasicMaterial color={ACCENT} />
+            </mesh>
+            <Text
+              raycast={NO_RAYCAST}
+              font={MONO}
+              position={[0, 0.03, 0.02]}
+              rotation={[-Math.PI / 2, 0, 0]}
+              fontSize={0.42}
+              color={ACCENT}
+              anchorX="center"
+              anchorY="middle"
+            >
+              ⚡
+            </Text>
+          </>
+        )}
+        {wp.kind === 'inspect' && checkpoint && (
+          <>
+            {/* checkpoint: diamond plate + center dot — the "stop & check" mark */}
+            <mesh rotation={[-Math.PI / 2, 0, Math.PI / 4]} position={[0, 0.02, 0]}>
+              <ringGeometry args={[0.26, 0.34, 4]} />
               <meshBasicMaterial color={tone} />
             </mesh>
-            <mesh position={[0, 0.06, 0]}>
-              <cylinderGeometry args={[0.1, 0.1, 0.12, 16]} />
-              <meshBasicMaterial color={tone} />
+            <mesh rotation={[-Math.PI / 2, 0, Math.PI / 4]} position={[0, 0.015, 0]}>
+              <circleGeometry args={[0.26, 4]} />
+              <meshBasicMaterial color="#0d0d0c" transparent opacity={0.72} />
+            </mesh>
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.025, 0]}>
+              <circleGeometry args={[0.07, 12]} />
+              <meshBasicMaterial color={hot ? ACCENT : '#e4e4de'} />
             </mesh>
           </>
         )}
-        {wp.kind === 'inspect' && (
+        {wp.kind === 'inspect' && !checkpoint && (
           <>
+            {/* inspect reticle */}
             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
-              <ringGeometry args={[0.17, 0.23, 28]} />
+              <ringGeometry args={[0.2, 0.27, 28]} />
               <meshBasicMaterial color={tone} />
             </mesh>
             {[0, 90, 180, 270].map((a) => (
-              <mesh key={a} rotation={[-Math.PI / 2, 0, (a / 180) * Math.PI]} position={[0, 0.02, 0]}>
-                <planeGeometry args={[0.13, 0.045]} />
+              <mesh key={a} rotation={[-Math.PI / 2, 0, (a / 180) * Math.PI]} position={[0.31 * Math.cos((a / 180) * Math.PI), 0.02, -0.31 * Math.sin((a / 180) * Math.PI)]}>
+                <planeGeometry args={[0.16, 0.05]} />
                 <meshBasicMaterial color={tone} />
               </mesh>
             ))}
             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
-              <circleGeometry args={[0.05, 12]} />
+              <circleGeometry args={[0.06, 12]} />
               <meshBasicMaterial color={tone} />
             </mesh>
           </>
         )}
         {wp.kind === 'nav' && (
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
-            <ringGeometry args={[0.1, 0.15, 24]} />
-            <meshBasicMaterial color={tone} />
-          </mesh>
+          <>
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
+              <ringGeometry args={[0.09, 0.13, 20]} />
+              <meshBasicMaterial color={tone} transparent opacity={0.8} />
+            </mesh>
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
+              <circleGeometry args={[0.035, 10]} />
+              <meshBasicMaterial color={tone} transparent opacity={0.8} />
+            </mesh>
+          </>
         )}
       </group>
-      <Billboard position={[0, 0.62, 0]}>
-        <Text raycast={NO_RAYCAST} font={MONO} fontSize={0.34} color={hot ? ACCENT : '#78786f'} anchorX="center" anchorY="bottom" letterSpacing={0.04}>
-          {wp.id.replace('WP-', 'W')}
-        </Text>
-        {hover && (
-          <Text raycast={NO_RAYCAST} font={MONO} fontSize={0.3} color="#b6b6b0" anchorX="center" anchorY="top" position={[0, -0.06, 0]}>
-            {wp.name}
-          </Text>
-        )}
-      </Billboard>
+      {/* labels: checkpoints & docks always carry a chip; nav/inspect reveal on hover */}
+      {(checkpoint || wp.kind === 'dock' || hot || hover) && (
+        <LabelChip
+          text={hover ? `${shortId} ${wp.name.toUpperCase()}` : wp.kind === 'dock' ? 'DOCK' : shortId}
+          tone={checkpoint || wp.kind === 'dock' ? '#e4e4de' : '#b6b6b0'}
+          edge={hot ? ACCENT : checkpoint ? '#4a4a44' : '#33332f'}
+          active={hot}
+          y={0.66}
+          size={0.26}
+          pointer
+        />
+      )}
       {order != null && (
-        <Billboard position={[0.5, 0.95, 0]}>
+        <Billboard position={[checkpoint || wp.kind === 'dock' ? 0.85 : 0.55, 1.05, 0]}>
           <mesh raycast={NO_RAYCAST}>
-            <circleGeometry args={[0.24, 24]} />
+            <circleGeometry args={[0.26, 24]} />
             <meshBasicMaterial color={ACCENT} />
           </mesh>
-          <Text raycast={NO_RAYCAST} font={MONO} fontSize={0.28} color="#0a0a0a" anchorX="center" anchorY="middle" fontWeight={700}>
+          <mesh raycast={NO_RAYCAST} position={[0, 0, -0.001]}>
+            <circleGeometry args={[0.3, 24]} />
+            <meshBasicMaterial color="#0c0c0b" />
+          </mesh>
+          <Text raycast={NO_RAYCAST} font={MONO} fontSize={0.3} color="#0a0a0a" anchorX="center" anchorY="middle" fontWeight={700}>
             {String(order)}
           </Text>
         </Billboard>
@@ -342,15 +451,20 @@ function WaypointMark({
   )
 }
 
+/** wrap an angle delta to [-π, π] so headings never take the long way round */
+function shortestArc(from: number, to: number) {
+  return ((((to - from + Math.PI) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) - Math.PI
+}
+
 function RobotPuck({
-  tel,
+  robotId,
   color,
   family,
   callsign,
   selected,
   onClick,
 }: {
-  tel: Telemetry
+  robotId: string
   color: string
   family: string
   callsign: string
@@ -359,10 +473,25 @@ function RobotPuck({
 }) {
   const group = useRef<THREE.Group>(null)
   const ring = useRef<THREE.Mesh>(null)
-  useFrame(({ clock }) => {
-    if (!group.current) return
-    group.current.position.lerp(new THREE.Vector3(tel.x, 0, tel.z), 0.14)
-    group.current.rotation.y = THREE.MathUtils.lerp(group.current.rotation.y, -tel.heading, 0.15)
+  const inited = useRef(false)
+  // telemetry arrives at 4 Hz — read it transiently and glide every frame,
+  // frame-rate independent (exp damping), so motion never stair-steps
+  useFrame(({ clock }, dt) => {
+    const g = group.current
+    const tel = useApp.getState().telemetry[robotId]
+    if (!g) return
+    g.visible = !!tel // no pose yet → stay hidden, never pile up at the origin
+    if (!tel) return
+    if (!inited.current || Math.hypot(g.position.x - tel.x, g.position.z - tel.z) > 5) {
+      g.position.set(tel.x, 0, tel.z)
+      g.rotation.y = -tel.heading
+      inited.current = true
+    } else {
+      const a = 1 - Math.exp(-Math.min(0.1, dt) * 9)
+      g.position.x += (tel.x - g.position.x) * a
+      g.position.z += (tel.z - g.position.z) * a
+      g.rotation.y += shortestArc(g.rotation.y, -tel.heading) * a
+    }
     if (ring.current) {
       const mat = ring.current.material as THREE.MeshBasicMaterial
       if (tel.speed > 0.05) {
@@ -377,7 +506,7 @@ function RobotPuck({
   })
   const tone = selected ? ACCENT : color
   return (
-    <group ref={group}>
+    <group ref={group} visible={false}>
       {/* FOV wedge */}
       <mesh rotation={[-Math.PI / 2, 0, -0.46]} position={[0, 0.03, 0]}>
         <circleGeometry args={[2.35, 26, 0, 0.92]} />
@@ -422,61 +551,109 @@ function RobotPuck({
         <ringGeometry args={[0.4, 0.44, 32]} />
         <meshBasicMaterial color={tone} transparent opacity={0.35} depthWrite={false} />
       </mesh>
-      <Billboard position={[0, 1.05, 0]}>
-        <Text
-          raycast={NO_RAYCAST}
-          font={MONO}
-          fontSize={0.36}
-          color={selected ? ACCENT : '#d8d8d2'}
-          outlineWidth={0.045}
-          outlineColor="#0a0a0a"
-          anchorX="center"
-          anchorY="middle"
-          letterSpacing={0.05}
-        >
-          {callsign}
-        </Text>
-      </Billboard>
+      <LabelChip text={callsign} tone="#e2e2dc" edge={selected ? ACCENT : color} active={selected} y={1.12} size={0.3} pointer />
     </group>
+  )
+}
+
+/** planned-path ribbon — its own 4 Hz subscription so path churn never re-renders the tree */
+function PathLine({ robotId, color, selected }: { robotId: string; color: string; selected: boolean }) {
+  const tel = useApp((s) => s.telemetry[robotId])
+  if (!tel || tel.path.length === 0) return null
+  return (
+    <Line
+      points={[[tel.x, 0.04, tel.z], ...tel.path.map((p) => [p.x, 0.04, p.z] as [number, number, number])]}
+      color={selected ? ACCENT : color}
+      lineWidth={selected ? 2 : 1.2}
+      dashed
+      dashSize={0.32}
+      gapSize={0.22}
+      transparent
+      opacity={selected ? 0.95 : 0.55}
+    />
   )
 }
 
 function EventPin({ x, z, severity, onClick }: { x: number; z: number; severity: string; onClick?: () => void }) {
   const tone = SEVERITY_COLOR[severity as keyof typeof SEVERITY_COLOR] ?? INK2
   const mat = useRef<THREE.MeshBasicMaterial>(null)
-  useFrame(({ clock }) => {
-    if (mat.current && severity === 'critical') mat.current.opacity = 0.55 + 0.45 * Math.sin(clock.elapsedTime * 4)
-  })
+  const pulse = useRef<THREE.Mesh>(null)
   const alarm = severity === 'critical' || severity === 'high'
+  useFrame(({ clock }) => {
+    if (mat.current && severity === 'critical') mat.current.opacity = 0.6 + 0.4 * Math.sin(clock.elapsedTime * 4)
+    if (pulse.current && alarm) {
+      const k = (clock.elapsedTime % 1.9) / 1.9
+      pulse.current.scale.setScalar(0.6 + k * 1.6)
+      ;(pulse.current.material as THREE.MeshBasicMaterial).opacity = 0.5 * (1 - k)
+    }
+  })
+  const stop = onClick
+    ? (e: { stopPropagation: () => void }) => {
+        e.stopPropagation()
+        onClick()
+      }
+    : undefined
+  if (!alarm)
+    return (
+      <group position={[x, 0, z]}>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} onClick={stop}>
+          <ringGeometry args={[0.12, 0.17, 20]} />
+          <meshBasicMaterial color={tone} transparent opacity={0.8} />
+        </mesh>
+      </group>
+    )
   return (
     <group position={[x, 0, z]}>
-      <Billboard position={[0, alarm ? 0.42 : 0.2, 0]}>
-        <mesh
-          onClick={
-            onClick
-              ? (e) => {
-                  e.stopPropagation()
-                  onClick()
-                }
-              : undefined
-          }
-        >
-          {alarm ? <circleGeometry args={[0.26, 3, Math.PI / 2]} /> : <ringGeometry args={[0.12, 0.17, 20]} />}
-          <meshBasicMaterial ref={mat} color={tone} transparent side={THREE.DoubleSide} />
+      {/* ground pulse anchors “where”, the leader line lifts the badge clear of clutter */}
+      <mesh ref={pulse} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} raycast={NO_RAYCAST}>
+        <ringGeometry args={[0.24, 0.3, 28]} />
+        <meshBasicMaterial color={tone} transparent opacity={0.4} depthWrite={false} />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.025, 0]}>
+        <circleGeometry args={[0.09, 14]} />
+        <meshBasicMaterial color={tone} />
+      </mesh>
+      <mesh position={[0, 0.42, 0]} raycast={NO_RAYCAST}>
+        <cylinderGeometry args={[0.012, 0.012, 0.8, 5]} />
+        <meshBasicMaterial color={tone} transparent opacity={0.55} depthTest={false} />
+      </mesh>
+      {/* alarm badge: outlined triangle + ! — renders through buildings, alarms are never hidden */}
+      <Billboard position={[0, 1.0, 0]} renderOrder={40}>
+        <mesh onClick={stop} renderOrder={40}>
+          <circleGeometry args={[0.33, 3, Math.PI / 2]} />
+          <meshBasicMaterial color="#0c0c0b" transparent opacity={0.9} depthTest={false} />
         </mesh>
+        <mesh raycast={NO_RAYCAST} renderOrder={41} position={[0, 0, 0.001]}>
+          <ringGeometry args={[0.26, 0.315, 3, 1, Math.PI / 2]} />
+          <meshBasicMaterial ref={mat} color={tone} transparent depthTest={false} />
+        </mesh>
+        <Text
+          raycast={NO_RAYCAST}
+          font={MONO}
+          renderOrder={42}
+          position={[0, -0.045, 0.002]}
+          fontSize={0.3}
+          color={tone}
+          anchorX="center"
+          anchorY="middle"
+          fontWeight={700}
+          material-depthTest={false}
+        >
+          !
+        </Text>
       </Billboard>
     </group>
   )
 }
 
 /** frame the whole yard for this viewport: distance from both FOV axes */
-function fitHome(width: number, height: number, fovDeg: number) {
+function fitHome(width: number, height: number, fovDeg: number, span: { w: number; d: number }) {
   const aspect = width / Math.max(1, height)
   const vfov = (fovDeg * Math.PI) / 180
   const hfov = 2 * Math.atan(Math.tan(vfov / 2) * aspect)
-  const dV = 21 / (2 * Math.tan(vfov / 2))
-  const dH = 35 / (2 * Math.tan(hfov / 2))
-  const dist = Math.min(58, Math.max(dV, dH) * 1.05)
+  const dV = (span.d + 3) / (2 * Math.tan(vfov / 2))
+  const dH = (span.w + 3) / (2 * Math.tan(hfov / 2))
+  const dist = Math.min(72, Math.max(dV, dH) * 1.05)
   const dir = new THREE.Vector3(0, 0.76, 0.65).normalize()
   return { pos: dir.multiplyScalar(dist).add(new THREE.Vector3(0, 0, 0.5)), tgt: new THREE.Vector3(0, 0, 0.5) }
 }
@@ -484,17 +661,20 @@ function fitHome(width: number, height: number, fovDeg: number) {
 function CameraRig({
   controls,
   homeRef,
+  span,
 }: {
   controls: React.RefObject<MapControlsImpl | null>
   homeRef: React.MutableRefObject<{ pos: THREE.Vector3; tgt: THREE.Vector3 }>
+  span: { w: number; d: number }
 }) {
   const size = useThree((s) => s.size)
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera
-  const framed = useRef(false)
+  const framedFor = useRef('')
   useEffect(() => {
-    if (framed.current || size.width < 60 || size.height < 60) return
-    framed.current = true
-    const home = fitHome(size.width, size.height, camera.fov)
+    const key = `${span.w}x${span.d}`
+    if (framedFor.current === key || size.width < 60 || size.height < 60) return
+    framedFor.current = key
+    const home = fitHome(size.width, size.height, camera.fov, span)
     homeRef.current = home
     camera.position.copy(home.pos)
     if (controls.current) {
@@ -503,7 +683,7 @@ function CameraRig({
     } else {
       camera.lookAt(home.tgt)
     }
-  }, [size, camera, controls, homeRef])
+  }, [size, camera, controls, homeRef, span])
   return null
 }
 
@@ -546,7 +726,6 @@ export function Map3D({
   const robots = useApp((s) => s.robots)
   const waypoints = useApp((s) => s.waypoints)
   const buildings = useApp((s) => s.buildings)
-  const telemetry = useApp((s) => s.telemetry)
   const events = useApp((s) => s.events)
   const t = useT()
   const canOperate = useCan('operator')
@@ -560,6 +739,9 @@ export function Map3D({
   )
 
   if (!site) return <div className={`skeleton ${heightClass} ${className}`} />
+
+  const bounds = { x: site.bounds.x as [number, number], z: site.bounds.z as [number, number] }
+  const span = { w: bounds.x[1] - bounds.x[0], d: bounds.z[1] - bounds.z[0] }
 
   const deselect = () => {
     onSelect?.(null)
@@ -591,7 +773,7 @@ export function Map3D({
           })
         }
       >
-        <CameraRig controls={controls} homeRef={homeRef} />
+        <CameraRig controls={controls} homeRef={homeRef} span={span} />
         <ambientLight intensity={0.85} />
         <hemisphereLight args={['#3a3a38', '#181816', 0.5]} />
         <directionalLight
@@ -606,7 +788,7 @@ export function Map3D({
           shadow-bias={-0.0004}
         />
         <Suspense fallback={null}>
-          <Ground />
+          <Ground bounds={bounds} />
           {site.map && <OccupancyUnderlay map={site.map} />}
           <Zones labels={labels} />
           <Buildings buildings={buildings} onMiss={interactive ? deselect : undefined} />
@@ -664,27 +846,15 @@ export function Map3D({
             />
           ))}
 
-          {/* planned paths + robots */}
+          {/* planned paths + robots — pose glides per-frame off transient reads;
+              only the path ribbon re-renders on the 4 Hz telemetry beat */}
           {robots.map((r) => {
-            const tel = telemetry[r.id]
-            if (!tel) return null
             const sel = selection?.kind === 'robot' && selection.id === r.id
             return (
               <group key={r.id}>
-                {tel.path.length > 0 && (
-                  <Line
-                    points={[[tel.x, 0.04, tel.z], ...tel.path.map((p) => [p.x, 0.04, p.z] as [number, number, number])]}
-                    color={sel ? ACCENT : r.color}
-                    lineWidth={sel ? 2 : 1.2}
-                    dashed
-                    dashSize={0.32}
-                    gapSize={0.22}
-                    transparent
-                    opacity={sel ? 0.95 : 0.55}
-                  />
-                )}
+                <PathLine robotId={r.id} color={r.color} selected={!!sel} />
                 <RobotPuck
-                  tel={tel}
+                  robotId={r.id}
                   color={r.color}
                   family={r.family}
                   callsign={r.callsign}
@@ -704,7 +874,7 @@ export function Map3D({
           enableDamping
           dampingFactor={0.12}
           minDistance={7}
-          maxDistance={60}
+          maxDistance={78}
           maxPolarAngle={Math.PI * 0.44}
           minPolarAngle={0.1}
         />
@@ -774,6 +944,13 @@ export function Map3D({
           <div className="hidden items-center gap-3 sm:flex">
             {(
               [
+                [
+                  'map.lg.checkpoint',
+                  <svg key="c" viewBox="-0.42 -0.42 0.84 0.84" className="h-3 w-3">
+                    <rect x={-0.24} y={-0.24} width={0.48} height={0.48} fill="none" stroke="#c9c9c2" strokeWidth={0.06} transform="rotate(45)" />
+                    <circle r={0.07} fill="#e4e4de" />
+                  </svg>,
+                ],
                 [
                   'map.lg.inspect',
                   <svg key="i" viewBox="-0.42 -0.42 0.84 0.84" className="h-3 w-3">
