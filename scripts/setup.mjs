@@ -70,6 +70,16 @@ const FOOTAGE = {
   'perimeter.mp4': 'https://assets.mixkit.co/videos/36318/36318-720.mp4', // night container yard — perimeter cam
   'corridor.mp4': 'https://assets.mixkit.co/videos/23378/23378-720.mp4', // machine corridor walk-through
   'tanknight.mp4': 'https://assets.mixkit.co/videos/4360/4360-720.mp4', // petrochemical plant at night
+  // ---- Campus East security patrol footage ----
+  'campus_quad.mp4': 'https://assets.mixkit.co/videos/4560/4560-720.mp4', // students w/ backpacks crossing the quad
+  'campus_gate.mp4': 'https://assets.mixkit.co/videos/4503/4503-720.mp4', // students exiting a teaching building
+  'campus_walk.mp4': 'https://assets.mixkit.co/videos/6252/6252-720.mp4', // main walkway pedestrians
+  'library_aisle.mp4': 'https://assets.mixkit.co/videos/21589/21589-720.mp4', // library corridor walkthrough
+  'theft_cctv.mp4': 'https://assets.mixkit.co/videos/31372/31372-720.mp4', // CCTV: pair stuffing backpacks — bag-event evidence
+  'intruder.mp4': 'https://assets.mixkit.co/videos/12830/12830-720.mp4', // intruder looks up at the camera
+  'parking_night.mp4': 'https://assets.mixkit.co/videos/40735/40735-720.mp4', // parking structure at night
+  'night_walkway.mp4': 'https://assets.mixkit.co/videos/40640/40640-720.mp4', // illuminated walkway at night — perimeter round
+  'stadium_field.mp4': 'https://assets.mixkit.co/videos/14190/14190-720.mp4', // low flight over the field — mast cam
 }
 
 // ---------- robots (DeepRobotics official models + Clearpath Husky) ----------
@@ -196,10 +206,10 @@ await filteredFeed('thermal.mp4', 'smokestack.mp4', 'format=gray,format=gbrp,pse
 await filteredFeed('ogi.mp4', 'pumpjack.mp4', 'format=gray,eq=contrast=1.55:brightness=-0.06,unsharp=5:5:0.8,noise=alls=5:allf=t,scale=960:-2')
 
 console.log('[2/4] data-saver variants (640p, capped bitrate — slow-link playback)')
-for (const name of [
-  'switchgear.mp4', 'substation.mp4', 'plant_aerial.mp4', 'perimeter.mp4', 'corridor.mp4',
-  'tanknight.mp4', 'staging.mp4', 'thermal.mp4', 'ogi.mp4',
-]) await lowVariant(name)
+// every loop in media/ gets a twin — a hardcoded list silently skips new channels
+const { readdirSync } = await import('node:fs')
+for (const name of readdirSync(join(ROOT, 'server', 'media')).filter((f) => f.endsWith('.mp4') && !f.endsWith('.low.mp4')))
+  await lowVariant(name)
 
 console.log('[3/4] DeepRobotics URDF models (DeepRoboticsLab/deep_robotics_model)')
 for (const [rel, spec] of Object.entries(ROBOT_FILES)) {

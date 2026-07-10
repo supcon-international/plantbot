@@ -149,6 +149,12 @@ const DETAILS: Record<string, () => string> = {
   ppe: () => `${5 + Math.floor(Math.random() * 3)}/8 operators in frame, all compliant`,
   motion: () => 'Filtered as wildlife / vegetation sway · no action',
   acoustic: () => `38 kHz band energy +${(6 + Math.random() * 6).toFixed(1)} dB at bushing`,
+  // campus security vocabulary
+  'unattended-bag': () => `Backpack static ${(3 + Math.random() * 7).toFixed(0)} min · no owner within ${(3 + Math.random() * 6).toFixed(0)} m`,
+  crowding: () => `~${(18 + Math.random() * 40).toFixed(0)} people in queue box · density ${(1.6 + Math.random() * 1.8).toFixed(1)} p/m²`,
+  fall: () => `Person down ${(6 + Math.random() * 20).toFixed(0)}s, not recovering · dispatching nearest unit`,
+  'ebike-blocking': () => `E-bike parked across egress line · plate readable, owner paging queued`,
+  tailgating: () => `${2 + Math.floor(Math.random() * 2)} entries on one credential in ${(3 + Math.random() * 4).toFixed(1)}s`,
 }
 
 const WEIGHTS: Record<string, number> = {
@@ -335,6 +341,7 @@ export class World {
       { id: 'fault', label: 'robot fault', severity: 'high' as Severity, detail: 'Robot health stream', builtin: true },
     ]
     for (const r of this.robots) this.initNav(r)
+    for (const t of def.eventTypeSeeds ?? []) this.addEventType(t)
     for (const s of def.ruleSeeds) this.addRule({ kind: 'sim', ...s, enabled: true, builtin: true })
     this.seedReadings()
   }
@@ -614,22 +621,24 @@ export class World {
     return [...ids]
   }
 
-  /** integration API: adapter posts a batch of readings */
+  /** integration API: adapter posts a batch of readings (accepted ones broadcast like sim readings) */
   ingestReadings(robotId: string, items: { metric: string; value: number; ts?: number; payloadId?: string; quality?: Reading['quality'] }[]): number {
-    let n = 0
+    const accepted: Reading[] = []
     for (const it of items) {
       if (typeof it.value !== 'number' || !METRIC_DEFS.some((d) => d.id === it.metric)) continue
-      this.pushReading({
+      const rd: Reading = {
         robotId,
         payloadId: it.payloadId ?? 'adapter',
         metric: it.metric,
         value: it.value,
         ts: it.ts ?? Date.now(),
         quality: it.quality ?? 'ok',
-      })
-      n++
+      }
+      this.pushReading(rd)
+      accepted.push(rd)
     }
-    return n
+    if (accepted.length) this.onReadings?.(accepted)
+    return accepted.length
   }
 
   /** simulated sensor values — smooth bands with the odd excursion */
@@ -876,10 +885,11 @@ export class World {
       const ev = this.events.find((e) => e.id === evId)
       if (!ev || !ev.verification || ev.verification.state !== 'pending') continue
       const rule = this.rules.find((r) => r.id === ev.ruleId)
-      const confirmed = ev.confidence >= 0.75
+      const confirmed = ev.confidence >= (ev.ruleId === 'EXT' ? 0.65 : 0.75)
+      const prompt = rule?.verify?.promptTemplate
       ev.verification = confirmed
-        ? { state: 'confirmed', by: 'llm', note: `Matches “${rule?.verify?.promptTemplate ?? 'prompt'}” · frame re-checked` }
-        : { state: 'rejected', by: 'llm', note: 'Subject not present on re-check — likely false positive' }
+        ? { state: 'confirmed', by: 'llm', note: prompt ? `Matches “${prompt}” · frame re-checked` : 'External claim re-checked against evidence · subject present' }
+        : { state: 'rejected', by: 'llm', note: ev.ruleId === 'EXT' ? 'External claim not reproducible from evidence — auto-dismissed' : 'Subject not present on re-check — likely false positive' }
       if (!confirmed) {
         ev.lifecycle = 'dismissed'
         ev.acked = true
@@ -971,7 +981,14 @@ export class World {
       x: +(input.x ?? pos.x).toFixed(2),
       z: +(input.z ?? pos.z).toFixed(2),
     }
+    // trust gate: low-confidence claims from external systems get the same
+    // second-stage vetting as our own detectors before reaching operators
+    if (input.confidence !== undefined && input.confidence < 0.8) {
+      ev.verification = { state: 'pending', by: 'llm' }
+      this.verifyDue.set(ev.id, Date.now() + 3000 + Math.random() * 6000)
+    }
     this.pushEvent(ev)
+    this.onEvent?.(ev) // external events are always live — broadcast at the source
     return ev
   }
 
@@ -1772,7 +1789,7 @@ export class World {
         const sched = this.createSchedule({
           templateId: t.id,
           assign: seed.requestedRobot === 'auto' ? { kind: 'auto' } : { kind: 'robot', robotId: seed.requestedRobot },
-          cadence: { kind: 'interval', everyMin: 4 + Math.floor(Math.random() * 3) },
+          cadence: { kind: 'interval', everyMin: seed.everyMin ?? 4 + Math.floor(Math.random() * 3) },
           priority: seed.priority,
           firstDelayMs: stagger,
         })

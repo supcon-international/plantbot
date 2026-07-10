@@ -28,6 +28,24 @@ const SOURCE: Record<string, string> = {
   'go2b-front': 'corridor.mp4',
   'berth-cam': 'perimeter.mp4',
   'tankrow-cam': 'tanknight.mp4',
+  // Campus East · security patrol
+  'gs1-front': 'campus_quad.mp4',
+  'gs1-rear': 'theft_cctv.mp4',
+  'gs2-front': 'campus_walk.mp4',
+  'go2c1-front': 'campus_walk.mp4',
+  'go2c2-front': 'library_aisle.mp4',
+  'lite3c-front': 'library_aisle.mp4',
+  'x30c1-optical': 'night_walkway.mp4',
+  'x30c1-thermal': 'thermal.mp4',
+  'x30c2-optical': 'campus_gate.mp4',
+  'hskc1-front': 'parking_night.mp4',
+  'hskc2-front': 'campus_quad.mp4',
+  'anyc-front': 'corridor.mp4',
+  'anyc-gas': 'ogi.mp4',
+  'gate-cam': 'campus_gate.mp4',
+  'perimeter-cam-c': 'intruder.mp4',
+  'stadium-cam': 'stadium_field.mp4',
+  'lot-cam': 'parking_night.mp4',
 }
 
 const durCache = new Map<string, number>()

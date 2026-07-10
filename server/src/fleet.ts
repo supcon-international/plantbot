@@ -174,6 +174,10 @@ export const METRIC_DEFS: MetricDef[] = [
   { id: 'uls.db', label: '38 kHz band', unit: 'dB', kind: 'gauge', nominal: [0, 11], decimals: 1 },
   { id: 'ch4.ppmm', label: 'CH₄ column', unit: 'ppm·m', kind: 'gauge', nominal: [0, 600], decimals: 0 },
   { id: 'vib.g', label: 'vibration', unit: 'g', kind: 'gauge', nominal: [0, 0.4], decimals: 3 },
+  // ambient set — service-patrol units (e.g. Gosuncn F2) report these
+  { id: 'amb.temp.c', label: 'ambient', unit: '°C', kind: 'gauge', nominal: [-5, 38], decimals: 1 },
+  { id: 'amb.rh.pct', label: 'humidity', unit: '%RH', kind: 'gauge', nominal: [20, 85], decimals: 0 },
+  { id: 'noise.db', label: 'noise', unit: 'dB(A)', kind: 'gauge', nominal: [30, 70], decimals: 1 },
 ]
 
 /** which metrics a payload kind emits — new sensors are data, not schema */
@@ -406,6 +410,23 @@ export const ROBOT_CATALOG: RobotModelSpec[] = [
       'Proven payload mule for heavy sensor stacks',
       '成熟轮式平台,适合重型传感器载荷',
       'Plataforma UGV para cargas pesadas',
+    ],
+  },
+  {
+    model: 'GS Patrol F2',
+    vendor: 'Gosuncn Robotics 高新兴',
+    family: 'ugv',
+    urdf: '', // third-party unit — connects via the integration API, silhouette twin
+    massKg: 150,
+    ipRating: 'IP55',
+    maxSpeed: 1.6,
+    enduranceMin: 480,
+    protocol: 'Integration API v1 (vendor adapter)',
+    firmware: 'GRobot 5.x',
+    blurb: [
+      'Security service-patrol UGV — PTZ mast, loudspeaker, ambient sensing',
+      '安保服务巡逻机器人——云台桅杆、喊话器、环境感知,经集成 API 接入',
+      'UGV de patrulla de seguridad — conectado vía API de integración',
     ],
   },
 ]

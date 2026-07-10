@@ -743,9 +743,9 @@ app.post(`${I}/events`, async (req: FastifyRequest<{ Body: any }>, reply) => {
   const b = (req.body ?? {}) as any
   if (!b.type) return reply.code(400).send({ error: 'type required (register it under event-types first)' })
   const robot = b.robotSerial ? w.robots.find((r) => r.serial === b.robotSerial) : undefined
+  // ingestEvent broadcasts through World.onEvent — no duplicate fan-out here
   const ev = w.ingestEvent({ ...b, robotId: robot?.id })
   if (!ev) return reply.code(400).send({ error: `unregistered event type '${b.type}'` })
-  broadcast(w.id, { t: 'event', event: ev })
   return { event: ev }
 })
 
@@ -756,11 +756,7 @@ app.post(`${I}/robots/:serial/readings`, async (req: FastifyRequest<{ Params: { 
   const robot = w.robots.find((r) => r.serial === req.params.serial && r.adapter === 'external')
   if (!robot) return reply.code(404).send({ error: 'robot not registered' })
   const items = Array.isArray((req.body as any)?.readings) ? (req.body as any).readings : []
-  const accepted = w.ingestReadings(robot.id, items)
-  if (accepted) {
-    const batch = w.listReadings(robot.id, undefined, Date.now() - 10_000)
-    broadcast(w.id, { t: 'readings', items: batch.slice(-accepted) })
-  }
+  const accepted = w.ingestReadings(robot.id, items) // accepted readings broadcast via World.onReadings
   return { accepted, skipped: items.length - accepted, metrics: METRIC_DEFS.map((d) => d.id) }
 })
 
@@ -809,6 +805,12 @@ app.post(`${I}/maps`, async (req: FastifyRequest<{ Body: any }>, reply) => {
 // ---------- simulation loops ----------
 
 for (const w of worlds.values()) w.seedMissions()
+
+// virtual Gosuncn service-patrol fleet joins Campus East via adapter semantics
+import('./gosim.js').then(({ startGosim }) => {
+  const campus = worlds.get('campus-east')
+  if (campus) startGosim(campus)
+})
 
 let last = Date.now()
 setInterval(() => {
