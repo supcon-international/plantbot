@@ -29,3 +29,4 @@ cd server && node_modules/.bin/tsc --noEmit   # 服务端类型检查（无独�
 - 权限：匿名=viewer 只读；种子账户 `admin/operator/viewer`（默认密码 `plantbot`，生产用 `PB_*_PASSWORD` 环境变量覆盖）。写接口按 `viewer<operator<admin` × 场站授权。
 - 多场站：一个 `World` 实例一个场站（`server/src/world.ts`），新场站在 `server/src/sites.ts` 加 `SiteDef` 即可（含规划器障碍、种子机队/规则/任务）。
 - 集成 API 见 `docs/integration.md`；部署运维见 `docs/deploy.md`。
+- 集成层目标模型（视频流/payload/事件/CV/任务/建图 六域的实体与 API 设计）见 `docs/platform-model.md`；其输入调研（高新兴 GoRobot 平台）见 `docs/gorobot-study.md`。动这六个域的代码前先对照目标模型。
