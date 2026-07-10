@@ -324,6 +324,7 @@ function LabelChip({
   y = 0.7,
   size = 0.3,
   pointer = false,
+  layer = 50,
 }: {
   text: string
   tone?: string
@@ -332,6 +333,8 @@ function LabelChip({
   y?: number
   size?: number
   pointer?: boolean
+  /** transparent-pass ordering: waypoints 50 < robots 60 < alarms 90 */
+  layer?: number
 }) {
   const P = useMapTheme()
   const w = text.length * size * 0.64 + size * 1.1
@@ -341,17 +344,17 @@ function LabelChip({
   return (
     <Billboard position={[0, y, 0]}>
       <group raycast={NO_RAYCAST}>
-        {/* backing plate + hairline edge */}
-        <mesh raycast={NO_RAYCAST}>
+        {/* opaque backing plate + hairline edge — see-through plates read as smudge */}
+        <mesh raycast={NO_RAYCAST} renderOrder={layer + 1}>
           <planeGeometry args={[w, h]} />
-          <meshBasicMaterial color={bg} transparent opacity={active ? 0.96 : 0.86} depthWrite={false} />
+          <meshBasicMaterial color={bg} transparent opacity={active ? 0.98 : 0.94} depthWrite={false} />
         </mesh>
-        <mesh raycast={NO_RAYCAST} position={[0, 0, -0.001]}>
+        <mesh raycast={NO_RAYCAST} position={[0, 0, -0.001]} renderOrder={layer}>
           <planeGeometry args={[w + 0.05, h + 0.05]} />
-          <meshBasicMaterial color={edge ?? (active ? P.accent : P.chipEdge)} transparent opacity={active ? 1 : 0.9} depthWrite={false} />
+          <meshBasicMaterial color={edge ?? (active ? P.accent : P.chipEdge)} transparent opacity={active ? 1 : 0.96} depthWrite={false} />
         </mesh>
         {pointer && (
-          <mesh raycast={NO_RAYCAST} position={[0, -h / 2 - 0.07, 0]} rotation={[0, 0, Math.PI]}>
+          <mesh raycast={NO_RAYCAST} position={[0, -h / 2 - 0.07, 0]} rotation={[0, 0, Math.PI]} renderOrder={layer}>
             <circleGeometry args={[0.09, 3, Math.PI / 2]} />
             <meshBasicMaterial color={edge ?? P.chipEdge} transparent opacity={0.95} depthWrite={false} />
           </mesh>
@@ -364,6 +367,7 @@ function LabelChip({
           anchorX="center"
           anchorY="middle"
           letterSpacing={0.08}
+          renderOrder={layer + 2}
         >
           {text}
         </Text>
@@ -617,7 +621,7 @@ function RobotPuck({
         <ringGeometry args={[0.4, 0.44, 32]} />
         <meshBasicMaterial color={tone} transparent opacity={0.35} depthWrite={false} />
       </mesh>
-      <LabelChip text={callsign} edge={selected ? P.accent : P.unit(color)} active={selected} y={1.12} size={0.3} pointer />
+      <LabelChip text={callsign} edge={selected ? P.accent : P.unit(color)} active={selected} y={1.12} size={0.3} pointer layer={60} />
     </group>
   )
 }
@@ -643,18 +647,30 @@ function PathLine({ robotId, color, selected }: { robotId: string; color: string
   )
 }
 
-function EventPin({ x, z, severity, onClick }: { x: number; z: number; severity: string; onClick?: () => void }) {
+function EventPin({
+  x,
+  z,
+  severity,
+  count = 1,
+  onClick,
+}: {
+  x: number
+  z: number
+  severity: string
+  count?: number
+  onClick?: () => void
+}) {
   const P = useMapTheme()
   const tone = P.sev[severity] ?? P.sev.info
   const mat = useRef<THREE.MeshBasicMaterial>(null)
   const pulse = useRef<THREE.Mesh>(null)
   const alarm = severity === 'critical' || severity === 'high'
   useFrame(({ clock }) => {
-    if (mat.current && severity === 'critical') mat.current.opacity = 0.6 + 0.4 * Math.sin(clock.elapsedTime * 4)
+    if (mat.current && severity === 'critical') mat.current.opacity = 0.65 + 0.35 * Math.sin(clock.elapsedTime * 4)
     if (pulse.current && alarm) {
       const k = (clock.elapsedTime % 1.9) / 1.9
       pulse.current.scale.setScalar(0.6 + k * 1.6)
-      ;(pulse.current.material as THREE.MeshBasicMaterial).opacity = 0.5 * (1 - k)
+      ;(pulse.current.material as THREE.MeshBasicMaterial).opacity = 0.55 * (1 - k)
     }
   })
   const stop = onClick
@@ -668,7 +684,7 @@ function EventPin({ x, z, severity, onClick }: { x: number; z: number; severity:
       <group position={[x, 0, z]}>
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} onClick={stop}>
           <ringGeometry args={[0.12, 0.17, 20]} />
-          <meshBasicMaterial color={tone} transparent opacity={0.8} />
+          <meshBasicMaterial color={tone} transparent opacity={0.9} />
         </mesh>
       </group>
     )
@@ -677,33 +693,36 @@ function EventPin({ x, z, severity, onClick }: { x: number; z: number; severity:
       {/* ground pulse anchors “where”, the leader line lifts the badge clear of clutter */}
       <mesh ref={pulse} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} raycast={NO_RAYCAST}>
         <ringGeometry args={[0.24, 0.3, 28]} />
-        <meshBasicMaterial color={tone} transparent opacity={0.4} depthWrite={false} />
+        <meshBasicMaterial color={tone} transparent opacity={0.5} depthWrite={false} />
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.025, 0]}>
         <circleGeometry args={[0.09, 14]} />
         <meshBasicMaterial color={tone} />
       </mesh>
-      <mesh position={[0, 0.42, 0]} raycast={NO_RAYCAST}>
-        <cylinderGeometry args={[0.012, 0.012, 0.8, 5]} />
-        <meshBasicMaterial color={tone} transparent opacity={0.55} depthTest={false} />
+      <mesh position={[0, 0.6, 0]} raycast={NO_RAYCAST} renderOrder={89}>
+        <cylinderGeometry args={[0.014, 0.014, 1.15, 5]} />
+        <meshBasicMaterial color={tone} transparent opacity={0.75} depthTest={false} depthWrite={false} />
       </mesh>
-      {/* alarm badge: outlined triangle + ! — renders through buildings, alarms are never hidden */}
-      <Billboard position={[0, 1.0, 0]} renderOrder={40}>
-        <mesh onClick={stop} renderOrder={40}>
-          <circleGeometry args={[0.33, 3, Math.PI / 2]} />
-          <meshBasicMaterial color={P.chipBg} transparent opacity={0.9} depthTest={false} />
+      {/* solid alarm badge — paper keyline, severity-filled triangle, inverse “!”.
+          One renderOrder block ABOVE all label chips: overlaps read as a badge
+          sitting on top, never as shapes threaded through text. Renders through
+          buildings — alarms are never hidden. */}
+      <Billboard position={[0, 1.36, 0]}>
+        <mesh onClick={stop} renderOrder={90} position={[0, -0.03, 0]}>
+          <circleGeometry args={[0.42, 3, Math.PI / 2]} />
+          <meshBasicMaterial color={P.chipBg} transparent opacity={0.97} depthTest={false} depthWrite={false} />
         </mesh>
-        <mesh raycast={NO_RAYCAST} renderOrder={41} position={[0, 0, 0.001]}>
-          <ringGeometry args={[0.26, 0.315, 3, 1, Math.PI / 2]} />
-          <meshBasicMaterial ref={mat} color={tone} transparent depthTest={false} />
+        <mesh raycast={NO_RAYCAST} renderOrder={91} position={[0, 0, 0.001]}>
+          <circleGeometry args={[0.34, 3, Math.PI / 2]} />
+          <meshBasicMaterial ref={mat} color={tone} transparent depthTest={false} depthWrite={false} />
         </mesh>
         <Text
           raycast={NO_RAYCAST}
           font={MONO}
-          renderOrder={42}
-          position={[0, -0.045, 0.002]}
+          renderOrder={92}
+          position={[0, -0.075, 0.002]}
           fontSize={0.3}
-          color={tone}
+          color={P.badgeInk}
           anchorX="center"
           anchorY="middle"
           fontWeight={700}
@@ -711,6 +730,28 @@ function EventPin({ x, z, severity, onClick }: { x: number; z: number; severity:
         >
           !
         </Text>
+        {count > 1 && (
+          <group position={[0.4, 0.28, 0.003]}>
+            <mesh raycast={NO_RAYCAST} renderOrder={92}>
+              <circleGeometry args={[0.19, 20]} />
+              <meshBasicMaterial color={P.chipText} transparent opacity={0.97} depthTest={false} depthWrite={false} />
+            </mesh>
+            <Text
+              raycast={NO_RAYCAST}
+              font={MONO}
+              renderOrder={93}
+              position={[0, 0, 0.001]}
+              fontSize={0.22}
+              color={P.chipBg}
+              anchorX="center"
+              anchorY="middle"
+              fontWeight={700}
+              material-depthTest={false}
+            >
+              {count > 9 ? '9+' : String(count)}
+            </Text>
+          </group>
+        )}
       </Billboard>
     </group>
   )
@@ -840,10 +881,27 @@ export function Map3D({
   const controls = useRef<MapControlsImpl>(null)
   const homeRef = useRef({ pos: HOME.pos.clone(), tgt: HOME.tgt.clone() })
 
-  const pins = useMemo(
-    () => (showEvents ? events.filter((e) => !e.acked).slice(0, 24) : []),
-    [events, showEvents],
-  )
+  // cluster neighbouring open events (≤1.8 m) — one badge with a count
+  // instead of a thicket of overlapping triangles at a hot spot
+  const pins = useMemo(() => {
+    if (!showEvents) return []
+    const open = events.filter((e) => !e.acked).slice(0, 32)
+    const rank: Record<string, number> = { critical: 3, high: 2, info: 1, low: 0 }
+    const clusters: { id: string; x: number; z: number; severity: string; count: number }[] = []
+    for (const e of open) {
+      const hit = clusters.find((c) => Math.hypot(c.x - e.x, c.z - e.z) < 1.8)
+      if (hit) {
+        hit.count++
+        if ((rank[e.severity] ?? 0) > (rank[hit.severity] ?? 0)) {
+          hit.severity = e.severity
+          hit.id = e.id // clicking opens the most severe member
+        }
+      } else {
+        clusters.push({ id: e.id, x: e.x, z: e.z, severity: e.severity, count: 1 })
+      }
+    }
+    return clusters.slice(0, 24)
+  }, [events, showEvents])
 
   if (!site) return <div className={`skeleton ${heightClass} ${className}`} />
 
@@ -943,13 +1001,14 @@ export function Map3D({
             )
           })}
 
-          {/* event pins */}
+          {/* event pins (clustered) */}
           {pins.map((e) => (
             <EventPin
               key={e.id}
               x={e.x}
               z={e.z}
               severity={e.severity}
+              count={e.count}
               onClick={interactive ? () => onSelect?.({ kind: 'event', id: e.id }) : undefined}
             />
           ))}
