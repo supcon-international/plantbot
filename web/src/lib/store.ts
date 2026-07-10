@@ -3,16 +3,26 @@ import { persist } from 'zustand/middleware'
 import { BASE } from './base'
 import type {
   Building,
+  Channel,
+  Command,
   DetectionEvent,
   DetectionRule,
+  EventLifecycle,
   EventTypeDef,
+  FrameTransform,
+  MapAsset,
   Me,
+  MetricDef,
   Mission,
+  MissionTemplate,
+  Reading,
   Role,
   RobotSpec,
+  Schedule,
   SiteCamera,
   SiteInfo,
   SiteSummary,
+  StreamSession,
   Telemetry,
   Waypoint,
   Zone,
@@ -112,22 +122,43 @@ interface AppState {
   zones: Zone[]
   buildings: Building[]
   missions: Mission[]
+  templates: MissionTemplate[]
+  schedules: Schedule[]
   rules: DetectionRule[]
   eventTypes: EventTypeDef[]
+  channels: Channel[]
+  maps: MapAsset[]
+  transforms: FrameTransform[]
+  metricDefs: MetricDef[]
   telemetry: Record<string, Telemetry>
   history: Record<string, HistoryPoint[]>
+  /** robotId|metric → recent readings ring */
+  readings: Record<string, Reading[]>
   events: DetectionEvent[]
   toast?: DetectionEvent
   clock: number
+  setLifecycle: (id: string, to: EventLifecycle) => void
   ack: (id: string) => void
   dismissToast: () => void
 }
 
 const EMPTY_HISTORY: HistoryPoint[] = []
+const EMPTY_READINGS: Reading[] = []
 
 /** stable-reference history selector (avoids getSnapshot loops) */
 export function useHistory(id?: string) {
   return useApp((s) => (id ? (s.history[id] ?? EMPTY_HISTORY) : EMPTY_HISTORY))
+}
+
+/** stable-reference readings selector for one robot+metric series */
+export function useReadings(robotId?: string, metric?: string) {
+  return useApp((s) => (robotId && metric ? (s.readings[`${robotId}|${metric}`] ?? EMPTY_READINGS) : EMPTY_READINGS))
+}
+
+const LIFECYCLE_PATH: Record<Exclude<EventLifecycle, 'new'>, string> = {
+  acked: 'ack',
+  resolved: 'resolve',
+  dismissed: 'dismiss',
 }
 
 export const useApp = create<AppState>((set) => ({
@@ -139,20 +170,29 @@ export const useApp = create<AppState>((set) => ({
   zones: [],
   buildings: [],
   missions: [],
+  templates: [],
+  schedules: [],
   rules: [],
   eventTypes: [],
+  channels: [],
+  maps: [],
+  transforms: [],
+  metricDefs: [],
   telemetry: {},
   history: {},
+  readings: {},
   events: [],
   clock: Date.now(),
-  ack: async (id: string) => {
-    set((s) => ({ events: s.events.map((e) => (e.id === id ? { ...e, acked: true } : e)) }))
+  setLifecycle: async (id: string, to: EventLifecycle) => {
+    if (to === 'new') return
+    set((s) => ({ events: s.events.map((e) => (e.id === id ? { ...e, lifecycle: to, acked: true } : e)) }))
     try {
-      await sfetch(`/events/${id}/ack`, { method: 'POST' })
+      await sfetch(`/events/${id}/${LIFECYCLE_PATH[to]}`, { method: 'POST' })
     } catch {
       /* optimistic */
     }
   },
+  ack: (id: string) => useApp.getState().setLifecycle(id, 'acked'),
   dismissToast: () => set({ toast: undefined }),
 }))
 
@@ -216,6 +256,45 @@ export const api = {
     }).then((r) => r.json()),
   deleteEventType: (id: string) => sfetch(`/event-types/${id}`, { method: 'DELETE' }),
   removeExternal: (id: string) => sfetch(`/external-robots/${id}`, { method: 'DELETE' }),
+  // channels + stream sessions (playback is a lease)
+  openSession: (channelId: string) =>
+    sfetch(`/channels/${encodeURIComponent(channelId)}/sessions`, { method: 'POST' }).then(
+      (r) => r.json() as Promise<{ session: StreamSession }>,
+    ),
+  // readings
+  readings: (robotId: string, metric?: string) =>
+    sfetch(`/robots/${robotId}/readings${metric ? `?metric=${encodeURIComponent(metric)}` : ''}`).then((r) => r.json()),
+  // templates + schedules
+  createTemplate: (body: unknown) =>
+    sfetch('/mission-templates', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then((r) => r.json()),
+  deleteTemplate: (id: string) => sfetch(`/mission-templates/${id}`, { method: 'DELETE' }),
+  createSchedule: (body: unknown) =>
+    sfetch('/schedules', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then((r) => r.json()),
+  patchSchedule: (id: string, body: unknown) =>
+    sfetch(`/schedules/${id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then((r) => r.json()),
+  deleteSchedule: (id: string) => sfetch(`/schedules/${id}`, { method: 'DELETE' }),
+  pauseMission: (id: string) => sfetch(`/missions/${id}/pause`, { method: 'POST' }),
+  resumeMission: (id: string) => sfetch(`/missions/${id}/resume`, { method: 'POST' }),
+  // commands (semantic, server-validated)
+  command: (robotId: string, command: Command) =>
+    sfetch(`/robots/${robotId}/commands`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(command),
+    }).then((r) => r.json()),
+  exportEvents: (lifecycle = 'dismissed') => sfetch(`/events/export?lifecycle=${lifecycle}`),
 }
 
 // ---------- websocket lifecycle (per-site rooms) ----------
@@ -254,10 +333,17 @@ export function startRealtime() {
       zones: [],
       buildings: [],
       missions: [],
+      templates: [],
+      schedules: [],
       rules: [],
       eventTypes: [],
+      channels: [],
+      maps: [],
+      transforms: [],
+      metricDefs: [],
       telemetry: {},
       history: {},
+      readings: {},
       events: [],
       toast: undefined,
     })
@@ -292,8 +378,14 @@ function connect() {
         zones: msg.zones ?? [],
         buildings: msg.buildings ?? [],
         missions: msg.missions ?? [],
+        templates: msg.templates ?? [],
+        schedules: msg.schedules ?? [],
         rules: msg.rules ?? [],
         eventTypes: msg.eventTypes ?? [],
+        channels: msg.channels ?? [],
+        maps: msg.maps?.maps ?? [],
+        transforms: msg.maps?.transforms ?? [],
+        metricDefs: msg.metricDefs ?? [],
         events: msg.events ?? [],
       })
     } else if (msg.t === 'tel') {
@@ -309,18 +401,46 @@ function connect() {
       useApp.setState({ telemetry: tel, history: hist })
     } else if (msg.t === 'event') {
       const ev = msg.event as DetectionEvent
+      // pending-verification events stay out of the toast lane — the verdict decides
+      const loud = (ev.severity === 'critical' || ev.severity === 'high') && ev.verification?.state !== 'pending'
       useApp.setState((s) => ({
         events: [ev, ...s.events].slice(0, 400),
-        toast: ev.severity === 'critical' || ev.severity === 'high' ? ev : s.toast,
+        toast: loud ? ev : s.toast,
+      }))
+    } else if (msg.t === 'verification') {
+      const ev = msg.event as DetectionEvent
+      useApp.setState((s) => ({
+        events: s.events.map((e) => (e.id === ev.id ? ev : e)),
+        toast:
+          ev.verification?.state === 'confirmed' && (ev.severity === 'critical' || ev.severity === 'high')
+            ? ev
+            : s.toast,
       }))
     } else if (msg.t === 'ack') {
       useApp.setState((s) => ({
-        events: s.events.map((e) => (e.id === msg.id ? { ...e, acked: true } : e)),
+        events: s.events.map((e) => (e.id === msg.id ? { ...e, acked: true, lifecycle: 'acked' } : e)),
       }))
+    } else if (msg.t === 'lifecycle') {
+      useApp.setState((s) => ({
+        events: s.events.map((e) => (e.id === msg.id ? { ...e, lifecycle: msg.lifecycle, acked: true } : e)),
+      }))
+    } else if (msg.t === 'readings') {
+      const readings = { ...useApp.getState().readings }
+      for (const r of msg.items as Reading[]) {
+        const key = `${r.robotId}|${r.metric}`
+        const buf = readings[key] ? [...readings[key], r] : [r]
+        if (buf.length > 150) buf.shift()
+        readings[key] = buf
+      }
+      useApp.setState({ readings })
     } else if (msg.t === 'fleet') {
       useApp.setState({ robots: msg.robots })
     } else if (msg.t === 'missions' || msg.t === 'missionResult') {
-      useApp.setState({ missions: msg.missions })
+      useApp.setState((s) => ({ missions: msg.missions, schedules: msg.schedules ?? s.schedules }))
+    } else if (msg.t === 'templates') {
+      useApp.setState({ templates: msg.templates })
+    } else if (msg.t === 'schedules') {
+      useApp.setState({ schedules: msg.schedules })
     } else if (msg.t === 'rules') {
       useApp.setState({ rules: msg.rules })
     } else if (msg.t === 'eventTypes') {

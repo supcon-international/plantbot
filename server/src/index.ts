@@ -18,7 +18,8 @@ import {
   type ExternalRec,
 } from './config.js'
 import { requestUser, requireRole, issueSession, clearSession, login, publicUser } from './auth.js'
-import { ROBOT_CATALOG, PAYLOAD_CATALOG } from './fleet.js'
+import { ROBOT_CATALOG, PAYLOAD_CATALOG, METRIC_DEFS, type Command } from './fleet.js'
+import { grabFrame } from './frames.js'
 
 const PUB = process.env.PUBLIC_BASE ?? ''
 
@@ -87,8 +88,13 @@ wss.on('connection', (ws, req) => {
       buildings: w.buildings,
       events: w.listEvents(80),
       missions: w.missions,
+      templates: w.templates,
+      schedules: w.schedules,
       rules: w.rules,
       eventTypes: w.eventTypes,
+      metricDefs: METRIC_DEFS,
+      channels: w.channels(),
+      maps: w.maps(),
     }),
   )
   ws.on('close', () => rooms.get(siteId)!.delete(ws))
@@ -97,6 +103,9 @@ wss.on('connection', (ws, req) => {
 
 for (const w of worlds.values()) {
   w.onResult = (m, res) => broadcast(w.id, { t: 'missionResult', missionId: m.id, result: res, missions: w.missions })
+  w.onEvent = (ev) => broadcast(w.id, { t: 'event', event: ev })
+  w.onVerify = (ev) => broadcast(w.id, { t: 'verification', event: ev })
+  w.onReadings = (batch) => broadcast(w.id, { t: 'readings', items: batch })
   for (const r of w.robots) {
     const s = w.nav.get(r.id)
     if (s) s.onResult = (m, res) => broadcast(w.id, { t: 'missionResult', missionId: m.id, result: res, missions: w.missions })
@@ -165,7 +174,9 @@ app.get('/api/sites', async (req) => {
         operator: s.operator,
         role: roleFor(u, s.id),
         robots: w.robots.length,
-        openAlerts: w.events.filter((e) => !e.acked && (e.severity === 'critical' || e.severity === 'high')).length,
+        openAlerts: w.events.filter(
+          (e) => e.lifecycle === 'new' && e.verification?.state !== 'pending' && (e.severity === 'critical' || e.severity === 'high'),
+        ).length,
       }
     }),
   }
@@ -256,7 +267,73 @@ app.delete(`${S}/external-robots/:id`, { preHandler: requireRole('admin') }, asy
   return { ok: true }
 })
 
-// -- events --
+// -- channels + stream sessions (playback is a lease, not a getter) --
+
+app.get(`${S}/channels`, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  return { channels: w.channels() }
+})
+
+app.get(`${S}/robots/:id/channels`, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  return { channels: w.channels((req.params as P).id) }
+})
+
+app.post(`${S}/channels/:chId/sessions`, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  const s = w.openSession(decodeURIComponent((req.params as P).chId))
+  if (!s) return reply.code(404).send({ error: 'unknown channel' })
+  return { session: s }
+})
+
+app.post(`${S}/stream-sessions/:sid/renew`, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  const s = w.renewSession((req.params as P).sid)
+  if (!s) return reply.code(404).send({ error: 'unknown session' })
+  return { session: s }
+})
+
+app.delete(`${S}/stream-sessions/:sid`, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  return { ok: w.closeSession((req.params as P).sid) }
+})
+
+app.get(`${S}/channels/:chId/snapshot`, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  const ch = w.channels().find((c) => c.id === decodeURIComponent((req.params as P).chId))
+  if (!ch?.streamKey) return reply.code(404).send({ error: 'channel has no snapshot source' })
+  const frame = await grabFrame(ch.streamKey)
+  if (!frame) return reply.code(503).send({ error: 'snapshot unavailable' })
+  reply.header('cache-control', 'no-store')
+  reply.type('image/jpeg')
+  return reply.send(frame)
+})
+
+// -- payload readings (stable envelope; metrics are registry entries) --
+
+app.get(`${S}/metrics`, async (req: FastifyRequest, reply) => {
+  if (!world(req, reply)) return
+  return { metrics: METRIC_DEFS }
+})
+
+app.get(`${S}/robots/:id/readings`, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  const q = (req.query ?? {}) as Record<string, string>
+  const robotId = (req.params as P).id
+  return {
+    metrics: w.robotMetrics(robotId),
+    readings: w.listReadings(robotId, q.metric || undefined, Number(q.since ?? 0), Number(q.limit ?? 200)),
+  }
+})
+
+// -- events (lifecycle: new → acked → resolved | dismissed) --
 
 app.get(`${S}/events`, async (req: FastifyRequest, reply) => {
   const w = world(req, reply)
@@ -269,8 +346,37 @@ app.post(`${S}/events/:id/ack`, { preHandler: requireRole('operator') }, async (
   if (!w) return
   const ev = w.ackEvent((req.params as P).id)
   if (!ev) return reply.code(404).send({ error: 'not found' })
-  broadcast(w.id, { t: 'ack', id: ev.id })
+  broadcast(w.id, { t: 'lifecycle', id: ev.id, lifecycle: ev.lifecycle })
   return { ok: true }
+})
+
+app.post(`${S}/events/:id/resolve`, { preHandler: requireRole('operator') }, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  const ev = w.setLifecycle((req.params as P).id, 'resolved')
+  if (!ev) return reply.code(404).send({ error: 'not found' })
+  broadcast(w.id, { t: 'lifecycle', id: ev.id, lifecycle: ev.lifecycle })
+  return { ok: true }
+})
+
+app.post(`${S}/events/:id/dismiss`, { preHandler: requireRole('operator') }, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  const ev = w.setLifecycle((req.params as P).id, 'dismissed')
+  if (!ev) return reply.code(404).send({ error: 'not found' })
+  broadcast(w.id, { t: 'lifecycle', id: ev.id, lifecycle: ev.lifecycle })
+  return { ok: true }
+})
+
+/** dismissed events keep their evidence — this is the negative-sample training export */
+app.get(`${S}/events/export`, { preHandler: requireRole('operator') }, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  const lc = String((req.query as any)?.lifecycle ?? 'dismissed')
+  const rows = w.events.filter((e) => e.lifecycle === lc)
+  reply.header('content-disposition', `attachment; filename="${w.id}-events-${lc}.jsonl"`)
+  reply.type('application/x-ndjson')
+  return rows.map((e) => JSON.stringify(e)).join('\n')
 })
 
 // -- rules (admin mutates) --
@@ -396,12 +502,121 @@ app.get(`${S}/integrations`, { preHandler: requireRole('admin') }, async (req: F
   }
 })
 
-// -- missions (operator) --
+// -- mission templates (routes — site-level, reusable) --
+
+app.get(`${S}/mission-templates`, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  return { templates: w.templates }
+})
+
+app.post(`${S}/mission-templates`, { preHandler: requireRole('operator') }, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  const b = (req.body ?? {}) as any
+  if (!b.name || !Array.isArray(b.steps) || !b.steps.length)
+    return reply.code(400).send({ error: 'name and steps[] required' })
+  const t = w.createTemplate({ name: b.name, steps: b.steps })
+  broadcast(w.id, { t: 'templates', templates: w.templates })
+  return { template: t }
+})
+
+app.delete(`${S}/mission-templates/:id`, { preHandler: requireRole('operator') }, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  if (!w.deleteTemplate((req.params as P).id)) return reply.code(404).send({ error: 'not found or builtin' })
+  broadcast(w.id, { t: 'templates', templates: w.templates })
+  broadcast(w.id, { t: 'schedules', schedules: w.schedules })
+  return { ok: true }
+})
+
+// -- schedules (creation IS activation — no separate deploy step) --
+
+app.get(`${S}/schedules`, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  return { schedules: w.schedules }
+})
+
+app.post(`${S}/schedules`, { preHandler: requireRole('operator') }, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  const b = (req.body ?? {}) as any
+  if (!b.templateId || !b.cadence?.kind) return reply.code(400).send({ error: 'templateId and cadence required' })
+  const s = w.createSchedule({ templateId: b.templateId, assign: b.assign, cadence: b.cadence, priority: b.priority })
+  if (!s) return reply.code(404).send({ error: 'unknown template' })
+  broadcast(w.id, { t: 'schedules', schedules: w.schedules })
+  return { schedule: s }
+})
+
+app.patch(`${S}/schedules/:id`, { preHandler: requireRole('operator') }, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  const s = w.patchSchedule((req.params as P).id, (req.body ?? {}) as any)
+  if (!s) return reply.code(404).send({ error: 'not found' })
+  broadcast(w.id, { t: 'schedules', schedules: w.schedules })
+  return { schedule: s }
+})
+
+app.delete(`${S}/schedules/:id`, { preHandler: requireRole('operator') }, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  if (!w.deleteSchedule((req.params as P).id)) return reply.code(404).send({ error: 'not found' })
+  broadcast(w.id, { t: 'schedules', schedules: w.schedules })
+  return { ok: true }
+})
+
+// -- maps (first-class assets + explicit calibration transforms) --
+
+app.get(`${S}/maps`, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  return w.maps()
+})
+
+// -- commands (semantic, server-validated; velocity deadman lives here, not in clients) --
+
+app.post(`${S}/robots/:id/commands`, { preHandler: requireRole('operator') }, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  const b = (req.body ?? {}) as Partial<Command>
+  if (!b.type) return reply.code(400).send({ error: 'type required' })
+  const u = requestUser(req)
+  const rec = w.command((req.params as P).id, b as Command, u?.username ?? 'operator')
+  if (rec.accepted) broadcast(w.id, { t: 'command', record: rec })
+  return { command: rec }
+})
+
+app.get(`${S}/robots/:id/commands`, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  return { commands: w.commandLog.filter((c) => c.robotId === (req.params as P).id).slice(0, 20) }
+})
+
+// -- missions (runs — the execution layer) --
 
 app.get(`${S}/missions`, async (req: FastifyRequest, reply) => {
   const w = world(req, reply)
   if (!w) return
   return { missions: w.missions }
+})
+
+app.post(`${S}/missions/:id/pause`, { preHandler: requireRole('operator') }, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  const m = w.pauseMission((req.params as P).id, true)
+  if (!m) return reply.code(404).send({ error: 'not active' })
+  broadcast(w.id, { t: 'missions', missions: w.missions })
+  return { mission: m }
+})
+
+app.post(`${S}/missions/:id/resume`, { preHandler: requireRole('operator') }, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  const m = w.pauseMission((req.params as P).id, false)
+  if (!m) return reply.code(404).send({ error: 'not active' })
+  broadcast(w.id, { t: 'missions', missions: w.missions })
+  return { mission: m }
 })
 
 app.post(`${S}/missions`, { preHandler: requireRole('operator') }, async (req: FastifyRequest, reply) => {
@@ -416,6 +631,7 @@ app.post(`${S}/missions`, { preHandler: requireRole('operator') }, async (req: F
     requestedRobot: b.requestedRobot ?? 'auto',
     recurring: !!b.recurring,
     steps: b.steps,
+    templateId: b.templateId,
   })
   broadcast(w.id, { t: 'missions', missions: w.missions })
   return { mission: m }
@@ -533,6 +749,21 @@ app.post(`${I}/events`, async (req: FastifyRequest<{ Body: any }>, reply) => {
   return { event: ev }
 })
 
+/** batch payload readings — the stable envelope; unknown metrics are skipped, not schema errors */
+app.post(`${I}/robots/:serial/readings`, async (req: FastifyRequest<{ Params: { serial: string }; Body: any }>, reply) => {
+  const w = integrationSite(req, reply)
+  if (!w) return
+  const robot = w.robots.find((r) => r.serial === req.params.serial && r.adapter === 'external')
+  if (!robot) return reply.code(404).send({ error: 'robot not registered' })
+  const items = Array.isArray((req.body as any)?.readings) ? (req.body as any).readings : []
+  const accepted = w.ingestReadings(robot.id, items)
+  if (accepted) {
+    const batch = w.listReadings(robot.id, undefined, Date.now() - 10_000)
+    broadcast(w.id, { t: 'readings', items: batch.slice(-accepted) })
+  }
+  return { accepted, skipped: items.length - accepted, metrics: METRIC_DEFS.map((d) => d.id) }
+})
+
 /** ROS map_server-style occupancy upload: image is a base64 PNG data URL;
  *  origin = scene coords of the image's TOP-LEFT pixel, x→east, z→south
  *  (from a ROS map.yaml: originX stays, originZ = -(origin_y + height*resolution)) */
@@ -590,9 +821,9 @@ setInterval(() => {
   }
 }, 250)
 
-// mission list state sync (assignments/completions) at 1 Hz
+// mission/schedule state sync (assignments/completions/next-run countdowns) at 1 Hz
 setInterval(() => {
-  for (const w of worlds.values()) broadcast(w.id, { t: 'missions', missions: w.missions })
+  for (const w of worlds.values()) broadcast(w.id, { t: 'missions', missions: w.missions, schedules: w.schedules })
 }, 1000)
 
 function scheduleNextEvent(w: World) {

@@ -230,22 +230,29 @@ type Command =
 - velocity 的 deadman 在**平台侧**:超时未续 → 自动下发停;客户端只表达意图。
 - 南向:命令进现有 AdapterOrder 队列,外部机器人 `GET /orders` 拉单 + `POST /orders/:id/status` 回执。
 
-## 3. 演进路径
+## 3. 落地状态(2026-07-10 全量实施)
 
-**P0(补齐叙事闭环,现有演示直接受益)**
-1. Event 升级:lifecycle 四态 + category(含 robot-fault)+ evidence[](现 snapshot 迁入)+ runId 回链。
-2. Detector.verify(llm 模拟复核)+ Events 页「复核队列」栏 —— 误报洪水叙事。
-3. Mission 拆 Template/Run(数据层拆,UI 复用)+ MissionResult 异常项生成 Event。
+**✅ P0 — 已落地**
+1. Event 升级:lifecycle 四态(ack/resolve/dismiss 端点)+ category(含 robot-fault 流)+ evidence[]
+   + runId 回链(MissionResult 异常项自动生成带 runId 的 Event)。
+2. Detector.verify(llm 模拟复核,3-9s 裁决;confirmed 进队列,rejected 自动 dismissed)
+   + Events 页 VERIFY 视图(待复核/最近裁决/JSONL 负样本导出)。
+3. Mission 拆 Template/Schedule/Run:种子 recurring 任务全部改由 schedule 驱动;
+   requires 能力匹配进入 auto 指派;pause/resume。
 
-**P1(结构就位)**
-4. Channel 资源 + StreamSession 契约(file 源先行,Live 页改走 sessions)。
-5. Reading 信封 + metric 注册表 + Robot 详情读数时序图;threshold-Detector 通路。
-6. Schedule 层(weekly/interval)+ auto 指派(requires 能力匹配)。
+**✅ P1 — 已落地**
+4. Channel 资源(payload/site-camera 派生)+ StreamSession 契约(`POST /channels/:id/sessions`,
+   file 源 `expiresAt:null`,live 源 120s 可续期);Live 页全量改走 sessions。
+5. Reading 信封 + METRIC_DEFS 注册表 + 仿真时序(每 3s,巡检中带 wp 上下文)
+   + Robot 详情 Payload Telemetry 面板;threshold-Detector 通路(带 180s 冷却)。
+6. Schedule 层(once/interval/weekly)+ auto 指派;创建即生效,无「下发」步骤。
 
-**P2(真机接入验证)**
-7. maps 清单 + Transform;splat 配置入库。
-8. integration v1 扩展:channels 声明、readings 上报、evidence 直报;写一个 GoRobot adapter
-   参考实现(tk 保活、getVideoUrl 换 session、80 字段拆三流)验证「薄 adapter」成立。
+**✅ P2 — 平台侧已落地,adapter 参考实现待真机**
+7. `GET /maps` 清单(occupancy/splat)+ Transform 资源(像素→world、world→wgs84 演示锚点);
+   splat 从前端硬编码迁入 SiteDef,无扫描站点自动降级 ops 图层。
+8. integration v1 扩展:`POST /robots/:serial/readings` 批量上报、events 接受
+   evidence/category/runId。GoRobot adapter 参考实现(tk 保活、getVideoUrl 换 session、
+   80 字段拆 state/readings/events 三流)留待真机接入时验证。
 
 ## 4. 明确不做
 

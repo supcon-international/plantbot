@@ -1,12 +1,160 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { ArrowLeft, ArrowUpRight, Plus, ShieldCheck, X } from 'lucide-react'
-import { useApp, useHistory, api, useCan } from '../lib/store'
+import { ArrowLeft, ArrowUpRight, Anchor, Megaphone, Pause, Play, Plus, ShieldCheck, X } from 'lucide-react'
+import { useApp, useReadings, useHistory, api, useCan } from '../lib/store'
 import { useT } from '../lib/i18n'
 import { Panel, PanelHead, Stat, Spark, BatteryBar, ModeChip } from '../components/ui'
 const RobotViewer = lazy(() => import('../three/RobotViewer').then((m) => ({ default: m.RobotViewer })))
 import { KIND_ICON, TwinPlaceholder } from './Robots'
-import type { PayloadSpec } from '../lib/types'
+import type { CommandRecord, PayloadSpec, Reading } from '../lib/types'
+
+/** live payload-readings strip: metric picker + sparkline over the stable envelope */
+function ReadingsPanel({ robotId }: { robotId: string }) {
+  const metricDefs = useApp((s) => s.metricDefs)
+  const allReadings = useApp((s) => s.readings)
+  const t = useT()
+  const metrics = useMemo(
+    () => metricDefs.filter((d) => (allReadings[`${robotId}|${d.id}`] ?? []).length > 0),
+    [metricDefs, allReadings, robotId],
+  )
+  const [metric, setMetric] = useState<string | null>(null)
+  const active = metric ?? metrics[0]?.id
+  const series = useReadings(robotId, active)
+  const def = metricDefs.find((d) => d.id === active)
+
+  // WS only streams deltas — pull the buffered history once on entry
+  useEffect(() => {
+    api.readings(robotId).then((r: { readings?: Reading[] }) => {
+      if (!r.readings?.length) return
+      const merged = { ...useApp.getState().readings }
+      for (const rd of r.readings) {
+        const key = `${rd.robotId}|${rd.metric}`
+        const buf = merged[key] ?? []
+        if (!buf.some((b) => b.ts === rd.ts)) merged[key] = [...buf, rd].sort((a, b) => a.ts - b.ts).slice(-150)
+      }
+      useApp.setState({ readings: merged })
+    }).catch(() => {})
+  }, [robotId])
+
+  if (!metrics.length) return null
+  const last = series[series.length - 1]
+  const outOfBand = def?.nominal && last ? last.value < def.nominal[0] || last.value > def.nominal[1] : false
+  return (
+    <Panel className="rise rise-1">
+      <PanelHead
+        label={t('rd.readings')}
+        right={
+          last && def ? (
+            <span className="mono text-[12px]" style={{ color: outOfBand ? 'var(--color-warn)' : 'var(--color-ink-2)' }}>
+              {last.value.toFixed(def.decimals)} {def.unit}
+              {last.wp ? <span className="ml-1.5 text-[10px] text-ink-3">@{last.wp}</span> : null}
+            </span>
+          ) : undefined
+        }
+      />
+      <div className="p-3.5">
+        <div className="mb-2.5 flex flex-wrap gap-1.5">
+          {metrics.map((d) => (
+            <button
+              key={d.id}
+              onClick={() => setMetric(d.id)}
+              className={`mono border px-1.5 py-0.5 text-[10.5px] tracking-[0.06em] transition-colors ${
+                active === d.id ? 'border-ink/40 bg-ink/10 text-ink' : 'border-line text-ink-3 hover:border-line-2 hover:text-ink-2'
+              }`}
+            >
+              {d.label}
+            </button>
+          ))}
+        </div>
+        <Spark
+          points={series.map((r) => r.value)}
+          min={def?.nominal ? Math.min(def.nominal[0], ...series.map((r) => r.value)) : undefined}
+          max={def?.nominal ? Math.max(def.nominal[1] * 1.15, ...series.map((r) => r.value)) : undefined}
+          w={340}
+          h={44}
+          color={outOfBand ? 'var(--color-warn)' : 'var(--color-accent)'}
+        />
+        {def?.nominal && (
+          <div className="microlabel mt-1.5">
+            {t('rd.nominal')} {def.nominal[0]}–{def.nominal[1]} {def.unit} · {series.length} {t('rd.samples')}
+          </div>
+        )}
+      </div>
+    </Panel>
+  )
+}
+
+/** semantic command console — every press is a server-validated Command resource */
+function CommandPanel({ robotId }: { robotId: string }) {
+  const tel = useApp((s) => s.telemetry[robotId])
+  const missions = useApp((s) => s.missions)
+  const t = useT()
+  const [text, setText] = useState('')
+  const [last, setLast] = useState<CommandRecord | null>(null)
+  const mission = tel?.missionId ? missions.find((m) => m.id === tel.missionId) : undefined
+  const send = async (command: unknown) => {
+    const r = await api.command(robotId, command as never)
+    if (r?.command) setLast(r.command as CommandRecord)
+  }
+  return (
+    <Panel className="rise rise-2">
+      <PanelHead label={t('rd.commands')} right={<span className="mono text-[10.5px] text-ink-3">{t('rd.commandsHint')}</span>} />
+      <div className="space-y-2.5 p-3.5">
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            onClick={() => send({ type: 'dock' })}
+            className="mono flex items-center gap-1.5 border border-line-2 px-2 py-1.5 text-[11px] tracking-[0.06em] text-ink-2 transition-colors hover:border-ink-3 hover:text-ink"
+          >
+            <Anchor size={11} /> {t('rd.cmdDock')}
+          </button>
+          {mission?.status === 'active' && (
+            <button
+              onClick={() => send({ type: mission.paused ? 'resume' : 'pause' })}
+              className="mono flex items-center gap-1.5 border border-line-2 px-2 py-1.5 text-[11px] tracking-[0.06em] text-ink-2 transition-colors hover:border-ink-3 hover:text-ink"
+            >
+              {mission.paused ? <Play size={11} /> : <Pause size={11} />} {mission.paused ? t('mi.resume') : t('mi.pause')}
+            </button>
+          )}
+        </div>
+        <div className="flex gap-1.5">
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && text.trim()) {
+                send({ type: 'announce', text: text.trim() })
+                setText('')
+              }
+            }}
+            placeholder={t('rd.announcePh')}
+            className="mono min-w-0 flex-1 border border-line-2 bg-surface-2 px-2.5 py-1.5 text-[12px] text-ink outline-none focus:border-ink-3"
+          />
+          <button
+            disabled={!text.trim()}
+            onClick={() => {
+              send({ type: 'announce', text: text.trim() })
+              setText('')
+            }}
+            className="mono flex items-center gap-1.5 border border-ink/30 bg-ink/10 px-2.5 py-1.5 text-[11px] tracking-[0.08em] text-ink transition-colors hover:bg-ink/15 disabled:opacity-30"
+          >
+            <Megaphone size={11} /> {t('rd.cmdAnnounce')}
+          </button>
+        </div>
+        {last && (
+          <div className="mono flex items-center gap-2 text-[11px]">
+            <span style={{ color: last.accepted ? 'var(--color-ok)' : 'var(--color-crit)' }}>
+              {last.accepted ? t('rd.cmdAccepted') : t('rd.cmdRejected')}
+            </span>
+            <span className="text-ink-3">
+              {last.id} · {last.command.type}
+              {last.reason ? ` — ${last.reason}` : ''}
+            </span>
+          </div>
+        )}
+      </div>
+    </Panel>
+  )
+}
 
 function JointRow({ name, c }: { name: string; c: number }) {
   const tone = c > 55 ? 'var(--color-crit)' : c > 50 ? 'var(--color-warn)' : 'var(--color-ink-2)'
@@ -28,6 +176,7 @@ function JointRow({ name, c }: { name: string; c: number }) {
 
 export function RobotDetail() {
   const canAdmin = useCan('admin')
+  const canOp = useCan('operator')
   const { id } = useParams()
   const robot = useApp((s) => s.robots.find((r) => r.id === id))
   const tel = useApp((s) => (id ? s.telemetry[id] : undefined))
@@ -274,6 +423,9 @@ export function RobotDetail() {
               )
             })}
           </Panel>
+
+          <ReadingsPanel robotId={robot.id} />
+          {canOp && robot.adapter !== 'external' && <CommandPanel robotId={robot.id} />}
 
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
             <Panel className="rise rise-2">

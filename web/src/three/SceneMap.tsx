@@ -27,7 +27,12 @@ export const SPLAT_CALIB = {
   scale: 1,
 }
 
-function SplatStage() {
+/** resolve a MapAsset url: '/'-prefixed → server URL (PUB baked in); else web asset under BASE */
+export function assetUrl(url: string) {
+  return url.startsWith('/') ? url : `${BASE}/${url}`
+}
+
+function SplatStage({ url }: { url: string }) {
   const [calib, setCalib] = useState(SPLAT_CALIB)
   const [viewer] = useState(() => {
     const v = new GaussianSplats3D.DropInViewer({
@@ -37,7 +42,7 @@ function SplatStage() {
       // the radial reveal animation stalls under our render loop — show all
       sceneRevealMode: GaussianSplats3D.SceneRevealMode.Instant,
     })
-    v.addSplatScene(BASE + '/assets/scenes/plant_yard.splat?v=' + SCENE_REV, {
+    v.addSplatScene(assetUrl(url) + '?v=' + SCENE_REV, {
       format: GaussianSplats3D.SceneFormat.Splat,
       splatAlphaRemovalThreshold: 5,
       showLoadingUI: false,
@@ -225,10 +230,15 @@ export function SceneMap({
 }) {
   const robots = useApp((s) => s.robots)
   const events = useApp((s) => s.events)
+  const splat = useApp((s) => s.maps.find((m) => m.kind === 'splat'))
   const pins = useMemo(
     () => events.filter((e) => !e.acked && Date.now() - e.ts < 45 * 60_000).slice(0, 12),
     [events],
   )
+  // sites without a 3DGS scan still resolve the loader chip immediately
+  useEffect(() => {
+    if (!splat) window.dispatchEvent(new CustomEvent('aegis:splat-ready'))
+  }, [splat])
   return (
     <Canvas
       eventPrefix="client"
@@ -240,9 +250,11 @@ export function SceneMap({
       onPointerMissed={() => onSelect(null)}
     >
       <hemisphereLight intensity={0.35} color="#c3ccd6" groundColor="#0c0d0f" />
-      <Suspense fallback={null}>
-        <SplatStage />
-      </Suspense>
+      {splat && (
+        <Suspense fallback={null}>
+          <SplatStage key={splat.url} url={splat.url} />
+        </Suspense>
+      )}
 
       <Grid
         position={[0, 0.005, 0]}

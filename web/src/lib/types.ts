@@ -139,8 +139,8 @@ export interface ExternalUnit {
 export interface AdapterOrder {
   id: string
   robotId: string
-  kind: 'goto' | 'mission'
-  payload: { x?: number; z?: number; missionId?: string; name?: string }
+  kind: 'goto' | 'mission' | 'announce'
+  payload: { x?: number; z?: number; missionId?: string; name?: string; text?: string }
   state: 'pending' | 'acked' | 'done' | 'failed'
   createdAt: number
   updatedAt: number
@@ -179,6 +179,17 @@ export type Severity = 'critical' | 'high' | 'info' | 'low'
 export type DetectionModel = string
 export const BUILTIN_MODELS = ['person', 'smoking', 'thermal', 'gauge', 'ppe', 'motion', 'acoustic', 'ogi'] as const
 
+export type EventCategory = 'security' | 'fire' | 'env' | 'equipment' | 'robot-fault'
+export type EventLifecycle = 'new' | 'acked' | 'resolved' | 'dismissed'
+export type DetectorKind = 'sim' | 'onboard-cv' | 'cloud-cv' | 'threshold' | 'external'
+
+export interface EventEvidence {
+  kind: 'image' | 'clip' | 'reading'
+  url?: string
+  channelId?: string
+  reading?: { metric: string; value: number; unit: string }
+}
+
 export interface DetectionEvent {
   id: string
   ts: number
@@ -187,13 +198,18 @@ export interface DetectionEvent {
   label: string
   detail: string
   severity: Severity
+  category: EventCategory
   source: string
   sourceName: string
   robotId?: string
   zone: string
   confidence: number
   snapshot?: string
+  evidence: EventEvidence[]
+  lifecycle: EventLifecycle
   acked: boolean
+  verification?: { state: 'pending' | 'confirmed' | 'rejected'; by: string; note?: string }
+  runId?: string
   x: number
   z: number
 }
@@ -202,6 +218,7 @@ export interface DetectionRule {
   id: string
   name: string
   model: DetectionModel
+  kind: DetectorKind
   source: string
   sourceName: string
   zone: string
@@ -210,8 +227,122 @@ export interface DetectionRule {
   enabled: boolean
   robotId?: string
   builtin: boolean
+  metric?: string
+  op?: '>' | '<'
+  bound?: number
+  verify?: { mode: 'none' | 'llm' | 'human'; promptTemplate?: string; referenceImage?: string }
   lastFiredAt?: number
   firedCount: number
+}
+
+// ---------- channels + stream sessions ----------
+
+export type ChannelRole = 'front' | 'optical' | 'ptz' | 'thermal' | 'ogi' | 'audio' | 'fixed'
+
+export interface Channel {
+  id: string
+  robotId?: string
+  payloadId?: string
+  role: ChannelRole
+  label: string
+  codec: 'h264' | 'h265' | 'mjpeg' | 'opus'
+  source: { kind: 'file'; file: string } | { kind: 'rtsp' | 'hls' | 'webrtc'; url: string }
+  streamKey?: string
+}
+
+export interface StreamSession {
+  id: string
+  channelId: string
+  url: string
+  protocol: 'file' | 'hls' | 'webrtc' | 'rtsp'
+  createdAt: number
+  expiresAt: number | null
+}
+
+// ---------- payload readings ----------
+
+export interface MetricDef {
+  id: string
+  label: string
+  unit: string
+  kind: 'gauge' | 'counter'
+  nominal?: [number, number]
+  decimals: number
+}
+
+export interface Reading {
+  robotId: string
+  payloadId: string
+  metric: string
+  value: number
+  ts: number
+  quality?: 'ok' | 'degraded' | 'stale'
+  wp?: string
+}
+
+// ---------- mission templates + schedules ----------
+
+export interface MissionTemplate {
+  id: string
+  name: string
+  steps: MissionStep[]
+  requires: PayloadSpec['kind'][]
+  builtin: boolean
+  createdAt: number
+}
+
+export type Cadence =
+  | { kind: 'once'; at?: number }
+  | { kind: 'interval'; everyMin: number }
+  | { kind: 'weekly'; days: number[]; at: string }
+
+export interface Schedule {
+  id: string
+  templateId: string
+  assign: { kind: 'auto' } | { kind: 'robot'; robotId: string }
+  cadence: Cadence
+  priority: 1 | 2 | 3
+  enabled: boolean
+  lastRunAt?: number
+  nextRunAt?: number
+  runCount: number
+}
+
+// ---------- maps + commands ----------
+
+export interface MapAsset {
+  id: string
+  kind: 'occupancy' | 'splat' | 'aerial'
+  name: string
+  url: string
+  occupancy?: { resolution: number; origin: [number, number]; width: number; height: number }
+}
+
+export interface FrameTransform {
+  from: string
+  to: string
+  params: { s: number; thetaRad: number; t: [number, number] }
+  note?: string
+}
+
+export type Command =
+  | { type: 'goto'; wp?: string; x?: number; z?: number }
+  | { type: 'dock' }
+  | { type: 'pause' }
+  | { type: 'resume' }
+  | { type: 'abort' }
+  | { type: 'announce'; text: string; priority?: number }
+  | { type: 'ptz'; channelId: string; pan?: number; tilt?: number; zoom?: number }
+  | { type: 'velocity'; vx: number; wz: number }
+
+export interface CommandRecord {
+  id: string
+  robotId: string
+  ts: number
+  by: string
+  command: Command
+  accepted: boolean
+  reason?: string
 }
 
 export type ActionType =
@@ -255,6 +386,9 @@ export interface Mission {
   endedAt?: number
   results: MissionResult[]
   progress: number
+  templateId?: string
+  scheduleId?: string
+  paused?: boolean
 }
 
 export const SEVERITY_COLOR: Record<Severity, string> = {

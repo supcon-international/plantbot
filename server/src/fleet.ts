@@ -100,6 +100,132 @@ export type Severity = 'critical' | 'high' | 'info' | 'low'
 export type DetectionModel = string
 export const BUILTIN_MODELS = ['person', 'smoking', 'thermal', 'gauge', 'ppe', 'motion', 'acoustic', 'ogi'] as const
 
+/** business stream an event belongs to — robot-fault is the health stream, the rest are operational */
+export type EventCategory = 'security' | 'fire' | 'env' | 'equipment' | 'robot-fault'
+export const MODEL_CATEGORY: Record<string, EventCategory> = {
+  person: 'security',
+  motion: 'security',
+  ppe: 'security',
+  smoking: 'fire',
+  thermal: 'equipment',
+  gauge: 'equipment',
+  acoustic: 'equipment',
+  ogi: 'env',
+  fault: 'robot-fault',
+}
+
+// ---------- channels (video/audio surfaces, one robot exposes several) ----------
+
+export type ChannelRole = 'front' | 'optical' | 'ptz' | 'thermal' | 'ogi' | 'audio' | 'fixed'
+
+export interface Channel {
+  id: string // 'go2-01:cam-front' | 'cam:perimeter-cam'
+  robotId?: string // absent → fixed site camera
+  payloadId?: string
+  role: ChannelRole
+  label: string
+  codec: 'h264' | 'h265' | 'mjpeg' | 'opus'
+  /** how the platform reaches it — the UI never sees this, only sessions */
+  source: { kind: 'file'; file: string } | { kind: 'rtsp' | 'hls' | 'webrtc'; url: string }
+  /** snapshot / legacy stream key (frames.ts SOURCE table) */
+  streamKey?: string
+}
+
+/** explicit playback lease — GoRobot's implicit 10-second URL, made a resource */
+export interface StreamSession {
+  id: string
+  channelId: string
+  url: string
+  protocol: 'file' | 'hls' | 'webrtc' | 'rtsp'
+  createdAt: number
+  /** null → static demo loop, never expires */
+  expiresAt: number | null
+}
+
+// ---------- payload readings (stable envelope + metric registry) ----------
+
+export interface MetricDef {
+  id: string // 'ch4.ppm'
+  label: string
+  unit: string
+  kind: 'gauge' | 'counter'
+  /** normal band — UI shades it, threshold detectors reference it */
+  nominal?: [number, number]
+  decimals: number
+}
+
+export interface Reading {
+  robotId: string
+  payloadId: string
+  metric: string
+  value: number
+  ts: number
+  quality?: 'ok' | 'degraded' | 'stale'
+  /** waypoint the robot was at, when captured during a mission step */
+  wp?: string
+}
+
+export const METRIC_DEFS: MetricDef[] = [
+  { id: 'ch4.ppm', label: 'CH₄', unit: 'ppm', kind: 'gauge', nominal: [0, 6], decimals: 2 },
+  { id: 'h2s.ppm', label: 'H₂S', unit: 'ppm', kind: 'gauge', nominal: [0, 1], decimals: 2 },
+  { id: 'co.ppm', label: 'CO', unit: 'ppm', kind: 'gauge', nominal: [0, 9], decimals: 1 },
+  { id: 'o2.pct', label: 'O₂', unit: '%', kind: 'gauge', nominal: [19.5, 23], decimals: 2 },
+  { id: 'dt.max.c', label: 'max ΔT', unit: '°C', kind: 'gauge', nominal: [0, 14], decimals: 1 },
+  { id: 'uls.db', label: '38 kHz band', unit: 'dB', kind: 'gauge', nominal: [0, 11], decimals: 1 },
+  { id: 'ch4.ppmm', label: 'CH₄ column', unit: 'ppm·m', kind: 'gauge', nominal: [0, 600], decimals: 0 },
+  { id: 'vib.g', label: 'vibration', unit: 'g', kind: 'gauge', nominal: [0, 0.4], decimals: 3 },
+]
+
+/** which metrics a payload kind emits — new sensors are data, not schema */
+export const PAYLOAD_METRICS: Partial<Record<PayloadSpec['kind'], string[]>> = {
+  gas: ['ch4.ppm', 'h2s.ppm', 'co.ppm', 'o2.pct'],
+  thermal: ['dt.max.c'],
+  acoustic: ['uls.db'],
+  ogi: ['ch4.ppmm'],
+  imu: ['vib.g'],
+}
+
+// ---------- commands (semantic, server-validated) ----------
+
+export type Command =
+  | { type: 'goto'; wp?: string; x?: number; z?: number }
+  | { type: 'dock' }
+  | { type: 'pause' }
+  | { type: 'resume' }
+  | { type: 'abort' }
+  | { type: 'announce'; text: string; priority?: number }
+  | { type: 'ptz'; channelId: string; pan?: number; tilt?: number; zoom?: number }
+  | { type: 'velocity'; vx: number; wz: number }
+
+export interface CommandRecord {
+  id: string
+  robotId: string
+  ts: number
+  by: string
+  command: Command
+  accepted: boolean
+  reason?: string
+}
+
+// ---------- maps (first-class assets + explicit calibration) ----------
+
+export interface MapAsset {
+  id: string
+  kind: 'occupancy' | 'splat' | 'aerial'
+  name: string
+  /** starts with '/' → server URL (PUB applied); else web-relative (client prepends BASE) */
+  url: string
+  occupancy?: { resolution: number; origin: [number, number]; width: number; height: number }
+}
+
+/** similarity transform between frames: p' = s·R(θ)·p + t */
+export interface FrameTransform {
+  from: string // 'map:<id>' | 'world' | 'wgs84'
+  to: string
+  params: { s: number; thetaRad: number; t: [number, number] }
+  note?: string
+}
+
 export type ActionType =
   | 'capture_photo'
   | 'thermal_scan'
@@ -112,6 +238,45 @@ export type ActionType =
 export interface MissionStep {
   waypointId: string
   actions: { type: ActionType; durationS: number }[]
+}
+
+/** which payload kinds a step's actions need — drives auto-assignment */
+export const ACTION_REQUIRES: Partial<Record<ActionType, PayloadSpec['kind']>> = {
+  thermal_scan: 'thermal',
+  ogi_scan: 'ogi',
+  gas_sample: 'gas',
+  acoustic_scan: 'acoustic',
+}
+
+// ---------- mission three-layer split: template (route) / schedule / run ----------
+
+/** reusable route — site-level, never bound to one robot (contra GoRobot) */
+export interface MissionTemplate {
+  id: string
+  name: string
+  steps: MissionStep[]
+  /** payload kinds a runner must carry (derived from steps at creation) */
+  requires: PayloadSpec['kind'][]
+  builtin: boolean
+  createdAt: number
+}
+
+export type Cadence =
+  | { kind: 'once'; at?: number }
+  | { kind: 'interval'; everyMin: number }
+  | { kind: 'weekly'; days: number[]; at: string } // days 0-6 (Sun-Sat), at 'HH:MM'
+
+export interface Schedule {
+  id: string
+  templateId: string
+  /** auto → capability match (requires ⊆ payload kinds); robot → pinned */
+  assign: { kind: 'auto' } | { kind: 'robot'; robotId: string }
+  cadence: Cadence
+  priority: 1 | 2 | 3
+  enabled: boolean
+  lastRunAt?: number
+  nextRunAt?: number
+  runCount: number
 }
 
 /** site-registered custom event type (integration API vocabulary) */

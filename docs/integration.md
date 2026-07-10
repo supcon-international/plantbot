@@ -33,7 +33,8 @@ Key 与场站一一绑定——同一套端点,不同 Key 自动落到各自场�
 | POST | `/api/integration/v1/robots/:serial/state` | 状态上报(兼作心跳;>20s 无上报判 offline) |
 | GET | `/api/integration/v1/robots/:serial/orders` | 拉取待执行订单(取走即置 `acked`) |
 | POST | `/api/integration/v1/orders/:id/status` | 回报订单结果 `done \| failed` |
-| POST | `/api/integration/v1/events` | 推送自定义事件(类型需先注册) |
+| POST | `/api/integration/v1/events` | 推送自定义事件(类型需先注册;支持 evidence/category/runId) |
+| POST | `/api/integration/v1/robots/:serial/readings` | 批量上报 payload 读数(稳定信封) |
 | POST | `/api/integration/v1/maps` | 上传占据栅格地图(ROS 约定) |
 
 ## 1. 注册机器人(factsheet)
@@ -104,7 +105,28 @@ curl -X POST $BASE/api/integration/v1/events \
 }'
 ```
 
-事件进入统一事件流:看板/表格/地图钉/toast/ACK 全部生效;自定义类型同样可用于规则引擎(NEW RULE 的模型下拉里)。
+事件进入统一事件流:看板/表格/地图钉/toast/生命周期(ack→resolve|dismiss)全部生效;自定义类型同样可用于规则引擎(NEW RULE 的模型下拉里)。可选扩展字段:
+`category ∈ security|fire|env|equipment|robot-fault`(分流到对应看板筛选)、
+`evidence: [{kind:'image'|'reading', url?, reading?:{metric,value,unit}}]`、
+`runId`(关联任务执行)。
+
+## 4b. 读数上报(payload 数据的稳定信封)
+
+传感器数据不进事件流、不改 schema——按 metric 批量上报:
+
+```bash
+curl -X POST $BASE/api/integration/v1/robots/ACME-0007/readings \
+  -H "authorization: Bearer $KEY" -H 'content-type: application/json' -d '{
+  "readings": [
+    {"metric": "ch4.ppm", "value": 2.4, "ts": 1783600000000},
+    {"metric": "dt.max.c", "value": 8.1}
+  ]
+}'
+# → {"accepted":2,"skipped":0,"metrics":["ch4.ppm","h2s.ppm",…]}   # 注册表内的 metric 才收
+```
+
+读数出现在机器人详情页 Payload Telemetry 时序里;站点侧 threshold 检测器(`kind:'threshold'`,
+`metric/op/bound`)可基于它们自动产生事件。metric 注册表见 `GET /api/sites/:siteId/metrics`。
 
 ## 5. 地图上传(ROS map_server 约定)
 

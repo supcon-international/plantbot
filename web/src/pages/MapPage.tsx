@@ -141,6 +141,7 @@ function SelectionCard({ sel, onFollow, follow, mode3d }: { sel: MapSel; onFollo
 export function MapPage() {
   const robots = useApp((s) => s.robots)
   const site = useApp((s) => s.site)
+  const maps = useApp((s) => s.maps)
   const t = useT()
   const [sel, setSel] = useState<MapSel>(() => {
     const id = new URLSearchParams(location.search).get('sel')
@@ -150,11 +151,15 @@ export function MapPage() {
   const [mode, setMode] = useState<'ops' | 'splat'>(() =>
     new URLSearchParams(location.search).get('mode') === 'ops' ? 'ops' : 'splat',
   )
+  const ready = !!useApp((s) => s.site)
+  const splatAsset = maps.find((m) => m.kind === 'splat')
+  // a site without a 3DGS scan only offers the ops layer (don't flash before hello lands)
+  const effMode = splatAsset ? mode : ready ? 'ops' : mode
 
   return (
     <div className="relative h-full min-h-[420px]">
       <div className="absolute inset-0">
-        {mode === 'splat' ? (
+        {effMode === 'splat' ? (
           <Suspense fallback={<div className="skeleton h-full w-full opacity-20" />}>
             <SceneMap
             selection={sel}
@@ -171,7 +176,7 @@ export function MapPage() {
         )}
       </div>
 
-      {mode === 'splat' && <LoaderChip />}
+      {effMode === 'splat' && <LoaderChip />}
 
       {/* top-left: site + fleet chips */}
       <div className="pointer-events-none absolute left-3 top-3 z-10 space-y-2">
@@ -195,19 +200,21 @@ export function MapPage() {
         </div>
       </div>
 
-      {/* top-right: mode switch */}
+      {/* top-right: layer switch — the map inventory drives what's offered */}
       <div className="absolute right-3 top-3 z-10 flex overflow-hidden border border-line bg-bg/70 backdrop-blur">
         {(
           [
-            ['ops', MapIcon, t('map.opsMap')],
-            ['splat', Box, t('map.3dScan')],
+            ['ops', MapIcon, t('map.opsMap'), true],
+            ['splat', Box, t('map.3dScan'), !!splatAsset || !ready],
           ] as const
-        ).map(([m, Icon, label]) => (
+        ).map(([m, Icon, label, avail]) => (
           <button
             key={m}
-            onClick={() => setMode(m)}
+            onClick={() => avail && setMode(m)}
+            disabled={!avail}
+            title={avail ? undefined : t('map.noScan')}
             className={`flex items-center gap-1.5 px-2.5 py-1.5 transition-colors ${
-              mode === m ? 'bg-surface-2 text-ink' : 'text-ink-3 hover:text-ink-2'
+              effMode === m ? 'bg-surface-2 text-ink' : avail ? 'text-ink-3 hover:text-ink-2' : 'cursor-not-allowed text-ink-3/40'
             }`}
           >
             <Icon size={12} strokeWidth={1.5} />
@@ -218,12 +225,14 @@ export function MapPage() {
 
       {/* bottom: selection card */}
       <div className="pointer-events-none absolute inset-x-3 bottom-3 z-10 flex justify-center md:justify-start">
-        <SelectionCard sel={sel} follow={follow} onFollow={() => setFollow((f) => !f)} mode3d={mode === 'splat'} />
+        <SelectionCard sel={sel} follow={follow} onFollow={() => setFollow((f) => !f)} mode3d={effMode === 'splat'} />
       </div>
 
-      {mode === 'splat' && (
+      {effMode === 'splat' && splatAsset && (
         <div className="pointer-events-none absolute bottom-1 right-2 z-10">
-          <span className="mono text-[9.5px] text-ink-3/70">scene: SKANOSFERA warehouse scan (Gliwice) · superspl.at · leveled</span>
+          <span className="mono text-[9.5px] text-ink-3/70">
+            {splatAsset.name} · SKANOSFERA (Gliwice) · superspl.at · leveled
+          </span>
         </div>
       )}
     </div>

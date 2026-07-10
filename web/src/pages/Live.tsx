@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { Grid2X2, Focus, Radio } from 'lucide-react'
-import { useApp } from '../lib/store'
-import { BASE } from '../lib/base'
+import { useApp, api } from '../lib/store'
 import { useT } from '../lib/i18n'
 import { FeedPlayer, VideoThumb } from '../components/StreamPlayer'
 import { Panel } from '../components/ui'
 import { utcClock } from '../lib/format'
+import type { Channel, StreamSession } from '../lib/types'
 
 interface Feed {
+  channelId: string
   stream: string
   file?: string
   name: string
@@ -17,57 +18,56 @@ interface Feed {
   robotId?: string
 }
 
-function useFeeds(): Feed[] {
-  const robots = useApp((s) => s.robots)
-  const cameras = useApp((s) => s.cameras)
-  return useMemo(() => {
-    const fs: Feed[] = []
-    for (const r of robots)
-      for (const p of r.payloads)
-        if (p.stream)
-          fs.push({
-            stream: p.stream,
-            file: p.file,
-            name: `${r.callsign} · ${p.name}`,
-            origin: `${r.model} — onboard camera`,
-            live: false,
-            robotId: r.id,
-          })
-    for (const c of cameras)
-      fs.push({ stream: c.stream, file: c.file, name: c.name, origin: c.source, live: c.live })
-    return fs
-  }, [robots, cameras])
+const ROLE_ORIGIN: Record<Channel['role'], string> = {
+  front: 'onboard · front',
+  optical: 'onboard · optical zoom',
+  ptz: 'onboard · PTZ',
+  thermal: 'onboard · radiometric',
+  ogi: 'onboard · gas imaging',
+  audio: 'onboard · audio',
+  fixed: 'fixed camera',
 }
 
-function StreamMeta({ stream, file }: { stream: string; file?: string }) {
-  const [meta, setMeta] = useState<string>('')
+/** feeds come from the site's Channel resources — the UI never touches raw payload wiring */
+function useFeeds(): Feed[] {
+  const channels = useApp((s) => s.channels)
+  const robots = useApp((s) => s.robots)
+  return useMemo(
+    () =>
+      channels.map((c) => ({
+        channelId: c.id,
+        stream: c.streamKey ?? c.id,
+        file: c.source.kind === 'file' ? c.source.file : undefined,
+        name: c.label,
+        origin: c.robotId ? `${robots.find((r) => r.id === c.robotId)?.model ?? c.robotId} — ${ROLE_ORIGIN[c.role]}` : ROLE_ORIGIN[c.role],
+        live: c.source.kind !== 'file',
+        robotId: c.robotId,
+      })),
+    [channels, robots],
+  )
+}
+
+/** open a playback lease for the channel; demo loops return a perpetual one */
+function useSession(channelId?: string): StreamSession | null {
+  const [session, setSession] = useState<StreamSession | null>(null)
   useEffect(() => {
-    if (file) return // local loop — static label, no probe
+    if (!channelId) return
     let dead = false
-    const load = async () => {
-      try {
-        const r = await fetch(`${BASE}/stream/api/streams?src=${encodeURIComponent(stream)}`)
-        const j = await r.json()
-        const prod = j?.producers?.[0]?.medias as string[] | undefined
-        const m = prod?.find((x: string) => x.includes('video'))
-        if (!dead && m) {
-          const codec = m.match(/(H264|H265|MJPEG|JPEG|AV1|VP9)/i)?.[1] ?? ''
-          setMeta(codec.toUpperCase())
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-    load()
+    setSession(null)
+    api
+      .openSession(channelId)
+      .then((r) => {
+        if (!dead && r.session) setSession(r.session)
+      })
+      .catch(() => {})
     return () => {
       dead = true
     }
-  }, [stream, file])
-  if (file) return <span className="mono text-[11px] text-white/45">H264 · LOOP</span>
-  return meta ? <span className="mono text-[11px] text-white/45">{meta} · RTSP</span> : null
+  }, [channelId])
+  return session
 }
 
-function PlayerOverlay({ feed }: { feed: Feed }) {
+function PlayerOverlay({ feed, session }: { feed: Feed; session: StreamSession | null }) {
   const clock = useApp((s) => s.clock)
   const t = useT()
   return (
@@ -85,13 +85,28 @@ function PlayerOverlay({ feed }: { feed: Feed }) {
         <span className="mono hidden text-[11px] text-white/60 sm:block">{utcClock(clock)}</span>
       </div>
       <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/55 to-transparent px-3 pb-2.5 pt-6">
-        <span className="mono text-[11px] text-white/55">{feed.origin}</span>
-        <StreamMeta stream={feed.stream} file={feed.file} />
+        <span className="mono truncate text-[11px] text-white/55">{feed.origin}</span>
+        {session && (
+          <span className="mono shrink-0 text-[11px] text-white/45" title={t('live.sessionHint')}>
+            {session.id} · {session.expiresAt === null ? t('live.loop') : `${Math.max(0, Math.round((session.expiresAt - clock) / 1000))}s`}
+          </span>
+        )}
       </div>
       <span className="pointer-events-none absolute left-2 top-2 h-3 w-3 border-l border-t border-white/25" />
       <span className="pointer-events-none absolute right-2 top-2 h-3 w-3 border-r border-t border-white/25" />
       <span className="pointer-events-none absolute bottom-2 left-2 h-3 w-3 border-b border-l border-white/25" />
       <span className="pointer-events-none absolute bottom-2 right-2 h-3 w-3 border-b border-r border-white/25" />
+    </>
+  )
+}
+
+/** a feed tile = session lease + the right transport for its protocol */
+function FeedTile({ feed }: { feed: Feed }) {
+  const session = useSession(feed.channelId)
+  return (
+    <>
+      <FeedPlayer stream={feed.stream} file={session?.protocol === 'file' ? session.url : feed.file} />
+      <PlayerOverlay feed={feed} session={session} />
     </>
   )
 }
@@ -143,12 +158,7 @@ export function Live() {
       {mode === 'focus' ? (
         <>
           <Panel className="rise relative aspect-video max-h-[62vh] w-full overflow-hidden">
-            {feed && (
-              <>
-                <FeedPlayer stream={feed.stream} file={feed.file} />
-                <PlayerOverlay feed={feed} />
-              </>
-            )}
+            {feed && <FeedTile key={feed.channelId} feed={feed} />}
           </Panel>
 
           <div className="-mx-3 overflow-x-auto px-3 md:mx-0 md:px-0">
@@ -190,9 +200,8 @@ export function Live() {
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {feeds.map((f, i) => (
-            <Panel key={f.stream} className={`rise rise-${(i % 5) + 1} relative aspect-video overflow-hidden`}>
-              <FeedPlayer stream={f.stream} file={f.file} />
-              <PlayerOverlay feed={f} />
+            <Panel key={f.channelId} className={`rise rise-${(i % 5) + 1} relative aspect-video overflow-hidden`}>
+              <FeedTile feed={f} />
             </Panel>
           ))}
         </div>

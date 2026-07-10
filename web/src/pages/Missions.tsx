@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
-import { ArrowLeft, Plus, X, ChevronUp, ChevronDown, OctagonX, Camera, Flame, Wind, AudioWaveform, Gauge, Timer, ScanEye } from 'lucide-react'
+import { ArrowLeft, Plus, X, ChevronUp, ChevronDown, OctagonX, Camera, Flame, Wind, AudioWaveform, Gauge, Timer, ScanEye, Route, CalendarClock, Play, Pause, Trash2, ListChecks } from 'lucide-react'
 import { useApp, api, useCan } from '../lib/store'
 import { useT, useAgo } from '../lib/i18n'
-import { Panel, PanelHead, MissionStatusTag, EmptyNote } from '../components/ui'
+import { Panel, PanelHead, MissionStatusTag, EmptyNote, Modal } from '../components/ui'
 import { OpsMap } from '../components/OpsMap'
 import { timeShort } from '../lib/format'
-import type { ActionType, Mission, MissionStep, Waypoint } from '../lib/types'
+import type { ActionType, Mission, MissionStep, MissionTemplate, Schedule, Waypoint } from '../lib/types'
 import { ACTION_TYPES } from '../lib/types'
 
 const ACTION_ICON: Record<ActionType, any> = {
@@ -32,9 +32,9 @@ function wpName(id: string, waypoints: Waypoint[]) {
   return waypoints.find((w) => w.id === id)?.name ?? id
 }
 
-// ---------- full-page planner ----------
+// ---------- full-page planner (missions and reusable route templates share it) ----------
 
-function MissionPlanner({ onClose }: { onClose: () => void }) {
+function MissionPlanner({ mode = 'mission', onClose }: { mode?: 'mission' | 'template'; onClose: () => void }) {
   const robots = useApp((s) => s.robots)
   const waypoints = useApp((s) => s.waypoints)
   const t = useT()
@@ -44,6 +44,7 @@ function MissionPlanner({ onClose }: { onClose: () => void }) {
   const [recurring, setRecurring] = useState(false)
   const [steps, setSteps] = useState<MissionStep[]>([])
   const [busy, setBusy] = useState(false)
+  const isTemplate = mode === 'template'
 
   const toggleWp = (wp: Waypoint) =>
     setSteps((s) => {
@@ -76,7 +77,8 @@ function MissionPlanner({ onClose }: { onClose: () => void }) {
   const submit = async () => {
     if (!name.trim() || !steps.length) return
     setBusy(true)
-    await api.createMission({ name: name.trim(), priority, requestedRobot: assignee, recurring, steps })
+    if (isTemplate) await api.createTemplate({ name: name.trim(), steps })
+    else await api.createMission({ name: name.trim(), priority, requestedRobot: assignee, recurring, steps })
     onClose()
   }
 
@@ -90,7 +92,7 @@ function MissionPlanner({ onClose }: { onClose: () => void }) {
         </button>
         <span className="h-4 w-px bg-line" />
         <div>
-          <span className="text-[13.5px] font-medium text-ink">{t('mi.wizTitle')}</span>
+          <span className="text-[13.5px] font-medium text-ink">{isTemplate ? t('mi.newRoute') : t('mi.wizTitle')}</span>
           <span className="microlabel ml-3 hidden lg:inline">{t('mi.plannerHint')}</span>
         </div>
         <button
@@ -98,7 +100,7 @@ function MissionPlanner({ onClose }: { onClose: () => void }) {
           onClick={submit}
           className="mono ml-auto border border-ink/30 bg-ink/10 px-3.5 py-1.5 text-[11.5px] tracking-[0.12em] text-ink transition-colors hover:bg-ink/15 disabled:opacity-30"
         >
-          {busy ? t('mi.wizSubmitting') : t('mi.wizQueue')}
+          {busy ? t('mi.wizSubmitting') : isTemplate ? t('mi.saveRoute') : t('mi.wizQueue')}
         </button>
       </div>
 
@@ -122,7 +124,7 @@ function MissionPlanner({ onClose }: { onClose: () => void }) {
           {/* mission meta */}
           <div className="shrink-0 space-y-3 border-b border-line p-3.5">
             <div>
-              <div className="microlabel mb-1.5">{t('mi.wizName')}</div>
+              <div className="microlabel mb-1.5">{isTemplate ? t('mi.routeName') : t('mi.wizName')}</div>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -130,50 +132,55 @@ function MissionPlanner({ onClose }: { onClose: () => void }) {
                 className="mono w-full border border-line-2 bg-surface-2 px-2.5 py-2 text-[13px] text-ink outline-none transition-colors focus:border-ink-3"
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <div className="microlabel mb-1.5">{t('mi.priority')}</div>
-                <div className="flex overflow-hidden border border-line">
-                  {([1, 2, 3] as const).map((p) => (
-                    <button
-                      key={p}
-                      onClick={() => setPriority(p)}
-                      className={`mono flex-1 px-2 py-1.5 text-[12px] transition-colors ${priority === p ? 'bg-surface-3 text-ink' : 'text-ink-3 hover:text-ink-2'}`}
+            {!isTemplate && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="microlabel mb-1.5">{t('mi.priority')}</div>
+                    <div className="flex overflow-hidden border border-line">
+                      {([1, 2, 3] as const).map((p) => (
+                        <button
+                          key={p}
+                          onClick={() => setPriority(p)}
+                          className={`mono flex-1 px-2 py-1.5 text-[12px] transition-colors ${priority === p ? 'bg-surface-3 text-ink' : 'text-ink-3 hover:text-ink-2'}`}
+                        >
+                          P{p}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="microlabel mb-1.5">{t('mi.wizAssign')}</div>
+                    <select
+                      value={assignee}
+                      onChange={(e) => setAssignee(e.target.value)}
+                      className="mono w-full border border-line-2 bg-surface-2 px-2 py-1.5 text-[12px] text-ink outline-none"
                     >
-                      P{p}
-                    </button>
-                  ))}
+                      <option value="auto">{t('mi.wizAuto')}</option>
+                      {robots.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.callsign}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-              </div>
-              <div>
-                <div className="microlabel mb-1.5">{t('mi.wizAssign')}</div>
-                <select
-                  value={assignee}
-                  onChange={(e) => setAssignee(e.target.value)}
-                  className="mono w-full border border-line-2 bg-surface-2 px-2 py-1.5 text-[12px] text-ink outline-none"
-                >
-                  <option value="auto">{t('mi.wizAuto')}</option>
-                  {robots.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.callsign}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <label className="flex cursor-pointer items-center gap-2.5">
-              <button
-                onClick={() => setRecurring(!recurring)}
-                className="relative h-4 w-8 border border-line-2 transition-colors"
-                style={{ background: recurring ? 'var(--color-surface-3)' : 'transparent' }}
-              >
-                <span
-                  className="absolute top-0.5 h-2.5 w-2.5 transition-all"
-                  style={{ left: recurring ? 18 : 3, background: recurring ? 'var(--color-ink)' : 'var(--color-ink-3)' }}
-                />
-              </button>
-              <span className="text-[13px] text-ink-2">{t('mi.wizRecurring')}</span>
-            </label>
+                <label className="flex cursor-pointer items-center gap-2.5">
+                  <button
+                    onClick={() => setRecurring(!recurring)}
+                    className="relative h-4 w-8 border border-line-2 transition-colors"
+                    style={{ background: recurring ? 'var(--color-surface-3)' : 'transparent' }}
+                  >
+                    <span
+                      className="absolute top-0.5 h-2.5 w-2.5 transition-all"
+                      style={{ left: recurring ? 18 : 3, background: recurring ? 'var(--color-ink)' : 'var(--color-ink-3)' }}
+                    />
+                  </button>
+                  <span className="text-[13px] text-ink-2">{t('mi.wizRecurring')}</span>
+                </label>
+              </>
+            )}
+            {isTemplate && <div className="text-[12.5px] leading-relaxed text-ink-3">{t('mi.routeHint')}</div>}
           </div>
 
           {/* sequence */}
@@ -232,7 +239,7 @@ function MissionPlanner({ onClose }: { onClose: () => void }) {
               onClick={submit}
               className="mono w-full border border-ink/30 bg-ink/10 px-3 py-2.5 text-[12px] tracking-[0.12em] text-ink transition-colors hover:bg-ink/15 disabled:opacity-30"
             >
-              {busy ? t('mi.wizSubmitting') : t('mi.wizQueue')}
+              {busy ? t('mi.wizSubmitting') : isTemplate ? t('mi.saveRoute') : t('mi.wizQueue')}
             </button>
           </div>
         </div>
@@ -247,23 +254,49 @@ function MissionDetail({ m }: { m: Mission }) {
   const canOp = useCan('operator')
   const waypoints = useApp((s) => s.waypoints)
   const robots = useApp((s) => s.robots)
+  const templates = useApp((s) => s.templates)
   const t = useT()
   const robot = robots.find((r) => r.id === m.robotId)
+  const tmpl = m.templateId ? templates.find((x) => x.id === m.templateId) : undefined
   const flagged = m.results.filter((r) => !r.ok).length
 
   return (
     <div className="space-y-3">
       <Panel>
         <PanelHead
-          label={`${m.id} · ${t('mi.plan')}`}
+          label={
+            <span className="flex items-center gap-2">
+              {m.id} · {t('mi.plan')}
+              {tmpl && (
+                <span className="mono flex items-center gap-1 border border-line px-1 py-px text-[9.5px] tracking-[0.08em] text-ink-3">
+                  <Route size={9} /> {tmpl.name}
+                </span>
+              )}
+              {m.paused && (
+                <span className="mono border border-warn/40 bg-warn/10 px-1 py-px text-[9.5px] tracking-[0.08em]" style={{ color: 'var(--color-warn)' }}>
+                  {t('mi.paused')}
+                </span>
+              )}
+            </span>
+          }
           right={
             canOp && (m.status === 'active' || m.status === 'queued') && (
-              <button
-                onClick={() => api.abortMission(m.id)}
-                className="mono flex items-center gap-1 border border-line-2 px-1.5 py-0.5 text-[10px] tracking-[0.08em] text-ink-3 transition-colors hover:border-crit/50 hover:text-crit"
-              >
-                <OctagonX size={11} /> {t('c.abort')}
-              </button>
+              <span className="flex items-center gap-1.5">
+                {m.status === 'active' && (
+                  <button
+                    onClick={() => (m.paused ? api.resumeMission(m.id) : api.pauseMission(m.id))}
+                    className="mono flex items-center gap-1 border border-line-2 px-1.5 py-0.5 text-[10px] tracking-[0.08em] text-ink-3 transition-colors hover:border-ink-3 hover:text-ink"
+                  >
+                    {m.paused ? <Play size={11} /> : <Pause size={11} />} {m.paused ? t('mi.resume') : t('mi.pause')}
+                  </button>
+                )}
+                <button
+                  onClick={() => api.abortMission(m.id)}
+                  className="mono flex items-center gap-1 border border-line-2 px-1.5 py-0.5 text-[10px] tracking-[0.08em] text-ink-3 transition-colors hover:border-crit/50 hover:text-crit"
+                >
+                  <OctagonX size={11} /> {t('c.abort')}
+                </button>
+              </span>
             )
           }
         />
@@ -370,12 +403,219 @@ function Row({ m, active, onClick }: { m: Mission; active: boolean; onClick: () 
   )
 }
 
+// ---------- routes & schedules ----------
+
+function cadenceLabel(c: Schedule['cadence'], t: (k: string) => string) {
+  if (c.kind === 'interval') return `${t('mi.every')} ${c.everyMin} min`
+  if (c.kind === 'weekly') return `${c.days.map((d) => ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'][d]).join(' ')} · ${c.at}`
+  return t('mi.once')
+}
+
+function ScheduleModal({ tmpl, onClose }: { tmpl: MissionTemplate; onClose: () => void }) {
+  const robots = useApp((s) => s.robots)
+  const t = useT()
+  const [everyMin, setEveryMin] = useState(15)
+  const [assign, setAssign] = useState('auto')
+  const [priority, setPriority] = useState<1 | 2 | 3>(2)
+  const capable = robots.filter((r) => r.adapter !== 'external' && tmpl.requires.every((k) => r.payloads.some((p) => p.kind === k)))
+  const submit = async () => {
+    await api.createSchedule({
+      templateId: tmpl.id,
+      cadence: { kind: 'interval', everyMin },
+      assign: assign === 'auto' ? { kind: 'auto' } : { kind: 'robot', robotId: assign },
+      priority,
+    })
+    onClose()
+  }
+  return (
+    <Modal onClose={onClose}>
+      <div className="flex items-center justify-between border-b border-line px-4 py-3">
+        <span className="microlabel flex items-center gap-1.5">
+          <CalendarClock size={12} /> {t('mi.newSchedule')} · {tmpl.name}
+        </span>
+        <button onClick={onClose} className="text-ink-3 hover:text-ink" aria-label="close">
+          <X size={16} />
+        </button>
+      </div>
+      <div className="space-y-3.5 p-4">
+        <div>
+          <div className="microlabel mb-1.5">
+            {t('mi.cadence')} · {t('mi.every')} {everyMin} min
+          </div>
+          <input type="range" min={5} max={120} step={5} value={everyMin} onChange={(e) => setEveryMin(Number(e.target.value))} className="h-[3px] w-full cursor-pointer appearance-none bg-line-2 accent-ink-2" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <div className="microlabel mb-1.5">{t('mi.wizAssign')}</div>
+            <select value={assign} onChange={(e) => setAssign(e.target.value)} className="mono w-full border border-line-2 bg-surface-2 px-2 py-1.5 text-[12px] text-ink outline-none">
+              <option value="auto">{t('mi.autoCapable')}</option>
+              {capable.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.callsign}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <div className="microlabel mb-1.5">{t('mi.priority')}</div>
+            <div className="flex overflow-hidden border border-line">
+              {([1, 2, 3] as const).map((p) => (
+                <button key={p} onClick={() => setPriority(p)} className={`mono flex-1 px-2 py-1.5 text-[12px] transition-colors ${priority === p ? 'bg-surface-3 text-ink' : 'text-ink-3 hover:text-ink-2'}`}>
+                  P{p}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        {tmpl.requires.length > 0 && (
+          <div className="text-[12px] text-ink-3">
+            {t('mi.requiresNote')}: <span className="mono">{tmpl.requires.join(' · ')}</span> — {capable.length} {t('mi.capableUnits')}
+          </div>
+        )}
+        <button onClick={submit} className="mono w-full border border-ink/30 bg-ink/10 px-3 py-2.5 text-[12px] tracking-[0.12em] text-ink transition-colors hover:bg-ink/15">
+          {t('mi.activateSchedule')}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+function RoutesView({ onNewRoute, onOpenRun }: { onNewRoute: () => void; onOpenRun: (id: string) => void }) {
+  const canOp = useCan('operator')
+  const templates = useApp((s) => s.templates)
+  const schedules = useApp((s) => s.schedules)
+  const missions = useApp((s) => s.missions)
+  const robots = useApp((s) => s.robots)
+  const clock = useApp((s) => s.clock)
+  const t = useT()
+  const [schedFor, setSchedFor] = useState<MissionTemplate | null>(null)
+
+  const runOnce = async (tmpl: MissionTemplate) => {
+    const r = await api.createMission({ name: tmpl.name, requestedRobot: 'auto', steps: tmpl.steps, templateId: tmpl.id })
+    if (r?.mission?.id) onOpenRun(r.mission.id)
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+      <Panel className="rise">
+        <PanelHead
+          label={
+            <span className="flex items-center gap-1.5">
+              <Route size={12} /> {t('mi.routes')} · {templates.length}
+            </span>
+          }
+          right={
+            canOp && (
+              <button onClick={onNewRoute} className="mono flex items-center gap-1 border border-line-2 px-1.5 py-0.5 text-[10px] tracking-[0.08em] text-ink-3 transition-colors hover:border-ink-3 hover:text-ink">
+                <Plus size={11} /> {t('mi.newRoute')}
+              </button>
+            )
+          }
+        />
+        {templates.map((tp) => {
+          const runs = missions.filter((m) => m.templateId === tp.id)
+          return (
+            <div key={tp.id} className="border-b border-line/70 px-3.5 py-3">
+              <div className="flex items-center gap-2">
+                <span className="mono text-[11px] text-ink-3">{tp.id}</span>
+                <span className="truncate text-[13.5px] text-ink">{tp.name}</span>
+                {canOp && (
+                  <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                    <button onClick={() => runOnce(tp)} title={t('mi.runOnce')} className="mono flex items-center gap-1 border border-line-2 px-1.5 py-0.5 text-[10px] tracking-[0.08em] text-ink-3 transition-colors hover:border-ink-3 hover:text-ink">
+                      <Play size={10} /> {t('mi.run')}
+                    </button>
+                    <button onClick={() => setSchedFor(tp)} title={t('mi.newSchedule')} className="mono flex items-center gap-1 border border-line-2 px-1.5 py-0.5 text-[10px] tracking-[0.08em] text-ink-3 transition-colors hover:border-ink-3 hover:text-ink">
+                      <CalendarClock size={10} /> {t('mi.schedule')}
+                    </button>
+                    {!tp.builtin && (
+                      <button onClick={() => api.deleteTemplate(tp.id)} className="p-0.5 text-ink-3 transition-colors hover:text-crit">
+                        <Trash2 size={12} />
+                      </button>
+                    )}
+                  </span>
+                )}
+              </div>
+              <div className="microlabel mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span>
+                  {tp.steps.length} {t('mi.wizStops')}
+                </span>
+                {tp.requires.length > 0 && <span className="mono">{t('mi.needs')} {tp.requires.join('+')}</span>}
+                <span>
+                  {runs.length} {t('mi.runsCount')}
+                </span>
+              </div>
+            </div>
+          )
+        })}
+        {templates.length === 0 && <EmptyNote>{t('mi.noRoutes')}</EmptyNote>}
+      </Panel>
+
+      <Panel className="rise rise-1">
+        <PanelHead
+          label={
+            <span className="flex items-center gap-1.5">
+              <CalendarClock size={12} /> {t('mi.schedules')} · {schedules.filter((s) => s.enabled).length}/{schedules.length}
+            </span>
+          }
+        />
+        {schedules.map((sc) => {
+          const tp = templates.find((x) => x.id === sc.templateId)
+          const robot = sc.assign.kind === 'robot' ? robots.find((r) => r.id === (sc.assign as { robotId: string }).robotId) : undefined
+          const eta = sc.enabled && sc.nextRunAt ? Math.max(0, Math.round((sc.nextRunAt - clock) / 1000)) : null
+          return (
+            <div key={sc.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line/70 px-3.5 py-3">
+              {canOp ? (
+                <button
+                  onClick={() => api.patchSchedule(sc.id, { enabled: !sc.enabled })}
+                  className="relative h-4 w-8 shrink-0 border border-line-2 transition-colors"
+                  style={{ background: sc.enabled ? 'var(--color-surface-3)' : 'transparent' }}
+                >
+                  <span className="absolute top-0.5 h-2.5 w-2.5 transition-all" style={{ left: sc.enabled ? 18 : 3, background: sc.enabled ? 'var(--color-ink)' : 'var(--color-ink-3)' }} />
+                </button>
+              ) : (
+                <span className="mono text-[10px] text-ink-3">{sc.enabled ? 'ON' : 'OFF'}</span>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className={`truncate text-[13px] ${sc.enabled ? 'text-ink' : 'text-ink-3'}`}>{tp?.name ?? sc.templateId}</div>
+                <div className="microlabel mt-0.5">
+                  {cadenceLabel(sc.cadence, t)} · {sc.assign.kind === 'auto' ? t('mi.autoCapable') : robot?.callsign ?? '—'} · P{sc.priority}
+                </div>
+              </div>
+              <div className="mono text-right text-[11px] text-ink-3">
+                {eta !== null ? (
+                  <span style={eta < 30 ? { color: 'var(--color-accent)' } : undefined}>
+                    {t('mi.nextIn')} {eta >= 60 ? `${Math.floor(eta / 60)}m ${eta % 60}s` : `${eta}s`}
+                  </span>
+                ) : (
+                  '—'
+                )}
+                <span className="block text-[10px] opacity-80">
+                  {sc.runCount}× {t('mi.fired')}
+                </span>
+              </div>
+              {canOp && (
+                <button onClick={() => api.deleteSchedule(sc.id)} className="p-0.5 text-ink-3 transition-colors hover:text-crit">
+                  <Trash2 size={12} />
+                </button>
+              )}
+            </div>
+          )
+        })}
+        {schedules.length === 0 && <EmptyNote>{t('mi.noSchedules')}</EmptyNote>}
+      </Panel>
+      {schedFor && <ScheduleModal tmpl={schedFor} onClose={() => setSchedFor(null)} />}
+    </div>
+  )
+}
+
 export function Missions() {
   const canOp = useCan('operator')
   const missions = useApp((s) => s.missions)
+  const schedules = useApp((s) => s.schedules)
   const t = useT()
   const [selId, setSelId] = useState<string | null>(null)
-  const [planning, setPlanning] = useState(false)
+  const [planning, setPlanning] = useState<false | 'mission' | 'template'>(false)
+  const [tab, setTab] = useState<'runs' | 'routes'>('runs')
 
   const groups = useMemo(() => {
     const by = (st: string[]) =>
@@ -389,19 +629,36 @@ export function Missions() {
 
   const sel = missions.find((m) => m.id === selId) ?? groups.active[0] ?? groups.queued[0] ?? groups.history[0]
 
-  if (planning) return <MissionPlanner onClose={() => setPlanning(false)} />
+  if (planning) return <MissionPlanner mode={planning} onClose={() => setPlanning(false)} />
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-3 p-3 md:p-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="mono text-[14px] text-ink-2">
-            {groups.active.length} {t('ms.active')} · {groups.queued.length} {t('ms.queued')}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-3">
+          <div className="flex overflow-hidden border border-line">
+            {(
+              [
+                ['runs', ListChecks, t('mi.tabRuns')],
+                ['routes', Route, t('mi.tabRoutes')],
+              ] as const
+            ).map(([v, Icon, label]) => (
+              <button
+                key={v}
+                onClick={() => setTab(v)}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] transition-colors ${tab === v ? 'bg-surface-2 text-ink' : 'text-ink-3 hover:text-ink-2'}`}
+              >
+                <Icon size={13} strokeWidth={1.5} />
+                <span className="mono text-[11px] tracking-[0.08em]">{label}</span>
+              </button>
+            ))}
+          </div>
+          <div className="mono hidden text-[13px] text-ink-2 sm:block">
+            {groups.active.length} {t('ms.active')} · {groups.queued.length} {t('ms.queued')} · {schedules.filter((s) => s.enabled).length} {t('mi.schedulesArmed')}
           </div>
         </div>
-        {canOp && (
+        {canOp && tab === 'runs' && (
           <button
-            onClick={() => setPlanning(true)}
+            onClick={() => setPlanning('mission')}
             className="mono flex items-center gap-1.5 border border-ink/30 bg-ink/10 px-2.5 py-1.5 text-[11.5px] tracking-[0.1em] text-ink transition-colors hover:bg-ink/15"
           >
             <Plus size={13} /> {t('mi.newMission')}
@@ -409,35 +666,47 @@ export function Missions() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
-        <div className="space-y-3 lg:col-span-5">
-          <Panel className="rise">
-            <PanelHead label={`${t('mi.active')} · ${groups.active.length}`} />
-            {groups.active.map((m) => (
-              <Row key={m.id} m={m} active={sel?.id === m.id} onClick={() => setSelId(m.id)} />
-            ))}
-            {groups.active.length === 0 && <EmptyNote>{t('ops.noActiveMissions')}</EmptyNote>}
-          </Panel>
-          <Panel className="rise rise-1">
-            <PanelHead label={`${t('mi.queued')} · ${groups.queued.length}`} />
-            {groups.queued.map((m) => (
-              <Row key={m.id} m={m} active={sel?.id === m.id} onClick={() => setSelId(m.id)} />
-            ))}
-            {groups.queued.length === 0 && <EmptyNote>{t('mi.queueEmpty')}</EmptyNote>}
-          </Panel>
-          <Panel className="rise rise-2">
-            <PanelHead label={t('mi.history')} />
-            {groups.history.map((m) => (
-              <Row key={m.id} m={m} active={sel?.id === m.id} onClick={() => setSelId(m.id)} />
-            ))}
-            {groups.history.length === 0 && <EmptyNote>{t('mi.noCompleted')}</EmptyNote>}
-          </Panel>
-        </div>
+      {tab === 'routes' && (
+        <RoutesView
+          onNewRoute={() => setPlanning('template')}
+          onOpenRun={(id) => {
+            setSelId(id)
+            setTab('runs')
+          }}
+        />
+      )}
 
-        <div className="lg:col-span-7">
-          {sel ? <MissionDetail m={sel} /> : <Panel><EmptyNote>{t('mi.selectMission')}</EmptyNote></Panel>}
+      {tab === 'runs' && (
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
+          <div className="space-y-3 lg:col-span-5">
+            <Panel className="rise">
+              <PanelHead label={`${t('mi.active')} · ${groups.active.length}`} />
+              {groups.active.map((m) => (
+                <Row key={m.id} m={m} active={sel?.id === m.id} onClick={() => setSelId(m.id)} />
+              ))}
+              {groups.active.length === 0 && <EmptyNote>{t('ops.noActiveMissions')}</EmptyNote>}
+            </Panel>
+            <Panel className="rise rise-1">
+              <PanelHead label={`${t('mi.queued')} · ${groups.queued.length}`} />
+              {groups.queued.map((m) => (
+                <Row key={m.id} m={m} active={sel?.id === m.id} onClick={() => setSelId(m.id)} />
+              ))}
+              {groups.queued.length === 0 && <EmptyNote>{t('mi.queueEmpty')}</EmptyNote>}
+            </Panel>
+            <Panel className="rise rise-2">
+              <PanelHead label={t('mi.history')} />
+              {groups.history.map((m) => (
+                <Row key={m.id} m={m} active={sel?.id === m.id} onClick={() => setSelId(m.id)} />
+              ))}
+              {groups.history.length === 0 && <EmptyNote>{t('mi.noCompleted')}</EmptyNote>}
+            </Panel>
+          </div>
+
+          <div className="lg:col-span-7">
+            {sel ? <MissionDetail m={sel} /> : <Panel><EmptyNote>{t('mi.selectMission')}</EmptyNote></Panel>}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

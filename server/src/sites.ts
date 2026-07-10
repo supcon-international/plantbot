@@ -29,6 +29,14 @@ export interface RuleSeed {
   threshold: number
   severity: Severity
   robotId?: string
+  /** producer kind — defaults to 'sim' (simulated CV) */
+  kind?: 'sim' | 'onboard-cv' | 'cloud-cv' | 'threshold' | 'external'
+  /** threshold detectors: fire when latest `metric` reading crosses `bound` */
+  metric?: string
+  op?: '>' | '<'
+  bound?: number
+  /** second-stage vetting gate (LLM re-check before the operator queue) */
+  verify?: { mode: 'none' | 'llm' | 'human'; promptTemplate?: string }
 }
 
 export interface SeedMissionDef {
@@ -63,6 +71,8 @@ export interface SiteDef {
   missionSeeds: SeedMissionDef[]
   /** minutes-ago offsets for the seeded event history */
   eventSeedMins: number[]
+  /** 3DGS scan of the yard, if one exists — listed as a first-class map asset */
+  splat?: { name: string; url: string }
 }
 
 const A = (type: ActionType, durationS: number) => ({ type, durationS })
@@ -418,14 +428,16 @@ const plant07: SiteDef = {
     },
   ],
   ruleSeeds: [
-    { name: 'Unbadged person in substation', model: 'person', source: 'x30-optical', sourceName: 'X30-01 · Optical', zone: 'Substation bay S-1', threshold: 0.7, severity: 'critical', robotId: 'x30-01' },
-    { name: 'Smoking behavior', model: 'smoking', source: 'workshop-cam', sourceName: 'Dock Camera', zone: 'Robot staging area', threshold: 0.75, severity: 'critical' },
-    { name: 'Stack thermal anomaly', model: 'thermal', source: 'lite3-thermal', sourceName: 'Lite3-01 · Thermal', zone: 'Boiler stack, sector N', threshold: 0.65, severity: 'high', robotId: 'lite3-01' },
-    { name: 'Fugitive emission (OGI)', model: 'ogi', source: 'agx-ogi', sourceName: 'HSK·W1 · OGI', zone: 'Tank farm — ATEX', threshold: 0.6, severity: 'high', robotId: 'agx-w1' },
-    { name: 'Analog gauge OCR', model: 'gauge', source: 'lite3-front', sourceName: 'Lite3-01 · PTZ', zone: 'Valve manifold VM-4', threshold: 0.6, severity: 'info', robotId: 'lite3-01' },
-    { name: 'PPE compliance', model: 'ppe', source: 'workshop-cam', sourceName: 'Dock Camera', zone: 'Robot staging area', threshold: 0.6, severity: 'info' },
-    { name: 'Perimeter motion', model: 'motion', source: 'perimeter-cam', sourceName: 'Perimeter — Reservoir Gate', zone: 'North fence, waterline', threshold: 0.55, severity: 'low' },
-    { name: 'Partial discharge signature', model: 'acoustic', source: 'x30-optical', sourceName: 'X30-01 · Acoustic imager', zone: 'Transformer bay T-1', threshold: 0.7, severity: 'high', robotId: 'x30-01' },
+    { name: 'Unbadged person in substation', model: 'person', kind: 'onboard-cv', source: 'x30-optical', sourceName: 'X30-01 · Optical', zone: 'Substation bay S-1', threshold: 0.7, severity: 'critical', robotId: 'x30-01', verify: { mode: 'llm', promptTemplate: 'Is there a person without a badge inside the substation bay?' } },
+    { name: 'Smoking behavior', model: 'smoking', kind: 'cloud-cv', source: 'workshop-cam', sourceName: 'Dock Camera', zone: 'Robot staging area', threshold: 0.75, severity: 'critical', verify: { mode: 'llm', promptTemplate: 'Is someone smoking in this frame? The zone is ATEX-rated.' } },
+    { name: 'Stack thermal anomaly', model: 'thermal', kind: 'onboard-cv', source: 'lite3-thermal', sourceName: 'Lite3-01 · Thermal', zone: 'Boiler stack, sector N', threshold: 0.65, severity: 'high', robotId: 'lite3-01' },
+    { name: 'Fugitive emission (OGI)', model: 'ogi', kind: 'onboard-cv', source: 'agx-ogi', sourceName: 'HSK·W1 · OGI', zone: 'Tank farm — ATEX', threshold: 0.6, severity: 'high', robotId: 'agx-w1' },
+    { name: 'Analog gauge OCR', model: 'gauge', kind: 'onboard-cv', source: 'lite3-front', sourceName: 'Lite3-01 · PTZ', zone: 'Valve manifold VM-4', threshold: 0.6, severity: 'info', robotId: 'lite3-01' },
+    { name: 'PPE compliance', model: 'ppe', kind: 'cloud-cv', source: 'workshop-cam', sourceName: 'Dock Camera', zone: 'Robot staging area', threshold: 0.6, severity: 'info' },
+    { name: 'Perimeter motion', model: 'motion', kind: 'sim', source: 'perimeter-cam', sourceName: 'Perimeter — Reservoir Gate', zone: 'North fence, waterline', threshold: 0.55, severity: 'low', verify: { mode: 'llm', promptTemplate: 'Is the motion caused by a person or vehicle (not wildlife / vegetation)?' } },
+    { name: 'Partial discharge signature', model: 'acoustic', kind: 'onboard-cv', source: 'x30-optical', sourceName: 'X30-01 · Acoustic imager', zone: 'Transformer bay T-1', threshold: 0.7, severity: 'high', robotId: 'x30-01' },
+    { name: 'CH₄ ceiling — tank farm', model: 'ogi', kind: 'threshold', source: 'agx-ogi', sourceName: 'HSK·W1 · Gas detector', zone: 'Tank farm — ATEX', threshold: 1, severity: 'high', robotId: 'agx-w1', metric: 'ch4.ppm', op: '>', bound: 6 },
+    { name: 'ΔT ceiling — thermal imager', model: 'thermal', kind: 'threshold', source: 'lite3-thermal', sourceName: 'Lite3-01 · Thermal', zone: 'Boiler stack, sector N', threshold: 1, severity: 'high', robotId: 'lite3-01', metric: 'dt.max.c', op: '>', bound: 14 },
   ],
   missionSeeds: [
     {
@@ -509,6 +521,7 @@ const plant07: SiteDef = {
     },
   ],
   eventSeedMins: [3, 7, 12, 19, 26, 34, 47, 58, 73, 95, 121, 148, 176, 204],
+  splat: { name: 'Warehouse 3DGS scan', url: 'assets/scenes/plant_yard.splat' },
 }
 
 // ============================================================ Plant 12 — Harbor Terminal
@@ -703,11 +716,12 @@ const plant12: SiteDef = {
     },
   ],
   ruleSeeds: [
-    { name: 'Tank row thermal anomaly', model: 'thermal', source: 'x30b-thermal', sourceName: 'X30-02 · Thermal', zone: 'Tank row — ATEX', threshold: 0.65, severity: 'high', robotId: 'x30-02' },
-    { name: 'Person on berth apron', model: 'person', source: 'berth-cam', sourceName: 'Berth camera', zone: 'Berth — exclusion', threshold: 0.7, severity: 'critical' },
-    { name: 'Berth motion watch', model: 'motion', source: 'berth-cam', sourceName: 'Berth camera', zone: 'Berth — exclusion', threshold: 0.55, severity: 'low' },
-    { name: 'Warehouse PPE compliance', model: 'ppe', source: 'go2b-front', sourceName: 'GO2-02 · Front', zone: 'Warehouse aisle', threshold: 0.6, severity: 'info', robotId: 'go2-02' },
-    { name: 'Manifold gauge OCR', model: 'gauge', source: 'x30b-optical', sourceName: 'X30-02 · Optical', zone: 'Manifold skid', threshold: 0.6, severity: 'info', robotId: 'x30-02' },
+    { name: 'Tank row thermal anomaly', model: 'thermal', kind: 'onboard-cv', source: 'x30b-thermal', sourceName: 'X30-02 · Thermal', zone: 'Tank row — ATEX', threshold: 0.65, severity: 'high', robotId: 'x30-02' },
+    { name: 'Person on berth apron', model: 'person', kind: 'cloud-cv', source: 'berth-cam', sourceName: 'Berth camera', zone: 'Berth — exclusion', threshold: 0.7, severity: 'critical', verify: { mode: 'llm', promptTemplate: 'Is there a person inside the berth exclusion zone?' } },
+    { name: 'Berth motion watch', model: 'motion', kind: 'sim', source: 'berth-cam', sourceName: 'Berth camera', zone: 'Berth — exclusion', threshold: 0.55, severity: 'low' },
+    { name: 'Warehouse PPE compliance', model: 'ppe', kind: 'cloud-cv', source: 'go2b-front', sourceName: 'GO2-02 · Front', zone: 'Warehouse aisle', threshold: 0.6, severity: 'info', robotId: 'go2-02' },
+    { name: 'Manifold gauge OCR', model: 'gauge', kind: 'onboard-cv', source: 'x30b-optical', sourceName: 'X30-02 · Optical', zone: 'Manifold skid', threshold: 0.6, severity: 'info', robotId: 'x30-02' },
+    { name: 'CH₄ ceiling — tank row', model: 'ogi', kind: 'threshold', source: 'x30b-thermal', sourceName: 'X30-02 · Gas detector', zone: 'Tank row — ATEX', threshold: 1, severity: 'high', robotId: 'x30-02', metric: 'ch4.ppm', op: '>', bound: 6 },
   ],
   missionSeeds: [
     {
