@@ -1,16 +1,18 @@
 @import 'tailwindcss';
 
 @theme {
-  /* neutral black core — no blue cast, warm off-white ink */
+  /* neutral black core — no blue cast, warm off-white ink.
+     Lines and secondary text run a step heavier than tasteful-minimum:
+     this is an ops console, legibility beats subtlety. */
   --color-bg: #0a0a0a;
   --color-surface: #101010;
-  --color-surface-2: #151515;
-  --color-surface-3: #1b1b1c;
-  --color-line: #1f1f20;
-  --color-line-2: #2b2b2d;
-  --color-ink: #ebebe8;
-  --color-ink-2: #9c9c98;
-  --color-ink-3: #5e5e5b;
+  --color-surface-2: #161616;
+  --color-surface-3: #1d1d1e;
+  --color-line: #2a2a2c;
+  --color-line-2: #3c3c3f;
+  --color-ink: #f0f0ed;
+  --color-ink-2: #b2b2ac;
+  --color-ink-3: #7d7d77;
 
   /* acid lime — the single accent, used sparingly */
   --color-accent: #b8ee46;
@@ -35,20 +37,22 @@
    to a readable leaf green; status colors keep hue, drop luminance. */
 [data-theme='light'] {
   color-scheme: light;
-  --color-bg: #f2f1ec;
-  --color-surface: #faf9f5;
-  --color-surface-2: #f0efe8;
-  --color-surface-3: #e6e5dd;
-  --color-line: #dddbd2;
-  --color-line-2: #c9c7bc;
-  --color-ink: #1c1c19;
-  --color-ink-2: #54544d;
-  --color-ink-3: #8b8b81;
-  --color-accent: #5c8a00;
-  --color-ok: #5c8a00;
-  --color-warn: #96701f;
-  --color-crit: #bf3527;
-  --color-low: #85858b;
+  /* muted parchment, not glare-white — and a full step more contrast on
+     hairlines and secondary text */
+  --color-bg: #e5e3da;
+  --color-surface: #eceadf;
+  --color-surface-2: #e1dfd4;
+  --color-surface-3: #d6d4c8;
+  --color-line: #bfbdb0;
+  --color-line-2: #a3a193;
+  --color-ink: #131310;
+  --color-ink-2: #3d3d36;
+  --color-ink-3: #676760;
+  --color-accent: #4d7a00;
+  --color-ok: #4d7a00;
+  --color-warn: #8a6314;
+  --color-crit: #b32d20;
+  --color-low: #74747a;
 }
 
 [data-theme='light'] body::before {
@@ -58,16 +62,16 @@
 }
 
 [data-theme='light'] ::selection {
-  background: rgba(92, 138, 0, 0.18);
+  background: rgba(77, 122, 0, 0.2);
 }
 
 [data-theme='light'] .live-dot {
   animation-name: pulse-ring-light;
 }
 @keyframes pulse-ring-light {
-  0% { box-shadow: 0 0 0 0 rgba(92, 138, 0, 0.3); }
-  70% { box-shadow: 0 0 0 5px rgba(92, 138, 0, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(92, 138, 0, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(77, 122, 0, 0.32); }
+  70% { box-shadow: 0 0 0 5px rgba(77, 122, 0, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(77, 122, 0, 0); }
 }
 [data-theme='light'] .live-dot.crit {
   animation-name: pulse-ring-crit;
@@ -76,7 +80,7 @@
   animation-name: flash-in-light;
 }
 @keyframes flash-in-light {
-  0% { background: rgba(92, 138, 0, 0.1); }
+  0% { background: rgba(77, 122, 0, 0.12); }
   100% { background: transparent; }
 }
 
