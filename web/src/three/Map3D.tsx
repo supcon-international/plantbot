@@ -723,7 +723,7 @@ function fitHome(width: number, height: number, fovDeg: number, span: { w: numbe
   const hfov = 2 * Math.atan(Math.tan(vfov / 2) * aspect)
   const dV = (span.d + 3) / (2 * Math.tan(vfov / 2))
   const dH = (span.w + 3) / (2 * Math.tan(hfov / 2))
-  const dist = Math.min(72, Math.max(dV, dH) * 1.05)
+  const dist = Math.min(120, Math.max(dV, dH) * 1.05)
   const dir = new THREE.Vector3(0, 0.76, 0.65).normalize()
   return { pos: dir.multiplyScalar(dist).add(new THREE.Vector3(0, 0, 0.5)), tgt: new THREE.Vector3(0, 0, 0.5) }
 }
@@ -741,11 +741,12 @@ function CameraRig({
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera
   const framedFor = useRef('')
   useEffect(() => {
-    const key = `${span.w}x${span.d}`
-    if (framedFor.current === key || size.width < 60 || size.height < 60) return
-    framedFor.current = key
+    if (size.width < 60 || size.height < 60) return
     const home = fitHome(size.width, size.height, camera.fov, span)
-    homeRef.current = home
+    homeRef.current = home // reset target follows every resize
+    const key = `${span.w}x${span.d}`
+    if (framedFor.current === key) return // don't yank the camera mid-interaction
+    framedFor.current = key
     camera.position.copy(home.pos)
     if (controls.current) {
       controls.current.target.copy(home.tgt)
@@ -757,12 +758,47 @@ function CameraRig({
   return null
 }
 
+/** soft fence for panning: the orbit target may not leave the yard (+margin).
+ *  The clamp delta is applied to the camera too, so the view stops instead of
+ *  stretching — the site can never be dragged out of frame and lost. */
+function PanFence({
+  controls,
+  bounds,
+}: {
+  controls: React.RefObject<MapControlsImpl | null>
+  bounds: { x: [number, number]; z: [number, number] }
+}) {
+  useFrame(() => {
+    const c = controls.current
+    if (!c) return
+    const m = 3
+    const t = c.target
+    const nx = THREE.MathUtils.clamp(t.x, bounds.x[0] - m, bounds.x[1] + m)
+    const nz = THREE.MathUtils.clamp(t.z, bounds.z[0] - m, bounds.z[1] + m)
+    const dx = nx - t.x
+    const dz = nz - t.z
+    if (dx !== 0 || dz !== 0) {
+      t.x = nx
+      t.z = nz
+      c.object.position.x += dx
+      c.object.position.z += dz
+      c.update()
+    }
+    if (t.y !== 0) {
+      c.object.position.y -= t.y
+      t.y = 0
+      c.update()
+    }
+  })
+  return null
+}
+
 // camera dolly helper for the +/− buttons
 function dolly(controls: MapControlsImpl | null, factor: number) {
   if (!controls) return
   const cam = controls.object as THREE.PerspectiveCamera
   const dir = cam.position.clone().sub(controls.target)
-  const len = THREE.MathUtils.clamp(dir.length() * factor, 7, 60)
+  const len = THREE.MathUtils.clamp(dir.length() * factor, 12, 130)
   cam.position.copy(controls.target.clone().add(dir.normalize().multiplyScalar(len)))
   controls.update()
 }
@@ -824,7 +860,7 @@ export function Map3D({
       <Canvas
         shadows
         dpr={[1, 1.75]}
-        camera={{ position: HOME.pos.toArray() as [number, number, number], fov: 38, near: 0.5, far: 220 }}
+        camera={{ position: HOME.pos.toArray() as [number, number, number], fov: 24, near: 0.5, far: 320 }}
         resize={{ polyfill: RafResizeObserver as any, scroll: false, debounce: 0 }}
         onPointerMissed={deselect}
         onCreated={({ setEvents, gl }) =>
@@ -845,6 +881,7 @@ export function Map3D({
         }
       >
         <CameraRig controls={controls} homeRef={homeRef} span={span} />
+        <PanFence controls={controls} bounds={bounds} />
         <ambientLight intensity={P === MAP_THEME.dark ? 0.85 : 1.0} />
         <hemisphereLight args={P === MAP_THEME.dark ? ['#3a3a38', '#181816', 0.5] : ['#ffffff', '#c9c7ba', 0.55]} />
         <directionalLight
@@ -852,10 +889,10 @@ export function Map3D({
           intensity={1.5}
           castShadow
           shadow-mapSize={[2048, 2048]}
-          shadow-camera-left={-20}
-          shadow-camera-right={20}
-          shadow-camera-top={16}
-          shadow-camera-bottom={-16}
+          shadow-camera-left={-26}
+          shadow-camera-right={26}
+          shadow-camera-top={20}
+          shadow-camera-bottom={-20}
           shadow-bias={-0.0004}
         />
         <Suspense fallback={null}>
@@ -944,9 +981,10 @@ export function Map3D({
           enablePan={interactive}
           enableDamping
           dampingFactor={0.12}
-          minDistance={7}
-          maxDistance={78}
-          maxPolarAngle={Math.PI * 0.44}
+          zoomToCursor
+          minDistance={12}
+          maxDistance={130}
+          maxPolarAngle={Math.PI * 0.38}
           minPolarAngle={0.1}
         />
       </Canvas>
