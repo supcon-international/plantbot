@@ -200,7 +200,7 @@ function Toast() {
           <div className="truncate text-[14px] font-medium text-ink">{toast.label}</div>
           <div className="microlabel mt-0.5">{toast.sourceName} · {toast.zone}</div>
         </div>
-        <NavLink to="/events" onClick={dismiss} className="text-link shrink-0">{t('shell.view')}</NavLink>
+        <NavLink to={`/events?ev=${toast.id}`} onClick={dismiss} className="text-link shrink-0">{t('shell.view')}</NavLink>
         <button onClick={dismiss} className="icon-button is-quiet" aria-label="dismiss"><X size={14} /></button>
       </div>
     </div>

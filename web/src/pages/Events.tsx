@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { Check, X, Plus, Trash2, Columns3, Table2, SlidersHorizontal, ShieldCheck, Download, Sparkles } from 'lucide-react'
 import { useApp, api, useCan } from '../lib/store'
 import { useT, useAgo } from '../lib/i18n'
@@ -536,6 +537,23 @@ export function Events() {
     return v === 'rules' || v === 'table' || v === 'verify' ? v : 'board'
   })
   const [sel, setSel] = useState<DetectionEvent | null>(null)
+  const [params, setParams] = useSearchParams()
+  // deep link: /events?ev=EV-0042 lands with that event's detail already open
+  // (toasts, the overview feed and map pins all arrive here) — and keeps the
+  // modal in sync as verification verdicts stream in
+  useEffect(() => {
+    const id = params.get('ev')
+    if (!id) return
+    const hit = events.find((e) => e.id === id)
+    if (hit) setSel(hit)
+  }, [params, events])
+  const closeDetail = () => {
+    setSel(null)
+    if (params.get('ev')) {
+      params.delete('ev')
+      setParams(params, { replace: true })
+    }
+  }
   const [newRule, setNewRule] = useState(false)
   const [ruleFilter, setRuleFilter] = useState<string | null>(null)
   const [hiRule, setHiRule] = useState<string | null>(null)
@@ -712,9 +730,9 @@ export function Events() {
       {sel && (
         <DetailModal
           ev={sel}
-          onClose={() => setSel(null)}
+          onClose={closeDetail}
           onRule={(id) => {
-            setSel(null)
+            closeDetail()
             setHiRule(id)
             setView('rules')
           }}

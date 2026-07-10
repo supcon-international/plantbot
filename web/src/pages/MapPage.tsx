@@ -126,6 +126,12 @@ function SelectionCard({ sel, onFollow, follow, mode3d }: { sel: MapSel; onFollo
           <div className="flex items-center gap-2">
             <SevTag sev={ev.severity} />
             <span className="mono text-[11px] text-ink-3">{ago(ev.ts, clock)}</span>
+            <Link
+              to={`/events?ev=${ev.id}`}
+              className="mono flex items-center gap-1 border border-line-2 px-1.5 py-1 text-[10px] tracking-[0.1em] text-ink-3 transition-colors hover:text-ink-2"
+            >
+              {t('c.detail')} <ArrowUpRight size={10} />
+            </Link>
           </div>
           <div className="mt-1.5 text-[14px] text-ink">{ev.label}</div>
           <div className="microlabel mt-1">

@@ -104,6 +104,7 @@ function Feed() {
   const clock = useApp((s) => s.clock)
   const t = useT()
   const ago = useAgo()
+  const nav = useNavigate()
   return (
     <Panel className="flex min-h-0 flex-col">
       <PanelHead
@@ -119,7 +120,8 @@ function Feed() {
         {events.slice(0, 12).map((e) => (
           <div
             key={e.id}
-            className={`flex items-center gap-2.5 border-b border-line/60 px-3.5 py-2 ${Date.now() - e.ts < 8000 ? 'flash-new' : ''} ${e.acked ? 'opacity-45' : ''}`}
+            onClick={() => nav(`/events?ev=${e.id}`)}
+            className={`flex cursor-pointer items-center gap-2.5 border-b border-line/60 px-3.5 py-2 transition-colors hover:bg-surface-2 ${Date.now() - e.ts < 8000 ? 'flash-new' : ''} ${e.acked ? 'opacity-45' : ''}`}
           >
             <SevDot sev={e.severity} pulse={!e.acked && e.severity === 'critical'} />
             <div className="min-w-0 flex-1">
@@ -204,7 +206,7 @@ export function Overview() {
   // dashboard map is a launchpad: robots open their detail, events open the board
   const onMapSelect = (s: MapSel) => {
     if (s?.kind === 'robot') nav(`/robots/${s.id}`)
-    else if (s?.kind === 'event') nav('/events')
+    else if (s?.kind === 'event') nav(`/events?ev=${s.id}`)
     else setSel(s)
   }
 
