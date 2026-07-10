@@ -5,6 +5,7 @@ import { OrbitControls, Line, Grid, Html } from '@react-three/drei'
 import * as GaussianSplats3D from '@mkkellogg/gaussian-splats-3d'
 import * as THREE from 'three'
 import { RafResizeObserver } from './rafResizeObserver'
+import { pushSnap, sampleSnap, INTERP_DELAY_MS, type PoseSnap } from './poseBuffer'
 import { useApp } from '../lib/store'
 import { BASE } from '../lib/base'
 import type { DetectionEvent, RobotSpec } from '../lib/types'
@@ -83,26 +84,23 @@ function SplatStage({ url }: { url: string }) {
 function RobotMarker({ r, selected, onSelect }: { r: RobotSpec; selected: boolean; onSelect: () => void }) {
   const group = useRef<THREE.Group>(null)
   const pulse = useRef<THREE.Mesh>(null)
-  const inited = useRef(false)
+  const buf = useRef<PoseSnap[]>([])
+  const lastTel = useRef<unknown>(null)
 
-  useFrame(({ clock }, dt) => {
+  useFrame(({ clock }) => {
     const tel = useApp.getState().telemetry[r.id]
     const g = group.current
     if (!g) return
-    g.visible = !!tel
-    if (!tel) return
-    // frame-rate-independent glide over the 4 Hz telemetry beat; snap on (re)spawn
-    if (!inited.current || Math.hypot(g.position.x - tel.x, g.position.z - tel.z) > 5) {
-      g.position.set(tel.x, 0, tel.z)
-      g.rotation.y = tel.heading
-      inited.current = true
-    } else {
-      const a = 1 - Math.exp(-Math.min(0.1, dt) * 9)
-      g.position.x += (tel.x - g.position.x) * a
-      g.position.z += (tel.z - g.position.z) * a
-      const diff = ((((tel.heading - g.rotation.y + Math.PI) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) - Math.PI
-      g.rotation.y += diff * a
+    // snapshot interpolation over the 4 Hz beat — constant-velocity glide
+    if (tel && tel !== lastTel.current) {
+      lastTel.current = tel
+      pushSnap(buf.current, tel.x, tel.z, tel.heading, performance.now())
     }
+    const s = sampleSnap(buf.current, performance.now() - INTERP_DELAY_MS)
+    g.visible = !!s
+    if (!s) return
+    g.position.set(s.x, 0, s.z)
+    g.rotation.y = s.h
     const t = clock.elapsedTime
     if (pulse.current) {
       const k = (t % 1.8) / 1.8
@@ -164,16 +162,15 @@ function RobotMarker({ r, selected, onSelect }: { r: RobotSpec; selected: boolea
 }
 
 function LivePath({ robotId, color }: { robotId: string; color: string }) {
-  // subscribe at 4 Hz via the store; never setState inside useFrame
+  // subscribe at 4 Hz via the store; never setState inside useFrame.
+  // Drawn from the plan's own points (not the live pose) so the ribbon
+  // holds still while the marker glides between snapshots.
   const tel = useApp((s) => s.telemetry[robotId])
   const pts = useMemo(() => {
-    if (!tel || tel.path.length === 0) return null
-    return [
-      [tel.x, 0.04, tel.z] as [number, number, number],
-      ...tel.path.map((p) => [p.x, 0.04, p.z] as [number, number, number]),
-    ]
+    if (!tel || tel.path.length < 2) return null
+    return tel.path.map((p) => [p.x, 0.04, p.z] as [number, number, number])
   }, [tel])
-  if (!pts || pts.length < 2) return null
+  if (!pts) return null
   return <Line points={pts} color={color} lineWidth={1.2} dashed dashSize={0.4} gapSize={0.26} transparent opacity={0.75} />
 }
 

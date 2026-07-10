@@ -12,6 +12,7 @@ import { useTheme } from '../lib/theme'
 import { useT } from '../lib/i18n'
 import type { Building, Waypoint } from '../lib/types'
 import { RafResizeObserver } from './rafResizeObserver'
+import { pushSnap, sampleSnap, INTERP_DELAY_MS, type PoseSnap } from './poseBuffer'
 
 export type MapSel =
   | { kind: 'robot'; id: string }
@@ -521,11 +522,6 @@ function WaypointMark({
   )
 }
 
-/** wrap an angle delta to [-π, π] so headings never take the long way round */
-function shortestArc(from: number, to: number) {
-  return ((((to - from + Math.PI) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) - Math.PI
-}
-
 function RobotPuck({
   robotId,
   color,
@@ -544,25 +540,24 @@ function RobotPuck({
   const P = useMapTheme()
   const group = useRef<THREE.Group>(null)
   const ring = useRef<THREE.Mesh>(null)
-  const inited = useRef(false)
-  // telemetry arrives at 4 Hz — read it transiently and glide every frame,
-  // frame-rate independent (exp damping), so motion never stair-steps
-  useFrame(({ clock }, dt) => {
+  const buf = useRef<PoseSnap[]>([])
+  const lastTel = useRef<unknown>(null)
+  // telemetry arrives at 4 Hz — buffer the snapshots and render the pose as it
+  // was INTERP_DELAY_MS ago, linearly interpolated between the two snapshots
+  // around that instant: constant velocity between ticks, zero stair-stepping
+  useFrame(({ clock }) => {
     const g = group.current
     const tel = useApp.getState().telemetry[robotId]
     if (!g) return
-    g.visible = !!tel // no pose yet → stay hidden, never pile up at the origin
-    if (!tel) return
-    if (!inited.current || Math.hypot(g.position.x - tel.x, g.position.z - tel.z) > 5) {
-      g.position.set(tel.x, 0, tel.z)
-      g.rotation.y = -tel.heading
-      inited.current = true
-    } else {
-      const a = 1 - Math.exp(-Math.min(0.1, dt) * 9)
-      g.position.x += (tel.x - g.position.x) * a
-      g.position.z += (tel.z - g.position.z) * a
-      g.rotation.y += shortestArc(g.rotation.y, -tel.heading) * a
+    if (tel && tel !== lastTel.current) {
+      lastTel.current = tel
+      pushSnap(buf.current, tel.x, tel.z, tel.heading, performance.now())
     }
+    const s = sampleSnap(buf.current, performance.now() - INTERP_DELAY_MS)
+    g.visible = !!s // no pose yet → stay hidden, never pile up at the origin
+    if (!s || !tel) return
+    g.position.set(s.x, 0, s.z)
+    g.rotation.y = -s.h
     if (ring.current) {
       const mat = ring.current.material as THREE.MeshBasicMaterial
       if (tel.speed > 0.05) {
@@ -627,14 +622,16 @@ function RobotPuck({
   )
 }
 
-/** planned-path ribbon — its own 4 Hz subscription so path churn never re-renders the tree */
+/** planned-path ribbon — its own 4 Hz subscription so path churn never re-renders the tree.
+ *  Drawn from the plan's own points (not the live pose): the dashes hold still
+ *  while the puck glides, instead of the whole ribbon twitching every tick. */
 function PathLine({ robotId, color, selected }: { robotId: string; color: string; selected: boolean }) {
   const P = useMapTheme()
   const tel = useApp((s) => s.telemetry[robotId])
-  if (!tel || tel.path.length === 0) return null
+  if (!tel || tel.path.length < 2) return null
   return (
     <Line
-      points={[[tel.x, 0.04, tel.z], ...tel.path.map((p) => [p.x, 0.04, p.z] as [number, number, number])]}
+      points={tel.path.map((p) => [p.x, 0.04, p.z] as [number, number, number])}
       color={selected ? P.accent : P.unit(color)}
       lineWidth={selected ? 2 : 1.2}
       dashed
