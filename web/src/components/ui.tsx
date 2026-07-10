@@ -31,7 +31,7 @@ export function PanelHead({
   className?: string
 }) {
   return (
-    <div className={`flex items-center justify-between gap-2 border-b border-line px-3.5 py-2.5 ${className}`}>
+    <div className={`panel-head flex items-center justify-between gap-2 ${className}`}>
       <span className="microlabel">{label}</span>
       {right}
     </div>
@@ -85,7 +85,8 @@ export function ModeChip({ mode }: { mode?: RobotMode }) {
   const tone = mode ? MODE_TONE[mode] : 'var(--color-ink-3)'
   return (
     <span
-      className="mono px-1.5 py-0.5 text-[11px] uppercase tracking-[0.1em]"
+      className="mode-chip mono px-1.5 py-0.5 text-[11px] uppercase tracking-[0.1em]"
+      data-mode={mode ?? 'offline'}
       style={{ color: tone, border: '1px solid var(--color-line-2)', background: 'var(--color-surface-2)' }}
     >
       {t(mode ? `mode.${mode}` : 'mode.offline')}
@@ -106,7 +107,8 @@ export function MissionStatusTag({ status }: { status: MissionStatus }) {
   const tone = MISSION_STATUS_TONE[status]
   return (
     <span
-      className="mono inline-flex items-center gap-1.5 px-1.5 py-0.5 text-[11px] uppercase tracking-[0.1em]"
+      className="mission-status-chip mono inline-flex items-center gap-1.5 px-1.5 py-0.5 text-[11px] uppercase tracking-[0.1em]"
+      data-status={status}
       style={{ color: tone, border: '1px solid var(--color-line-2)', background: 'var(--color-surface-2)' }}
     >
       {status === 'active' && <span className="live-dot" style={{ width: 5, height: 5 }} />}
@@ -180,16 +182,16 @@ export function Spark({
 }
 
 export function BatteryBar({ value, w = 64 }: { value: number; w?: number }) {
-  const tone = value > 40 ? 'var(--color-ink-2)' : value > 20 ? 'var(--color-warn)' : 'var(--color-crit)'
+  const tone = value > 40 ? 'var(--signal)' : value > 20 ? 'var(--color-warn)' : 'var(--color-crit)'
   return (
     <div className="flex items-center gap-2">
-      <div className="relative h-[9px] overflow-hidden" style={{ width: w, border: '1px solid var(--color-line-2)' }}>
+      <div className="battery-track relative h-[9px] overflow-hidden" style={{ width: w, border: '1px solid var(--color-line-2)' }}>
         <div
-          className="absolute inset-y-0 left-0 transition-[width] duration-700"
-          style={{ width: `${value}%`, background: tone, opacity: 0.9 }}
+          className="battery-fill absolute inset-y-0 left-0 transition-[width] duration-700"
+          style={{ width: `${value}%`, color: tone }}
         />
       </div>
-      <span className="mono text-[12px]" style={{ color: value > 20 ? 'var(--color-ink-2)' : tone }}>
+      <span className="battery-value mono text-[12px]" style={{ color: value > 20 ? 'var(--color-ink-2)' : tone }}>
         {Math.round(value)}%
       </span>
     </div>
@@ -215,11 +217,11 @@ export function Modal({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/65 backdrop-blur-sm md:items-center"
+      className="modal-backdrop-scrim fixed inset-0 z-50 flex items-end justify-center bg-black/65 backdrop-blur-sm md:items-center"
       onClick={onClose}
     >
       <div
-        className={`panel max-h-[92vh] w-full overflow-y-auto ${wide ? 'md:max-w-2xl' : 'md:max-w-xl'}`}
+        className={`panel modal-surface max-h-[92vh] w-full overflow-y-auto ${wide ? 'md:max-w-2xl' : 'md:max-w-xl'}`}
         onClick={(e) => e.stopPropagation()}
       >
         {children}

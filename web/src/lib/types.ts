@@ -73,7 +73,7 @@ export interface RobotModelSpec {
   enduranceMin: number
   protocol: string
   firmware: string
-  blurb: [string, string, string]
+  blurb: [string, string]
 }
 
 export interface SiteMapMeta {

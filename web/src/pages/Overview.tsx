@@ -39,7 +39,7 @@ function KpiRow() {
   return (
     <div className="grid grid-cols-2 gap-2 md:grid-cols-5 md:gap-3">
       {tiles.map((tile, i) => (
-        <Panel key={tile.label} className={`rise rise-${i + 1} px-3.5 py-3 ${i === 4 ? 'max-md:hidden' : ''}`}>
+        <Panel key={tile.label} className={`kpi-tile rise rise-${i + 1} px-3.5 py-3 ${i === 4 ? 'max-md:hidden' : ''}`}>
           <div className="microlabel">{tile.label}</div>
           <div className="mono mt-1.5 text-[26px] leading-none md:text-[30px]" style={{ color: tile.tone ?? 'var(--color-ink)' }}>
             {tile.value}

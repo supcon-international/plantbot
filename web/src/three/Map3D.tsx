@@ -28,59 +28,59 @@ const MONO = undefined // troika default — keep bundle lean
 // dark = charcoal yard with white clay; light = paper board with warm shadows.
 const MAP_THEME = {
   dark: {
-    accent: '#b8ee46',
-    clay: '#e9e9e4',
-    clayMid: '#bdbdb6',
-    clayEdge: '#0a0a0a',
-    roofText: '#5c5c55',
-    apron: '#101010',
-    ground: '#161615',
-    grid: '#2b2b29',
-    boundary: '#5c5c55',
-    zoneNeutral: '#bcbcb3',
-    zoneOutline: '#0c0c0b',
-    wpNeutral: '#9a9a90',
-    wpBright: '#d4d4cc',
-    wpDot: '#eaeae4',
-    padBg: '#0d0d0c',
-    chipBg: '#0d0d0c',
-    chipEdge: '#4c4c46',
-    chipEdgeSoft: '#42423d',
-    chipText: '#eaeae4',
-    chipTextDim: '#c4c4bd',
-    chipOnActive: '#0c0c0b',
-    body: '#141414',
-    fov: '#ebebe8',
-    badgeInk: '#0a0a0a',
-    sev: { critical: '#dd5648', high: '#c2a05a', info: '#b2b2ac', low: '#7d7d77' } as Record<string, string>,
+    accent: '#c8ff00',
+    clay: '#dedede',
+    clayMid: '#929292',
+    clayEdge: '#050505',
+    roofText: '#343434',
+    apron: '#050505',
+    ground: '#171717',
+    grid: '#414141',
+    boundary: '#a8a8a8',
+    zoneNeutral: '#c6c6c6',
+    zoneOutline: '#050505',
+    wpNeutral: '#9f9f9f',
+    wpBright: '#f4f4f4',
+    wpDot: '#ffffff',
+    padBg: '#080808',
+    chipBg: '#090909',
+    chipEdge: '#6f6f6f',
+    chipEdgeSoft: '#525252',
+    chipText: '#f4f4f4',
+    chipTextDim: '#c6c6c6',
+    chipOnActive: '#080808',
+    body: '#080808',
+    fov: '#f4f4f4',
+    badgeInk: '#080808',
+    sev: { critical: '#fa4d56', high: '#f1c21b', info: '#c6c6c6', low: '#8d8d8d' } as Record<string, string>,
     unit: (c: string) => c,
   },
   light: {
-    accent: '#4d7a00',
-    clay: '#f3f2ea',
-    clayMid: '#c6c4b7',
-    clayEdge: '#31302a',
-    roofText: '#565448',
-    apron: '#c8c6ba',
-    ground: '#d7d5c9',
-    grid: '#a9a799',
-    boundary: '#6e6c5f',
-    zoneNeutral: '#5f5d50',
-    zoneOutline: '#e5e3da',
-    wpNeutral: '#585850',
-    wpBright: '#35352d',
-    wpDot: '#191914',
-    padBg: '#e7e5da',
-    chipBg: '#e7e5da',
-    chipEdge: '#77756a',
-    chipEdgeSoft: '#8b8a7d',
-    chipText: '#191914',
-    chipTextDim: '#3a3a32',
-    chipOnActive: '#eeece1',
-    body: '#26261f',
-    fov: '#33332b',
-    badgeInk: '#eeece2',
-    sev: { critical: '#b32d20', high: '#8a6314', info: '#3d3d36', low: '#74747a' } as Record<string, string>,
+    accent: '#587500',
+    clay: '#ffffff',
+    clayMid: '#c6c6c6',
+    clayEdge: '#161616',
+    roofText: '#3d3d3d',
+    apron: '#d6d6d6',
+    ground: '#eeeeee',
+    grid: '#a8a8a8',
+    boundary: '#525252',
+    zoneNeutral: '#525252',
+    zoneOutline: '#f4f4f4',
+    wpNeutral: '#525252',
+    wpBright: '#161616',
+    wpDot: '#161616',
+    padBg: '#f4f4f4',
+    chipBg: '#ffffff',
+    chipEdge: '#525252',
+    chipEdgeSoft: '#8d8d8d',
+    chipText: '#161616',
+    chipTextDim: '#525252',
+    chipOnActive: '#ffffff',
+    body: '#161616',
+    fov: '#161616',
+    badgeInk: '#ffffff',
+    sev: { critical: '#da1e28', high: '#8e6a00', info: '#525252', low: '#6f6f6f' } as Record<string, string>,
     // fleet colors are pale greys tuned for the dark board — deepen them on paper
     unit: (c: string) =>
       (({ '#ebebe8': '#41413a', '#b4b4ac': '#54544b', '#8a8a82': '#616158', '#d6d6ce': '#494940', '#c2c2ba': '#585750' }) as Record<string, string>)[c] ?? c,
@@ -168,7 +168,7 @@ function Ground({ bounds }: { bounds: { x: [number, number]; z: [number, number]
         <meshStandardMaterial color={P.ground} roughness={1} metalness={0} />
       </mesh>
       <lineSegments geometry={grid} position={[0, 0.005, 0]}>
-        <lineBasicMaterial color={P.grid} transparent opacity={0.7} />
+        <lineBasicMaterial color={P.grid} transparent opacity={0.82} />
       </lineSegments>
       {/* site boundary */}
       <Line
@@ -180,7 +180,7 @@ function Ground({ bounds }: { bounds: { x: [number, number]; z: [number, number]
           [x0 + inset, 0.01, z0 + inset],
         ]}
         color={P.boundary}
-        lineWidth={1}
+        lineWidth={1.4}
       />
     </group>
   )
@@ -580,7 +580,7 @@ function RobotPuck({
       {/* FOV wedge */}
       <mesh rotation={[-Math.PI / 2, 0, -0.46]} position={[0, 0.03, 0]}>
         <circleGeometry args={[2.35, 26, 0, 0.92]} />
-        <meshBasicMaterial color={P.fov} transparent opacity={selected ? 0.14 : 0.08} depthWrite={false} />
+        <meshBasicMaterial color={P.fov} transparent opacity={selected ? 0.12 : 0.045} depthWrite={false} />
       </mesh>
       <group
         onClick={
@@ -637,12 +637,12 @@ function PathLine({ robotId, color, selected }: { robotId: string; color: string
     <Line
       points={tel.path.map((p) => [p.x, 0.04, p.z] as [number, number, number])}
       color={selected ? P.accent : P.unit(color)}
-      lineWidth={selected ? 2 : 1.2}
+      lineWidth={selected ? 3 : 1.6}
       dashed
       dashSize={0.32}
       gapSize={0.22}
       transparent
-      opacity={selected ? 0.95 : 0.55}
+      opacity={selected ? 1 : 0.7}
     />
   )
 }
@@ -914,7 +914,7 @@ export function Map3D({
   }
 
   return (
-    <div className={`relative touch-none overflow-hidden bg-surface ${heightClass} ${className}`}>
+    <div className={`map-viewport relative touch-none overflow-hidden bg-surface ${heightClass} ${className}`}>
       <Canvas
         shadows
         dpr={[1, 1.75]}
@@ -967,7 +967,7 @@ export function Map3D({
                 .filter(Boolean)
                 .map((w) => [w!.x, 0.05, w!.z] as [number, number, number])}
               color={P.accent}
-              lineWidth={2}
+              lineWidth={3}
               dashed
               dashSize={0.4}
               gapSize={0.26}
@@ -1048,9 +1048,15 @@ export function Map3D({
         />
       </Canvas>
 
+      <div className="map-readout map-status-readout pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2">
+        <span><i style={{ color: 'var(--signal)' }} /><strong>{robots.length}</strong> {t('c.units')}</span>
+        <span><i style={{ color: pins.length ? 'var(--color-warn)' : 'var(--color-ink-3)' }} /><strong>{pins.reduce((sum, pin) => sum + pin.count, 0)}</strong> {t('c.open')}</span>
+        <span>GRID <strong>4 M</strong></span>
+      </div>
+
       {/* zoom / reset */}
       {interactive && (
-        <div className="absolute bottom-3 right-3 z-10 flex flex-col border border-line bg-surface/90 backdrop-blur">
+        <div className="map-tools absolute bottom-3 right-3 z-10 flex flex-col border border-line bg-surface/90">
           <button
             onClick={() => dolly(controls.current, 0.74)}
             className="flex h-8 w-8 items-center justify-center text-ink-3 transition-colors hover:text-ink"
@@ -1108,7 +1114,7 @@ export function Map3D({
 
       {/* legend + provenance — full-page map only */}
       {labels && wheelZoom && (
-        <div className="pointer-events-none absolute bottom-1.5 left-2 space-y-1">
+        <div className="map-readout map-legend pointer-events-none absolute bottom-2 left-2 space-y-1">
           <div className="hidden items-center gap-3 sm:flex">
             {(
               [

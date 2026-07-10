@@ -306,7 +306,7 @@ export interface RobotModelSpec {
   enduranceMin: number
   protocol: string
   firmware: string
-  blurb: [string, string, string] // en / zh / es
+  blurb: [string, string] // en / zh
 }
 
 export const ROBOT_CATALOG: RobotModelSpec[] = [
@@ -324,7 +324,6 @@ export const ROBOT_CATALOG: RobotModelSpec[] = [
     blurb: [
       'Agile indoor/yard patrol quadruped',
       '轻型敏捷四足,适合室内与场区巡逻',
-      'Cuadrúpedo ágil para patrulla',
     ],
   },
   {
@@ -341,7 +340,6 @@ export const ROBOT_CATALOG: RobotModelSpec[] = [
     blurb: [
       'Industrial all-weather inspection flagship',
       '全天候工业巡检旗舰,防护等级 IP67',
-      'Buque insignia de inspección industrial',
     ],
   },
   {
@@ -358,7 +356,6 @@ export const ROBOT_CATALOG: RobotModelSpec[] = [
     blurb: [
       'Wheel-legged hybrid for rough terrain · 3D twin pending',
       '轮足复合构型,复杂地形通行 · 3D 模型待接入',
-      'Híbrido rueda-pata para terreno difícil',
     ],
   },
   {
@@ -375,7 +372,6 @@ export const ROBOT_CATALOG: RobotModelSpec[] = [
     blurb: [
       'Agile quadruped for corridor and rack inspection',
       '敏捷四足,适合廊道与机柜巡检',
-      'Cuadrúpedo ágil para pasillos',
     ],
   },
   {
@@ -392,7 +388,6 @@ export const ROBOT_CATALOG: RobotModelSpec[] = [
     blurb: [
       'Autonomous industrial inspection benchmark, Ex-proof option',
       '工业巡检标杆机型,可选防爆版本',
-      'Referencia en inspección industrial autónoma',
     ],
   },
   {
@@ -409,7 +404,6 @@ export const ROBOT_CATALOG: RobotModelSpec[] = [
     blurb: [
       'Proven payload mule for heavy sensor stacks',
       '成熟轮式平台,适合重型传感器载荷',
-      'Plataforma UGV para cargas pesadas',
     ],
   },
   {
@@ -426,7 +420,6 @@ export const ROBOT_CATALOG: RobotModelSpec[] = [
     blurb: [
       'Security service-patrol UGV — PTZ mast, loudspeaker, ambient sensing',
       '安保服务巡逻机器人——云台桅杆、喊话器、环境感知,经集成 API 接入',
-      'UGV de patrulla de seguridad — conectado vía API de integración',
     ],
   },
 ]
