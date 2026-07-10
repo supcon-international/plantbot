@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { ArrowLeft, ArrowUpRight, Plus, ShieldCheck, X } from 'lucide-react'
-import { useApp, useHistory, api } from '../lib/store'
+import { useApp, useHistory, api, useCan } from '../lib/store'
 import { useT } from '../lib/i18n'
 import { Panel, PanelHead, Stat, Spark, BatteryBar, ModeChip } from '../components/ui'
 const RobotViewer = lazy(() => import('../three/RobotViewer').then((m) => ({ default: m.RobotViewer })))
@@ -27,6 +27,7 @@ function JointRow({ name, c }: { name: string; c: number }) {
 }
 
 export function RobotDetail() {
+  const canAdmin = useCan('admin')
   const { id } = useParams()
   const robot = useApp((s) => s.robots.find((r) => r.id === id))
   const tel = useApp((s) => (id ? s.telemetry[id] : undefined))
@@ -170,12 +171,14 @@ export function RobotDetail() {
                   <span className="mono text-[11px] text-ink-3">
                     {robot.payloads.length} {t('rd.fitted')}
                   </span>
+                  {canAdmin && (
                   <button
                     onClick={() => setAddOpen((v) => !v)}
                     className="mono flex items-center gap-1 border border-line-2 px-1.5 py-0.5 text-[10px] tracking-[0.1em] text-ink-2 transition-colors hover:border-ink-3 hover:text-ink"
                   >
                     <Plus size={10} /> {t('rd.addPayload')}
                   </button>
+                  )}
                 </span>
               }
             />
@@ -252,6 +255,7 @@ export function RobotDetail() {
                   >
                     {tel?.payloadHealth[p.id] ?? 'ok'}
                   </span>
+                  {canAdmin && (
                   <span
                     role="button"
                     aria-label={t('rd.removePayload')}
@@ -265,6 +269,7 @@ export function RobotDetail() {
                   >
                     <X size={12} />
                   </span>
+                  )}
                 </button>
               )
             })}

@@ -8,6 +8,8 @@ import { Robots } from './pages/Robots'
 import { RobotDetail } from './pages/RobotDetail'
 import { MapPage } from './pages/MapPage'
 import { Events } from './pages/Events'
+import { Login } from './pages/Login'
+import { Integrations } from './pages/Integrations'
 
 export function App() {
   return (
@@ -21,6 +23,8 @@ export function App() {
           <Route path="robots/:id" element={<RobotDetail />} />
           <Route path="map" element={<MapPage />} />
           <Route path="events" element={<Events />} />
+          <Route path="login" element={<Login />} />
+          <Route path="integrations" element={<Integrations />} />
         </Route>
       </Routes>
     </BrowserRouter>

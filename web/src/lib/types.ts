@@ -27,6 +27,9 @@ export interface RobotSpec {
   batteryStart: number
   color: string
   home: { x: number; z: number }
+  /** 'sim' built-in twin · 'external' integration-API adapter */
+  adapter?: 'sim' | 'external'
+  integrationLevel?: 'state-only' | 'dispatchable'
 }
 
 export interface SiteCamera {
@@ -73,19 +76,74 @@ export interface RobotModelSpec {
   blurb: [string, string, string]
 }
 
+export interface SiteMapMeta {
+  image: string
+  resolution: number
+  width: number
+  height: number
+  origin: [number, number]
+  source: string
+}
+
 export interface SiteInfo {
   id: string
   name: string
   operator: string
   bounds: { x: number[]; z: number[] }
-  map: {
-    image: string
-    resolution: number
-    width: number
-    height: number
-    origin: [number, number]
-    source: string
-  }
+  map: SiteMapMeta | null
+}
+
+export type Role = 'viewer' | 'operator' | 'admin'
+
+export interface SiteSummary {
+  id: string
+  name: string
+  operator: string
+  role: Role
+  robots?: number
+  openAlerts?: number
+}
+
+export interface Me {
+  user: { username: string; displayName: string; roles: Record<string, Role> } | null
+  sites: SiteSummary[]
+}
+
+export interface EventTypeDef {
+  id: string
+  label: string
+  severity: Severity
+  detail?: string
+  builtin: boolean
+}
+
+export interface ApiKeyRec {
+  id: string
+  label: string
+  key: string
+  createdAt: number
+  lastUsedAt?: number
+}
+
+export interface ExternalUnit {
+  id: string
+  serial: string
+  callsign: string
+  model: string
+  level?: 'state-only' | 'dispatchable'
+  lastSeen: number
+  online: boolean
+  mode?: string
+}
+
+export interface AdapterOrder {
+  id: string
+  robotId: string
+  kind: 'goto' | 'mission'
+  payload: { x?: number; z?: number; missionId?: string; name?: string }
+  state: 'pending' | 'acked' | 'done' | 'failed'
+  createdAt: number
+  updatedAt: number
 }
 
 export interface JointTemp {
@@ -93,7 +151,7 @@ export interface JointTemp {
   c: number
 }
 
-export type RobotMode = 'idle' | 'navigating' | 'executing' | 'teleop' | 'charging'
+export type RobotMode = 'idle' | 'navigating' | 'executing' | 'teleop' | 'charging' | 'offline'
 
 export interface Telemetry {
   id: string
@@ -117,15 +175,9 @@ export interface Telemetry {
 }
 
 export type Severity = 'critical' | 'high' | 'info' | 'low'
-export type DetectionModel =
-  | 'person'
-  | 'smoking'
-  | 'thermal'
-  | 'gauge'
-  | 'ppe'
-  | 'motion'
-  | 'acoustic'
-  | 'ogi'
+/** open vocabulary — built-in detection models plus site-registered custom event types */
+export type DetectionModel = string
+export const BUILTIN_MODELS = ['person', 'smoking', 'thermal', 'gauge', 'ppe', 'motion', 'acoustic', 'ogi'] as const
 
 export interface DetectionEvent {
   id: string
@@ -218,6 +270,7 @@ export const MODE_LABEL: Record<RobotMode, string> = {
   executing: 'inspecting',
   teleop: 'teleop',
   charging: 'charging',
+  offline: 'offline',
 }
 
 export const ACTION_TYPES: ActionType[] = [

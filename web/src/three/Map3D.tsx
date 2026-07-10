@@ -7,7 +7,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { MapControls, Text, Line, Billboard, Edges } from '@react-three/drei'
 import * as THREE from 'three'
 import { Plus, Minus, Maximize2 } from 'lucide-react'
-import { useApp, api } from '../lib/store'
+import { useApp, api, useCan } from '../lib/store'
 import { useT } from '../lib/i18n'
 import type { Building, Telemetry, Waypoint } from '../lib/types'
 import { SEVERITY_COLOR } from '../lib/types'
@@ -38,6 +38,45 @@ interface MapControlsImpl {
 }
 
 // ---------- static scene ----------
+
+/** uploaded occupancy underlay (ROS map_server convention: origin = scene
+ *  coords of the image's top-left pixel, x→east/right, z→south/down) */
+function OccupancyUnderlay({ map }: { map: NonNullable<ReturnType<typeof useApp.getState>['site']>['map'] }) {
+  const [tex, setTex] = useState<THREE.Texture | null>(null)
+  useEffect(() => {
+    if (!map) return
+    let dead = false
+    new THREE.TextureLoader().load(map.image, (t) => {
+      if (dead) {
+        t.dispose()
+        return
+      }
+      t.colorSpace = THREE.NoColorSpace
+      t.minFilter = THREE.LinearFilter
+      setTex(t)
+    })
+    return () => {
+      dead = true
+      setTex((old) => {
+        old?.dispose()
+        return null
+      })
+    }
+  }, [map])
+  if (!map || !tex) return null
+  const w = map.width * map.resolution
+  const h = map.height * map.resolution
+  return (
+    <mesh
+      rotation={[-Math.PI / 2, 0, 0]}
+      position={[map.origin[0] + w / 2, 0.002, map.origin[1] + h / 2]}
+      raycast={NO_RAYCAST}
+    >
+      <planeGeometry args={[w, h]} />
+      <meshBasicMaterial map={tex} transparent opacity={0.34} depthWrite={false} color="#9aa39a" />
+    </mesh>
+  )
+}
 
 function Ground() {
   const grid = useMemo(() => {
@@ -510,6 +549,7 @@ export function Map3D({
   const telemetry = useApp((s) => s.telemetry)
   const events = useApp((s) => s.events)
   const t = useT()
+  const canOperate = useCan('operator')
   const [gotoMenu, setGotoMenu] = useState<Waypoint | null>(null)
   const controls = useRef<MapControlsImpl>(null)
   const homeRef = useRef({ pos: HOME.pos.clone(), tgt: HOME.tgt.clone() })
@@ -567,6 +607,7 @@ export function Map3D({
         />
         <Suspense fallback={null}>
           <Ground />
+          {site.map && <OccupancyUnderlay map={site.map} />}
           <Zones labels={labels} />
           <Buildings buildings={buildings} onMiss={interactive ? deselect : undefined} />
 
@@ -699,8 +740,8 @@ export function Map3D({
         </div>
       )}
 
-      {/* waypoint teleop menu */}
-      {gotoMenu && interactive && !onWaypointClick && (
+      {/* waypoint teleop menu — dispatching needs the operator role */}
+      {gotoMenu && interactive && !onWaypointClick && canOperate && (
         <div className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2">
           <div className="panel flex items-center gap-2 px-3 py-2">
             <span className="mono text-[13px] text-ink">{gotoMenu.id}</span>
@@ -771,7 +812,9 @@ export function Map3D({
             ))}
           </div>
           <div>
-            <span className="mono text-[10px] text-ink-3/80">occupancy 5 cm/px · {site.map.source} · 3D</span>
+            <span className="mono text-[10px] text-ink-3/80">
+              {site.map ? `occupancy ${Math.round(site.map.resolution * 100)} cm/px · ${site.map.source}` : site.name} · 3D
+            </span>
           </div>
         </div>
       )}

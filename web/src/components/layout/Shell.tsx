@@ -1,6 +1,6 @@
-import { NavLink, Outlet } from 'react-router'
-import { LayoutGrid, Cctv, Bot, Map as MapIcon, ShieldAlert, X, Route } from 'lucide-react'
-import { useApp } from '../../lib/store'
+import { NavLink, Outlet, useNavigate } from 'react-router'
+import { LayoutGrid, Cctv, Bot, Map as MapIcon, ShieldAlert, X, Route, Plug, LogIn, LogOut } from 'lucide-react'
+import { useApp, useAuth, useCan, useRole, useSite } from '../../lib/store'
 import { useDataSaver } from '../../lib/media'
 import { useT, useLang, type Lang } from '../../lib/i18n'
 import { utcClock } from '../../lib/format'
@@ -15,6 +15,7 @@ const NAV = [
   { to: '/map', key: 'nav.map', icon: MapIcon },
   { to: '/events', key: 'nav.events', icon: ShieldAlert },
 ]
+const NAV_ADMIN = [...NAV, { to: '/integrations', key: 'nav.integrations', icon: Plug }]
 
 function NavItem({ to, label, icon: Icon, badge }: { to: string; label: string; icon: any; badge: number }) {
   return (
@@ -77,6 +78,56 @@ function LangSwitch() {
   )
 }
 
+function SiteSwitch() {
+  const sites = useApp((s) => s.sites)
+  const siteId = useSite((s) => s.siteId)
+  const setSite = useSite((s) => s.setSite)
+  if (sites.length < 2) return null
+  return (
+    <select
+      value={siteId}
+      onChange={(e) => setSite(e.target.value)}
+      aria-label="site"
+      className="mono max-w-[170px] border border-line bg-surface px-1.5 py-0.5 text-[11px] tracking-[0.04em] text-ink-2 outline-none hover:text-ink"
+    >
+      {sites.map((s) => (
+        <option key={s.id} value={s.id}>
+          {s.name}
+        </option>
+      ))}
+    </select>
+  )
+}
+
+function AuthChip() {
+  const me = useAuth((s) => s.me)
+  const logout = useAuth((s) => s.logout)
+  const role = useRole()
+  const t = useT()
+  const nav = useNavigate()
+  if (!me?.user)
+    return (
+      <button
+        onClick={() => nav('/login')}
+        className="mono flex items-center gap-1.5 border border-line px-1.5 py-0.5 text-[11px] tracking-[0.08em] text-ink-3 transition-colors hover:text-ink"
+      >
+        <LogIn size={11} />
+        <span className="hidden sm:inline">{t('shell.signIn')}</span>
+      </button>
+    )
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className="mono hidden text-[11px] text-ink-2 md:inline">{me.user.username}</span>
+      <span className="mono border border-line-2 bg-surface-2 px-1 py-0.5 text-[10px] tracking-[0.1em] text-ink-3">
+        {t(`shell.role.${role}`)}
+      </span>
+      <button onClick={() => logout()} title={t('shell.signOut')} className="text-ink-3 transition-colors hover:text-ink">
+        <LogOut size={12} />
+      </button>
+    </span>
+  )
+}
+
 function EcoToggle() {
   const on = useDataSaver((s) => s.on)
   const toggle = useDataSaver((s) => s.toggle)
@@ -133,6 +184,8 @@ export function Shell() {
   const connected = useApp((s) => s.connected)
   const lang = useLang((s) => s.lang)
   const t = useT()
+  const isAdmin = useCan('admin')
+  const nav = isAdmin ? NAV_ADMIN : NAV
   const critCount = useApp(
     (s) => s.events.filter((e) => !e.acked && (e.severity === 'critical' || e.severity === 'high')).length,
   )
@@ -152,7 +205,9 @@ export function Shell() {
           </svg>
           <span className="text-[14px] font-semibold tracking-[0.02em] text-ink">Plantbot</span>
         </div>
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto flex items-center gap-2.5">
+          <SiteSwitch />
+          <AuthChip />
           <EcoToggle />
           <LangSwitch />
           {!connected && (
@@ -168,14 +223,14 @@ export function Shell() {
 
       {/* desktop rail */}
       <nav className="fixed bottom-0 left-0 top-12 z-40 hidden w-14 flex-col border-r border-line bg-surface md:flex">
-        {NAV.map((n) => (
+        {nav.map((n) => (
           <NavItem key={n.to} to={n.to} label={t(n.key)} icon={n.icon} badge={n.to === '/events' ? critCount : 0} />
         ))}
       </nav>
 
       {/* mobile bottom tab bar */}
       <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 flex h-[58px] border-t border-line bg-surface/95 backdrop-blur md:hidden">
-        {NAV.map((n) => (
+        {nav.map((n) => (
           <NavItem key={n.to} to={n.to} label={t(n.key)} icon={n.icon} badge={n.to === '/events' ? critCount : 0} />
         ))}
       </nav>

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ArrowLeft, Plus, X, ChevronUp, ChevronDown, OctagonX, Camera, Flame, Wind, AudioWaveform, Gauge, Timer, ScanEye } from 'lucide-react'
-import { useApp, api } from '../lib/store'
+import { useApp, api, useCan } from '../lib/store'
 import { useT, useAgo } from '../lib/i18n'
 import { Panel, PanelHead, MissionStatusTag, EmptyNote } from '../components/ui'
 import { OpsMap } from '../components/OpsMap'
@@ -244,6 +244,7 @@ function MissionPlanner({ onClose }: { onClose: () => void }) {
 // ---------- detail ----------
 
 function MissionDetail({ m }: { m: Mission }) {
+  const canOp = useCan('operator')
   const waypoints = useApp((s) => s.waypoints)
   const robots = useApp((s) => s.robots)
   const t = useT()
@@ -256,7 +257,7 @@ function MissionDetail({ m }: { m: Mission }) {
         <PanelHead
           label={`${m.id} · ${t('mi.plan')}`}
           right={
-            (m.status === 'active' || m.status === 'queued') && (
+            canOp && (m.status === 'active' || m.status === 'queued') && (
               <button
                 onClick={() => api.abortMission(m.id)}
                 className="mono flex items-center gap-1 border border-line-2 px-1.5 py-0.5 text-[10px] tracking-[0.08em] text-ink-3 transition-colors hover:border-crit/50 hover:text-crit"
@@ -370,6 +371,7 @@ function Row({ m, active, onClick }: { m: Mission; active: boolean; onClick: () 
 }
 
 export function Missions() {
+  const canOp = useCan('operator')
   const missions = useApp((s) => s.missions)
   const t = useT()
   const [selId, setSelId] = useState<string | null>(null)
@@ -397,12 +399,14 @@ export function Missions() {
             {groups.active.length} {t('ms.active')} · {groups.queued.length} {t('ms.queued')}
           </div>
         </div>
-        <button
-          onClick={() => setPlanning(true)}
-          className="mono flex items-center gap-1.5 border border-ink/30 bg-ink/10 px-2.5 py-1.5 text-[11.5px] tracking-[0.1em] text-ink transition-colors hover:bg-ink/15"
-        >
-          <Plus size={13} /> {t('mi.newMission')}
-        </button>
+        {canOp && (
+          <button
+            onClick={() => setPlanning(true)}
+            className="mono flex items-center gap-1.5 border border-ink/30 bg-ink/10 px-2.5 py-1.5 text-[11.5px] tracking-[0.1em] text-ink transition-colors hover:bg-ink/15"
+          >
+            <Plus size={13} /> {t('mi.newMission')}
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">

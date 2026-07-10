@@ -77,6 +77,7 @@ const MODE_TONE: Record<RobotMode, string> = {
   executing: 'var(--color-accent)',
   teleop: 'var(--color-warn)',
   charging: 'var(--color-accent)',
+  offline: 'var(--color-crit)',
 }
 
 export function ModeChip({ mode }: { mode?: RobotMode }) {

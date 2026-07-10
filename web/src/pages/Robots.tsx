@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { Plus, X, Camera, Flame, Radar, Wind, AudioWaveform, Compass, ScanEye, Dog, Car, Check, PawPrint, Truck } from 'lucide-react'
-import { useApp, api } from '../lib/store'
+import { useApp, api, useCan } from '../lib/store'
 import { useT, useLang, IDX } from '../lib/i18n'
 import { Panel, PanelHead, BatteryBar, ModeChip } from '../components/ui'
 const RobotThumb = lazy(() => import('../three/RobotThumb').then((m) => ({ default: m.RobotThumb })))
@@ -332,6 +332,7 @@ function RobotCard({ r }: { r: RobotSpec }) {
 }
 
 export function Robots() {
+  const canAdmin = useCan('admin')
   const robots = useApp((s) => s.robots)
   const telemetry = useApp((s) => s.telemetry)
   const t = useT()
@@ -373,7 +374,7 @@ export function Robots() {
             {g.list.map((r) => (
               <RobotCard key={r.id} r={r} />
             ))}
-            {g.key === 'ugv' && (
+            {g.key === 'ugv' && canAdmin && (
               <button
                 onClick={() => setConnect(true)}
                 className="flex min-h-[180px] flex-col items-center justify-center gap-2 border border-dashed border-line-2 text-ink-3 transition-colors hover:border-ink-3 hover:text-ink-2"

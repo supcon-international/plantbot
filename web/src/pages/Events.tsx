@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Check, X, Plus, Trash2, Columns3, Table2, SlidersHorizontal } from 'lucide-react'
-import { useApp, api } from '../lib/store'
+import { useApp, api, useCan } from '../lib/store'
 import { useT, useAgo } from '../lib/i18n'
 import { timeShort } from '../lib/format'
 import { Panel, SevTag, SevDot, EmptyNote, Modal } from '../components/ui'
@@ -8,6 +8,13 @@ import type { DetectionEvent, DetectionModel, DetectionRule, Severity } from '..
 import { SEVERITY_COLOR } from '../lib/types'
 
 const MODEL_IDS: DetectionModel[] = ['person', 'smoking', 'thermal', 'ogi', 'gauge', 'ppe', 'motion', 'acoustic']
+
+/** builtin models carry i18n labels; site-registered custom types carry their own */
+function useModelLabel() {
+  const t = useT()
+  const eventTypes = useApp((s) => s.eventTypes)
+  return (m: string) => (MODEL_IDS.includes(m) ? t(`ev.m.${m}`) : (eventTypes.find((x) => x.id === m)?.label ?? m))
+}
 
 function Snapshot({ ev, size = 'sm' }: { ev: DetectionEvent; size?: 'sm' | 'lg' }) {
   if (!ev.snapshot) return <div className={`skeleton ${size === 'sm' ? 'h-12 w-20' : 'h-40 w-full'} opacity-30`} />
@@ -22,6 +29,7 @@ function Snapshot({ ev, size = 'sm' }: { ev: DetectionEvent; size?: 'sm' | 'lg' 
 }
 
 function DetailModal({ ev, onClose, onRule }: { ev: DetectionEvent; onClose: () => void; onRule: (id: string) => void }) {
+  const canOp = useCan('operator')
   const ack = useApp((s) => s.ack)
   const rules = useApp((s) => s.rules)
   const rule = rules.find((r) => r.id === ev.ruleId)
@@ -69,7 +77,7 @@ function DetailModal({ ev, onClose, onRule }: { ev: DetectionEvent; onClose: () 
             </div>
           ))}
         </div>
-        {!ev.acked && (
+        {!ev.acked && canOp && (
           <button
             onClick={() => {
               ack(ev.id)
@@ -88,6 +96,7 @@ function DetailModal({ ev, onClose, onRule }: { ev: DetectionEvent; onClose: () 
 // ---------- board ----------
 
 function BoardCard({ e, onOpen }: { e: DetectionEvent; onOpen: () => void }) {
+  const canOp = useCan('operator')
   const ack = useApp((s) => s.ack)
   const clock = useApp((s) => s.clock)
   const t = useT()
@@ -107,7 +116,7 @@ function BoardCard({ e, onOpen }: { e: DetectionEvent; onOpen: () => void }) {
       <div className="mt-1.5 line-clamp-2 text-[13.5px] leading-snug text-ink">{e.label}</div>
       <div className="microlabel mt-1 truncate">{e.zone}</div>
       {e.snapshot && <img src={e.snapshot} alt="" loading="lazy" className="mt-2 h-20 w-full border border-line object-cover" />}
-      {!e.acked && (
+      {!e.acked && canOp && (
         <button
           onClick={(ev) => {
             ev.stopPropagation()
@@ -165,6 +174,8 @@ function Board({ events, onOpen }: { events: DetectionEvent[]; onOpen: (e: Detec
 // ---------- rules ----------
 
 function RuleRow({ r, hi, onViewEvents }: { r: DetectionRule; hi?: boolean; onViewEvents: (id: string) => void }) {
+  const canAdmin = useCan('admin')
+  const modelLabel = useModelLabel()
   const t = useT()
   const ago = useAgo()
   return (
@@ -173,7 +184,7 @@ function RuleRow({ r, hi, onViewEvents }: { r: DetectionRule; hi?: boolean; onVi
       style={hi ? { boxShadow: 'inset 2px 0 0 var(--color-accent)', background: 'var(--color-surface-2)' } : undefined}
     >
       <button
-        onClick={() => api.patchRule(r.id, { enabled: !r.enabled })}
+        onClick={canAdmin ? () => api.patchRule(r.id, { enabled: !r.enabled }) : undefined}
         className="relative h-4 w-8 shrink-0 border border-line-2 transition-colors"
         style={{ background: r.enabled ? 'var(--color-surface-3)' : 'transparent' }}
         title={r.enabled ? 'disable' : 'enable'}
@@ -189,7 +200,7 @@ function RuleRow({ r, hi, onViewEvents }: { r: DetectionRule; hi?: boolean; onVi
           {!r.builtin && <span className="mono border border-line px-1 text-[9.5px] tracking-[0.1em] text-ink-3">{t('ev.custom')}</span>}
         </div>
         <div className="microlabel mt-0.5 truncate">
-          {t(`ev.m.${r.model}`)} · {r.sourceName}
+          {modelLabel(r.model)} · {r.sourceName}
         </div>
       </div>
       <div className="flex items-center gap-2">
@@ -200,6 +211,7 @@ function RuleRow({ r, hi, onViewEvents }: { r: DetectionRule; hi?: boolean; onVi
           max={0.95}
           step={0.05}
           defaultValue={r.threshold}
+          disabled={!canAdmin}
           onChange={(e) => api.patchRule(r.id, { threshold: Number(e.target.value) })}
           className="h-[3px] w-20 cursor-pointer appearance-none bg-line-2 accent-ink-2"
         />
@@ -214,7 +226,7 @@ function RuleRow({ r, hi, onViewEvents }: { r: DetectionRule; hi?: boolean; onVi
         {r.firedCount}× {t('ev.fired')}
         <span className="block text-[10px] opacity-80">{r.lastFiredAt ? ago(r.lastFiredAt) : '—'}</span>
       </button>
-      {!r.builtin && (
+      {!r.builtin && canAdmin && (
         <button onClick={() => api.deleteRule(r.id)} className="text-ink-3 transition-colors hover:text-crit" title="delete">
           <Trash2 size={13} />
         </button>
@@ -224,6 +236,7 @@ function RuleRow({ r, hi, onViewEvents }: { r: DetectionRule; hi?: boolean; onVi
 }
 
 function NewRuleModal({ onClose }: { onClose: () => void }) {
+  const customTypes = useApp((s) => s.eventTypes.filter((x) => !x.builtin))
   const robots = useApp((s) => s.robots)
   const cameras = useApp((s) => s.cameras)
   const zonesList = useApp((s) => s.zones)
@@ -285,6 +298,11 @@ function NewRuleModal({ onClose }: { onClose: () => void }) {
               {MODEL_IDS.map((m) => (
                 <option key={m} value={m}>
                   {t(`ev.m.${m}`)}
+                </option>
+              ))}
+              {customTypes.map((et) => (
+                <option key={et.id} value={et.id}>
+                  {et.label}
                 </option>
               ))}
             </select>
@@ -352,6 +370,8 @@ function NewRuleModal({ onClose }: { onClose: () => void }) {
 type View = 'board' | 'table' | 'rules'
 
 export function Events() {
+  const canOp = useCan('operator')
+  const canAdmin = useCan('admin')
   const events = useApp((s) => s.events)
   const rules = useApp((s) => s.rules)
   const ack = useApp((s) => s.ack)
@@ -388,7 +408,7 @@ export function Events() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          {view === 'rules' && (
+          {view === 'rules' && canAdmin && (
             <button
               onClick={() => setNewRule(true)}
               className="mono flex items-center gap-1.5 border border-ink/30 bg-ink/10 px-2.5 py-1.5 text-[11.5px] tracking-[0.1em] text-ink transition-colors hover:bg-ink/15"
@@ -458,7 +478,7 @@ export function Events() {
                     <Snapshot ev={e} />
                   </td>
                   <td className="px-3.5 py-2.5 align-top">
-                    {!e.acked && (
+                    {!e.acked && canOp && (
                       <button
                         onClick={(ev) => {
                           ev.stopPropagation()
