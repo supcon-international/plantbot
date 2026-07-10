@@ -1,0 +1,141 @@
+# Plantbot 开放集成 API（v1）
+
+把任意品牌的巡检机器人/外部检测系统接入 Plantbot 场站。设计对齐业界既有标准,而不是再发明一套:
+
+| 借鉴 | 用在哪里 |
+| --- | --- |
+| **VDA 5050**(factsheet / state / order / instantAction 语义) | 注册消息=factsheet;`state` 上报;`orders` 拉取执行 |
+| **MassRobotics AMR Interop**(最小状态互通集) | `state-only` 接入级别的字段选型 |
+| **Open-RMF fleet adapter**(混合控制级别) | `level: state-only \| dispatchable` 两级接入 |
+| **ROS map_server**(`image + resolution + origin`) | 占据栅格地图上传约定 |
+| NEA/TC35《变电站巡检机器人系统交互接口》(HTTP+JSON 三类接口) | 传输选型:HTTP + WebSocket,JSON/UTF-8 |
+
+传输为 HTTP(+ 平台自身的 WS 遥测下发),不依赖 MQTT broker;生产部署可在适配器侧桥接 MQTT/VDA5050 原生栈。
+
+## 认证
+
+管理面(Web/REST `/api/sites/...` 写操作)用**账户会话**(角色:`viewer < operator < admin`,按场站授权;匿名=viewer 只读)。
+集成面(`/api/integration/v1/...`)用**场站 API Key**:管理员在 *Integrations* 面板签发,请求头携带:
+
+```
+Authorization: Bearer pbk_xxxxxxxx…
+```
+
+Key 与场站一一绑定——同一套端点,不同 Key 自动落到各自场站。
+
+## 端点总览
+
+| Method | Path | 说明 |
+| --- | --- | --- |
+| GET | `/api/integration/v1/site` | 场站 factsheet:边界、航点、区域、事件类型词表 |
+| POST | `/api/integration/v1/robots` | 注册/更新外部机器人(factsheet) |
+| DELETE | `/api/integration/v1/robots/:serial` | 注销 |
+| POST | `/api/integration/v1/robots/:serial/state` | 状态上报(兼作心跳;>20s 无上报判 offline) |
+| GET | `/api/integration/v1/robots/:serial/orders` | 拉取待执行订单(取走即置 `acked`) |
+| POST | `/api/integration/v1/orders/:id/status` | 回报订单结果 `done \| failed` |
+| POST | `/api/integration/v1/events` | 推送自定义事件(类型需先注册) |
+| POST | `/api/integration/v1/maps` | 上传占据栅格地图(ROS 约定) |
+
+## 1. 注册机器人(factsheet)
+
+```bash
+curl -X POST $BASE/api/integration/v1/robots \
+  -H "authorization: Bearer $KEY" -H 'content-type: application/json' -d '{
+  "serial": "ACME-0007",            # 必填,幂等键
+  "model": "ANYmal C",              # 命中内置目录时自动带出 3D 孪生/参数
+  "level": "dispatchable",          # state-only | dispatchable
+  "callsign": "ACME·07",
+  "family": "quadruped",
+  "home": {"x": -6, "z": -4},
+  "streams": [{"id":"acme-front","name":"Front cam","kind":"camera","url":"https://…/front.m3u8"}]
+}'
+```
+
+`level` 语义(Open-RMF 混合控制级别):
+- **state-only** — 平台只显示你的状态/事件,不会向你派单;
+- **dispatchable** — 操作员可对你 tap-to-dispatch、指派任务;订单进入队列由适配器拉取执行。
+
+注册后机器人立即出现在该场站 FLEET/地图上(标记 `EXTERNAL`)。
+
+## 2. 状态上报(≈1 Hz,兼作心跳)
+
+```bash
+curl -X POST $BASE/api/integration/v1/robots/ACME-0007/state \
+  -H "authorization: Bearer $KEY" -H 'content-type: application/json' \
+  -d '{"x":-5.5,"z":-3.8,"heading":1.2,"speed":0.6,"battery":81,"mode":"navigating"}'
+```
+
+字段全部可选,给多少更新多少。`mode ∈ idle|navigating|executing|teleop|charging`。响应携带 `ordersPending` 计数,便于适配器决定何时拉单。超过 20 秒未上报,平台侧显示 `OFFLINE`。
+
+## 3. 订单(dispatchable)
+
+```bash
+curl $BASE/api/integration/v1/robots/ACME-0007/orders -H "authorization: Bearer $KEY"
+# → {"orders":[{"id":"OR-0001","kind":"goto","payload":{"x":3,"z":2},…},
+#              {"id":"OR-0002","kind":"mission","payload":{"missionId":"M-107","name":"…","steps":[…]}}]}
+
+curl -X POST $BASE/api/integration/v1/orders/OR-0002/status \
+  -H "authorization: Bearer $KEY" -H 'content-type: application/json' \
+  -d '{"status":"done","note":"3 waypoints inspected"}'
+```
+
+`kind: goto` 来自地图 tap-to-dispatch;`kind: mission` 是操作员显式指派给该机器人的完整任务(订单完结会同步任务状态)。平台不会把 `auto` 任务自动派给外部机器人——只派显式点名的。
+
+## 4. 自定义事件
+
+先在 *Integrations* 面板(或 `POST /api/sites/:siteId/event-types`,admin)注册类型:
+
+```json
+{ "id": "valve-leak", "label": "Valve micro-leak", "severity": "high", "detail": "Acoustic + OGI fusion" }
+```
+
+之后即可推送(未注册类型返回 400——保持事件词表受控):
+
+```bash
+curl -X POST $BASE/api/integration/v1/events \
+  -H "authorization: Bearer $KEY" -H 'content-type: application/json' -d '{
+  "type": "valve-leak",
+  "robotSerial": "ACME-0007",      # 可选:挂到机器人当前位置
+  "detail": "CH4 8ppm at flange B-12",
+  "severity": "high",              # 可选,默认取类型注册值
+  "x": 3.2, "z": -1.4,             # 可选:显式坐标
+  "snapshotUrl": "https://…/frame.jpg",
+  "confidence": 0.83
+}'
+```
+
+事件进入统一事件流:看板/表格/地图钉/toast/ACK 全部生效;自定义类型同样可用于规则引擎(NEW RULE 的模型下拉里)。
+
+## 5. 地图上传(ROS map_server 约定)
+
+```bash
+curl -X POST $BASE/api/integration/v1/maps \
+  -H "authorization: Bearer $KEY" -H 'content-type: application/json' -d '{
+  "name": "slam_toolbox 2026-07-10",
+  "resolution": 0.05,               # 米/像素,来自 map.yaml
+  "origin": [-16, -9],              # 图像左上角像素的场景坐标 [x, z]
+  "image": "data:image/png;base64,…"  # PNG(PGM 请先转 PNG),≤8MB
+}'
+```
+
+坐标系:场景 x→东(图像向右),z→南(图像向下)。从 ROS `map.yaml`(origin 为左下角、y 向上)换算:`originX 不变`,`originZ = -(origin_y + height × resolution)`。
+
+上传即生效:持久化存储、广播到所有在线客户端,3D 作业地图立即以半透明底图渲染(OPS MAP 地面层)。
+
+## 参考适配器(20 行跑通)
+
+```python
+import requests, time, math
+B, K = 'https://your-host/robots/api/integration/v1', {'authorization': 'Bearer pbk_…'}
+requests.post(f'{B}/robots', headers=K, json={'serial':'PY-01','model':'Husky A200','level':'dispatchable','home':{'x':0,'z':0}})
+x = z = 0.0; target = None
+while True:
+    for o in requests.get(f'{B}/robots/PY-01/orders', headers=K).json()['orders']:
+        if o['kind'] == 'goto': target = (o['payload']['x'], o['payload']['z'], o['id'])
+    if target:
+        dx, dz = target[0]-x, target[1]-z; d = math.hypot(dx, dz)
+        if d < 0.2: requests.post(f"{B}/orders/{target[2]}/status", headers=K, json={'status':'done'}); target = None
+        else: x += dx/d*0.5; z += dz/d*0.5
+    requests.post(f'{B}/robots/PY-01/state', headers=K, json={'x':x,'z':z,'speed':0.5 if target else 0,'battery':88,'mode':'navigating' if target else 'idle'})
+    time.sleep(1)
+```
