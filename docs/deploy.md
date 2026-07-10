@@ -35,6 +35,24 @@ Restart=on-failure
 
 辅助：`plantbot-snap-gc.timer` 每小时清理 24h 前的事件快照 JPG（上游只写不删，防磁盘涨满）。
 
+### 集成层（三对 simulator/adapter，演示环境）
+
+外部机器人（SPOT·A / X30·EXT / GS·F2×2）来自 `integrations/` 的六个独立进程。演示环境 sim+adapter 都跑；
+接真机时只部署 adapter。每对一个 systemd unit（模式同 plantbot.service，`WorkingDirectory` 指 `integrations/`，
+`ExecStart` 指 `node node_modules/tsx/dist/cli.mjs <vendor>/{sim,adapter}/main.ts`）。关键环境变量：
+
+```ini
+# 平台侧（plantbot.service drop-in）——播种适配器秘钥，与各 adapter 的 PLANTBOT_KEY 一致：
+Environment=PB_SEED_KEYS=plant-07=pbk_xxx,plant-12=pbk_yyy,campus-east=pbk_zzz
+# 各 adapter：
+Environment=PLANTBOT_BASE=http://127.0.0.1:8787
+Environment=PLANTBOT_KEY=pbk_xxx
+Environment=STREAM_BASE=/robots/media      # 子路径部署时注册流地址的前缀（本地默认 /media）
+```
+
+真实秘钥值同样记录在 `/home/ubuntu/plantbot-credentials.txt`，不入库。sim 侧无秘密（本地回环监听）。
+掉线语义：adapter 停止 = 机器人 20s 后显示 OFFLINE（注册信息在 `config.json` 持久，重启平台仍在场）。
+
 ## 更新流程（在服务器上）
 
 ```bash

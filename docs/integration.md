@@ -23,6 +23,12 @@ Authorization: Bearer pbk_xxxxxxxx…
 
 Key 与场站一一绑定——同一套端点,不同 Key 自动落到各自场站。
 
+秘钥交接:生产在 *Integrations* 面板签发,或 `PB_SEED_KEYS="plant-07=pbk_…,campus-east=pbk_…"` 由部署环境注入;
+开发时根 `pnpm dev` 自带 `PB_DEV_KEYS=1`,播种确定性 `pbk_dev_<site>`(内置 sim 适配器的默认值,零配置互认)。
+
+> 三个**参考适配器**(Boston Dynamics Spot·gRPC / 云深处 X30·TCP / 高新兴 F2·云 REST+WS)连同各自的
+> 机器人仿真器随仓库提供于 `integrations/`,架构与厂商映射见 [adapter-sim-architecture.md](adapter-sim-architecture.md)。
+
 ## 端点总览
 
 | Method | Path | 说明 |
@@ -35,6 +41,7 @@ Key 与场站一一绑定——同一套端点,不同 Key 自动落到各自场�
 | POST | `/api/integration/v1/orders/:id/status` | 回报订单结果 `done \| failed` |
 | POST | `/api/integration/v1/events` | 推送自定义事件(类型需先注册;支持 evidence/category/runId) |
 | POST | `/api/integration/v1/robots/:serial/readings` | 批量上报 payload 读数(稳定信封) |
+| POST | `/api/integration/v1/snapshot` | 证据抓帧:`{stream}` → `{url}`,平台从已登记帧源出快照托管 |
 | POST | `/api/integration/v1/maps` | 上传占据栅格地图(ROS 约定) |
 
 ## 1. 注册机器人(factsheet)
@@ -80,7 +87,17 @@ curl -X POST $BASE/api/integration/v1/orders/OR-0002/status \
   -d '{"status":"done","note":"3 waypoints inspected"}'
 ```
 
-`kind: goto` 来自地图 tap-to-dispatch;`kind: mission` 是操作员显式指派给该机器人的完整任务(订单完结会同步任务状态)。平台不会把 `auto` 任务自动派给外部机器人——只派显式点名的。
+订单共七类(适配器按厂商能力如实执行或回 `failed: unsupported`):
+
+| kind | payload | 语义 |
+| --- | --- | --- |
+| `goto` | `{x, z, dock?}` | 地图 tap-to-dispatch;`dock: true` 表示这是回桩命令——适配器可换用厂商自己的回充例程(如高新兴一键充电) |
+| `mission` | `{missionId, name, steps[]}` | 操作员显式指派的完整任务;**只有 mission 订单的完结会结算平台侧任务状态** |
+| `announce` | `{text}` | 语音播报 |
+| `pause` / `resume` / `abort` | `{missionId}` | 操作员对进行中外部任务的干预(missionId 仅作引用) |
+| `ptz` | `{channelId, pan?, tilt?, zoom?}` | 云台意图 |
+
+平台不会把 `auto` 任务自动派给外部机器人——只派显式点名的(排程也可用 `assign: {kind:'robot'}` 钉死外部单元,机器人未注册时任务留队,注册后自动派发)。
 
 ## 4. 自定义事件
 

@@ -22,6 +22,10 @@ const SOURCE: Record<string, string> = {
   'workshop-cam': 'staging.mp4',
   'mast-cam': 'plant_aerial.mp4',
   'tank-cam': 'tanknight.mp4',
+  // external vendor units (adapter-registered streams)
+  'spotext-cam': 'switchgear.mp4',
+  'x30ext-front': 'substation.mp4',
+  'x30ext-thermal': 'thermal.mp4',
   // Plant 12 · Harbor Terminal
   'x30b-optical': 'substation.mp4',
   'x30b-thermal': 'thermal.mp4',

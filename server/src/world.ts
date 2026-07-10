@@ -217,12 +217,27 @@ export interface NavState {
   onResult?: (m: Mission, r: MissionResult) => void
 }
 
-/** VDA5050-order-like unit of work queued for an external (adapter) robot */
+/** VDA5050-order-like unit of work queued for an external (adapter) robot.
+ *  pause/resume/abort mirror operator commands onto an in-flight mission order;
+ *  ptz forwards camera intent; goto with dock:true keeps the dock semantic so
+ *  adapters can substitute the vendor's own charge/return routine. */
 export interface AdapterOrder {
   id: string
   robotId: string
-  kind: 'goto' | 'mission' | 'announce'
-  payload: { x?: number; z?: number; missionId?: string; name?: string; steps?: MissionStep[]; text?: string }
+  kind: 'goto' | 'mission' | 'announce' | 'pause' | 'resume' | 'abort' | 'ptz'
+  payload: {
+    x?: number
+    z?: number
+    dock?: boolean
+    missionId?: string
+    name?: string
+    steps?: MissionStep[]
+    text?: string
+    channelId?: string
+    pan?: number
+    tilt?: number
+    zoom?: number
+  }
   state: 'pending' | 'acked' | 'done' | 'failed'
   createdAt: number
   updatedAt: number
@@ -1150,6 +1165,9 @@ export class World {
     const m = this.missions.find((x) => x.id === id)
     if (!m || m.status !== 'active') return undefined
     m.paused = paused
+    // an externally-executed mission must hear about it, or only the UI pauses
+    const r = m.robotId ? this.robots.find((x) => x.id === m.robotId) : undefined
+    if (r?.adapter === 'external') this.enqueueOrder(r.id, paused ? 'pause' : 'resume', { missionId: m.id })
     return m
   }
 
@@ -1163,8 +1181,16 @@ export class World {
         s.path = []
         s.missionId = undefined
       }
-      // cancel any pending adapter order carrying this mission
-      for (const o of this.orders) if (o.payload.missionId === m.id && o.state === 'pending') o.state = 'failed'
+      // cancel any pending adapter order carrying this mission; if the adapter
+      // already pulled it, follow up with an explicit abort order
+      let acked = false
+      for (const o of this.orders)
+        if (o.payload.missionId === m.id) {
+          if (o.state === 'pending') o.state = 'failed'
+          else if (o.state === 'acked' && o.kind === 'mission') acked = true
+        }
+      const r = this.robots.find((x) => x.id === m.robotId)
+      if (r?.adapter === 'external' && acked) this.enqueueOrder(r.id, 'abort', { missionId: m.id })
     }
     m.status = 'aborted'
     m.endedAt = Date.now()
@@ -1225,6 +1251,12 @@ export class World {
       }
       case 'dock': {
         const dock = this.wpById.get(this.def.dockWp)!
+        if (r.adapter === 'external') {
+          // keep the dock semantic — the adapter may swap in the vendor's own
+          // return-to-charge routine instead of plain navigation
+          this.enqueueOrder(robotId, 'goto', { x: dock.x, z: dock.z, dock: true })
+          return done(true)
+        }
         return done(this.teleopGoto(robotId, dock.x, dock.z))
       }
       case 'pause':
@@ -1248,6 +1280,8 @@ export class World {
       case 'ptz': {
         const ch = this.channels(robotId).find((c) => c.id === cmd.channelId)
         if (!ch) return done(false, 'unknown channel')
+        if (r.adapter === 'external')
+          this.enqueueOrder(robotId, 'ptz', { channelId: ch.streamKey ?? ch.id, pan: cmd.pan, tilt: cmd.tilt, zoom: cmd.zoom })
         return done(true)
       }
       case 'velocity': {
@@ -1325,12 +1359,16 @@ export class World {
     if (!o) return undefined
     o.state = state
     o.updatedAt = Date.now()
-    if (o.payload.missionId) {
+    // only the mission order itself settles the mission — pause/resume/abort
+    // orders carry missionId purely as a reference
+    if (o.kind === 'mission' && o.payload.missionId) {
       const m = this.missions.find((x) => x.id === o.payload.missionId)
       if (m && m.status === 'active') {
         m.status = state === 'done' ? 'done' : 'failed'
         m.progress = state === 'done' ? 1 : m.progress
         m.endedAt = Date.now()
+        const s = m.robotId ? this.nav.get(m.robotId) : undefined
+        if (s?.missionId === m.id) s.missionId = undefined
         if (note)
           m.results.push({
             ts: Date.now(),
@@ -1384,7 +1422,10 @@ export class World {
       m.currentStep = 0
       m.progress = 0
       if (robot.adapter === 'external') {
-        // hand the whole mission to the adapter as one order (VDA5050-style)
+        // hand the whole mission to the adapter as one order (VDA5050-style);
+        // still pin nav.missionId so robot-scoped pause/resume/abort commands
+        // resolve the active mission for external units too
+        s.missionId = m.id
         this.enqueueOrder(robot.id, 'mission', { missionId: m.id, name: m.name, steps: m.steps })
         continue
       }

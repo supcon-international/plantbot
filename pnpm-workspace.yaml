@@ -1,5 +1,7 @@
 packages:
   - server
   - web
+  - integrations
 allowBuilds:
   esbuild: true
+  protobufjs: true

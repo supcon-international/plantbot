@@ -15,9 +15,10 @@
 | **MAP** 地图 | 双模式：**OPS MAP**（SLAM OccupancyGrid 栅格底图 → 主题化 canvas 渲染 + waypoint/zone/实时位姿/规划路径矢量层，点击航点即可 teleop 派遣）/ **3D SCAN**（高斯 splat 场景 + 实时 marker） |
 | **EVENTS** 事件 | **三列看板**（Critical / High / Routine）+ 表格视图 + **规则定义**：检测模型 × 视频源 × 置信度阈值 × severity，可新建/启停/调阈值——规则实时约束事件生成器;规则模型下拉同时提供**自定义事件类型** |
 | **多场站** | 顶栏一键切换场站（Plant 07 工业园区 / Plant 12 海港储运站 / **Campus East 校园安防**）。每站独立 World 实例：机队、任务调度、A* 规划网格、规则、事件流、WebSocket 房间全部隔离 |
-| **Campus East 安防场景** | 10 台 · 6 型号协同（Go2×2 / Lite3 / X30×2 / Husky×2 / ANYmal + **高新兴 GS Patrol F2 ×2 经集成 API 虚拟接入**）。Checkpoint 停顿巡逻（大门→图书馆→食堂→宿舍）、周界夜巡（热成像）、停车场与消防通道、实验楼气体轮巡全部由排程驱动;机器人直报**可疑背包**事件;安防词表：翻越围栏 / 跌倒 / 尾随 / 人员聚集 / 电动车占道,16 路真实巡逻画面 |
+| **Campus East 安防场景** | 10 台 · 6 型号协同（Go2×2 / Lite3 / X30×2 / Husky×2 / ANYmal + **高新兴 GS Patrol F2 ×2 经三层集成架构外部接入**）。Checkpoint 停顿巡逻（大门→图书馆→食堂→宿舍）、周界夜巡（热成像）、停车场与消防通道、实验楼气体轮巡全部由排程驱动;机器人直报**可疑背包**事件;安防词表：跌倒 / 尾随 / 人员聚集 / 电动车占道,16 路真实巡逻画面 |
 | **用户与角色** | 匿名即可浏览（公开演示保留）;登录升权。三档角色 × 场站授权矩阵（Orbit/InOrbit 式）：`viewer` 只读 / `operator` 建任务·派遣·ACK / `admin` 规则·开通·集成配置。演示账户 `admin / operator / viewer`,密码 `plantbot`（生产用 `PB_*_PASSWORD` 环境变量轮换） |
-| **集成开放 API** | 语义对齐 **VDA 5050**（factsheet/state/order），接入级别学 **Open-RMF**（`state-only` / `dispatchable`），地图上传走 **ROS map_server** 约定（PNG+resolution+origin,上传即在 3D 地图渲染底图）;自定义事件类型注册 + ingest。场站级 API Key,admin 面板管理。详见 [docs/integration.md](docs/integration.md) |
+| **集成开放 API** | 语义对齐 **VDA 5050**（factsheet/state/order），接入级别学 **Open-RMF**（`state-only` / `dispatchable`），地图上传走 **ROS map_server** 约定（PNG+resolution+origin,上传即在 3D 地图渲染底图）;自定义事件类型注册 + ingest + 证据抓帧服务。场站级 API Key,admin 面板管理。详见 [docs/integration.md](docs/integration.md) |
+| **三层集成架构** | **simulator ⇄ adapter ⇄ platform**（Open-RMF fleet-adapter 式）:`integrations/` 里三家厂商各一对独立进程,**忠实还原官方协议**——Boston Dynamics Spot（59 个官方 proto,gRPC 会话舞蹈 auth→timesync→lease→estop→power 全套闸）/ 云深处 X30（robotserver_sdk 裸 TCP `EB90` 帧+XML,1003 终态语义）/ 高新兴 GS F2（GoRobot 云 `.action` RPC + WS 增量推送 + md5 登录 + 10s 流地址）。adapter 对「真机 or sim」零感知,接真机即插;25 项全行为 e2e（`cd integrations && pnpm test`）。设计见 [docs/adapter-sim-architecture.md](docs/adapter-sim-architecture.md) |
 
 ## 快速开始
 
@@ -27,7 +28,8 @@
 git clone https://github.com/supcon-international/plantbot.git && cd plantbot
 pnpm install
 pnpm run setup # 下载巡检视频素材、URDF 模型（DEEP Robotics/Unitree/ANYbotics/Clearpath）、高斯 splat 场景（全自动,约 200 MB）,并预渲染 640p 省流变体
-pnpm dev       # server :8787 + web :5173
+pnpm dev       # server :8787 + web :5173 + 三对厂商 sim/adapter（Spot/X30/GS F2 外部机器人上线）
+pnpm dev:core  # 只起 server + web
 ```
 
 `pnpm run setup` 幂等可重跑:资产已存在则跳过;网络抖动(CDN 限流)会自动重试。注意必须是 `pnpm run setup`——裸 `pnpm setup` 会被 pnpm 内置命令遮蔽。
@@ -50,6 +52,16 @@ server/  Fastify 5 + ws + @fastify/static（/media，Range）
              teleop 抢占、低电返航充电、循环任务冷却复用
            - planner.ts：64×36 栅格 A*（对角+禁切角+共线简化）≈ 机器人端 Nav2
            - 事件生成由启用中的规则驱动，快照从对应流抓真实帧
+
+integrations/  三层集成（simulator ⇄ adapter ⇄ platform），六个独立 Node 进程
+           - spot/      官方 bosdyn.api proto ×59；sim=gRPC server（lease/estop/power 闸），
+                        adapter=mini bosdyn-client（会话舞蹈 + NavigateToAnchor）→ plant-07
+           - deeprobotics/  robotserver_sdk 线协议（TCP EB90 帧 + PatrolDevice XML）；
+                        sim=X30「106 导航主机」，adapter=1002/1003/1004/1007 客户端 → plant-12
+           - gosuncn/   GoRobot 云 API（.action RPC + Token + WS 推送）；sim=伪厂商云 + F2 行为模型，
+                        adapter=登录保活/告警桥/px↔米标定 → campus-east
+           - test/      25 项全行为 e2e：起真平台+真 sim+真 adapter 断言注册/遥测/派单/任务/
+                        事件/读数/dock/故障/掉线恢复/线协议怪癖
 
 ffmpeg   快照抓帧：事件/任务快照直接从本地素材随机时间点截取
            - 热成像 inferno / OGI·MWIR 两路观感由 setup 预渲染成离线环路

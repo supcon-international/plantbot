@@ -443,6 +443,19 @@ const plant07: SiteDef = {
   ],
   missionSeeds: [
     {
+      // 外部接入的 Spot（bosdyn adapter）——排程钉死给它，注册前任务留队自愈
+      name: 'Spot switchgear anchors',
+      priority: 2,
+      requestedRobot: 'ext-bd-91250107',
+      recurring: true,
+      everyMin: 18,
+      steps: [
+        { waypointId: 'WP-05', actions: [A('capture_photo', 4)] },
+        { waypointId: 'WP-02', actions: [A('capture_photo', 3)] },
+        { waypointId: 'WP-13', actions: [A('capture_photo', 3)] },
+      ],
+    },
+    {
       name: 'North corridor patrol',
       priority: 2,
       requestedRobot: 'lite3-01',
@@ -726,6 +739,19 @@ const plant12: SiteDef = {
     { name: 'CH₄ ceiling — tank row', model: 'ogi', kind: 'threshold', source: 'x30b-thermal', sourceName: 'X30-02 · Gas detector', zone: 'Tank row — ATEX', threshold: 1, severity: 'high', robotId: 'x30-02', metric: 'ch4.ppm', op: '>', bound: 6 },
   ],
   missionSeeds: [
+    {
+      // 外部接入的绝影 X30（robotserver adapter）——1003 原生多点任务
+      name: 'X30 berth sweep (external)',
+      priority: 2,
+      requestedRobot: 'ext-x30-jy-2024-0007',
+      recurring: true,
+      everyMin: 24,
+      steps: [
+        { waypointId: 'HB-02', actions: [A('capture_photo', 3)] },
+        { waypointId: 'HB-04', actions: [A('thermal_scan', 8)] },
+        { waypointId: 'HB-05', actions: [A('thermal_scan', 6)] },
+      ],
+    },
     {
       name: 'Tank row thermal round',
       priority: 1,

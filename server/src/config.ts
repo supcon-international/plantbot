@@ -10,7 +10,9 @@ import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
 import type { Severity } from './fleet.js'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
-export const DATA_DIR = join(ROOT, 'data')
+// PB_DATA_DIR redirects all durable state (config.json, uploaded maps) —
+// integration e2e tests boot throwaway platforms without touching dev data
+export const DATA_DIR = process.env.PB_DATA_DIR ?? join(ROOT, 'data')
 export const MAPS_DIR = join(DATA_DIR, 'maps')
 const CONFIG_PATH = join(DATA_DIR, 'config.json')
 mkdirSync(MAPS_DIR, { recursive: true })
@@ -126,8 +128,29 @@ export function loadConfig(siteIds: string[]): PlatformConfig {
     if (pw && u?.seeded) Object.assign(u, hashPassword(pw))
   }
   for (const id of siteIds) config.sites[id] ??= { apiKeys: [], eventTypes: [], externals: [] }
+  seedApiKeys(siteIds)
   saveConfig()
   return config
+}
+
+/** Adapter onboarding without a manual console visit:
+ *  - PB_SEED_KEYS="plant-07=pbk_abc,campus-east=pbk_def" pins production keys
+ *    from the environment (systemd drop-in), so adapters and platform share
+ *    secrets without anything entering git.
+ *  - PB_DEV_KEYS=1 (set by the root `pnpm dev` script only) seeds the
+ *    deterministic pbk_dev_<site> keys the bundled sim adapters default to. */
+function seedApiKeys(siteIds: string[]) {
+  const upsert = (siteId: string, key: string, label: string) => {
+    const sc = config.sites[siteId]
+    if (!sc || sc.apiKeys.some((k) => k.key === key)) return
+    sc.apiKeys.push({ id: `AK-seed-${siteId}`, label, key, createdAt: Date.now() })
+  }
+  for (const pair of (process.env.PB_SEED_KEYS ?? '').split(',')) {
+    const [siteId, key] = pair.split('=').map((s) => s.trim())
+    if (siteId && key?.startsWith('pbk_')) upsert(siteId, key, 'seeded adapter key (env)')
+  }
+  if (process.env.PB_DEV_KEYS === '1')
+    for (const id of siteIds) upsert(id, `pbk_dev_${id.replace(/-/g, '')}`, 'dev adapter key')
 }
 
 export function getConfig(): PlatformConfig {

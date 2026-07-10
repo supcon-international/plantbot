@@ -1,0 +1,29 @@
+{
+  "name": "integrations",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sim:gosuncn": "tsx gosuncn/sim/main.ts",
+    "adapter:gosuncn": "tsx gosuncn/adapter/main.ts",
+    "sim:deeprobotics": "tsx deeprobotics/sim/main.ts",
+    "adapter:deeprobotics": "tsx deeprobotics/adapter/main.ts",
+    "sim:spot": "tsx spot/sim/main.ts",
+    "adapter:spot": "tsx spot/adapter/main.ts",
+    "dev": "node scripts/dev-all.mjs",
+    "test": "node --import tsx --test test/*.e2e.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fastify/multipart": "^9.0.3",
+    "@grpc/grpc-js": "^1.13.4",
+    "@grpc/proto-loader": "^0.7.15",
+    "fastify": "^5.3.2",
+    "ws": "^8.18.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}

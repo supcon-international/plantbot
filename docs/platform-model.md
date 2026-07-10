@@ -252,8 +252,17 @@ type Command =
 7. `GET /maps` 清单(occupancy/splat)+ Transform 资源(像素→world、world→wgs84 演示锚点);
    splat 从前端硬编码迁入 SiteDef,无扫描站点自动降级 ops 图层。
 8. integration v1 扩展:`POST /robots/:serial/readings` 批量上报、events 接受
-   evidence/category/runId。GoRobot adapter 参考实现(tk 保活、getVideoUrl 换 session、
-   80 字段拆 state/readings/events 三流)留待真机接入时验证。
+   evidence/category/runId。
+
+**✅ P3 — 三层集成架构(2026-07-10 全量实施)**
+9. **simulator ⇄ adapter ⇄ platform** 三层落地(`integrations/`,设计见
+   [adapter-sim-architecture.md](adapter-sim-architecture.md)):三家厂商协议忠实还原
+   (Spot·官方 proto gRPC / 云深处·robotserver TCP+XML / 高新兴·GoRobot 云 REST+WS),
+   adapter 对真机即插。GoRobot adapter 从设想变为实现:tk 保活、告警桥(含平台侧证据抓帧)、
+   px↔米标定、navigateToPoint 派单、一键充电 dock 语义,全部经 25 项 e2e 验证。
+   配套平台增量:AdapterOrder 扩至七类(+pause/resume/abort/ptz + goto 的 dock 标志)、
+   `POST /integration/v1/snapshot` 证据抓帧服务、`PB_SEED_KEYS`/`PB_DEV_KEYS` 秘钥播种、
+   `PB_DATA_DIR` 测试隔离、排程可钉死外部机器人。
 
 ## 4. 明确不做
 

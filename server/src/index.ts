@@ -757,6 +757,19 @@ app.post(`${I}/robots/:serial/readings`, async (req: FastifyRequest<{ Params: { 
   return { accepted, skipped: items.length - accepted, metrics: METRIC_DEFS.map((d) => d.id) }
 })
 
+/** evidence-capture service: adapters reference a platform-registered frame
+ *  source (their unit's stream key) and get back a hosted snapshot URL — no
+ *  vendor-side transcoding needed to attach image evidence to events */
+app.post(`${I}/snapshot`, async (req: FastifyRequest<{ Body: any }>, reply) => {
+  const w = integrationSite(req, reply)
+  if (!w) return
+  const stream = String((req.body as any)?.stream ?? '')
+  if (!stream) return reply.code(400).send({ error: 'stream required' })
+  const url = await w.missionSnapshot(stream, 'ADP')
+  if (!url) return reply.code(404).send({ error: `no frame source for stream '${stream}'` })
+  return { url }
+})
+
 /** ROS map_server-style occupancy upload: image is a base64 PNG data URL;
  *  origin = scene coords of the image's TOP-LEFT pixel, x→east, z→south
  *  (from a ROS map.yaml: originX stays, originZ = -(origin_y + height*resolution)) */
@@ -802,12 +815,6 @@ app.post(`${I}/maps`, async (req: FastifyRequest<{ Body: any }>, reply) => {
 // ---------- simulation loops ----------
 
 for (const w of worlds.values()) w.seedMissions()
-
-// virtual Gosuncn service-patrol fleet joins Campus East via adapter semantics
-import('./gosim.js').then(({ startGosim }) => {
-  const campus = worlds.get('campus-east')
-  if (campus) startGosim(campus)
-})
 
 let last = Date.now()
 setInterval(() => {

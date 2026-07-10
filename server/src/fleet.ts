@@ -178,6 +178,9 @@ export const METRIC_DEFS: MetricDef[] = [
   { id: 'amb.temp.c', label: 'ambient', unit: '°C', kind: 'gauge', nominal: [-5, 38], decimals: 1 },
   { id: 'amb.rh.pct', label: 'humidity', unit: '%RH', kind: 'gauge', nominal: [20, 85], decimals: 0 },
   { id: 'noise.db', label: 'noise', unit: 'dB(A)', kind: 'gauge', nominal: [30, 70], decimals: 1 },
+  // robot-health set — adapters report these from vendor state (e.g. Spot battery)
+  { id: 'batt.v', label: 'battery', unit: 'V', kind: 'gauge', nominal: [42, 58], decimals: 1 },
+  { id: 'batt.temp.c', label: 'battery temp', unit: '°C', kind: 'gauge', nominal: [5, 45], decimals: 1 },
 ]
 
 /** which metrics a payload kind emits — new sensors are data, not schema */
