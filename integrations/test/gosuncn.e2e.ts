@@ -4,8 +4,7 @@
 
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { bootPlatform, spawnProc, waitFor, api, integration, fleetRobot, sampleTelemetry, disablePinnedSchedules } from './harness.js'
-import type { ChildProcess } from 'node:child_process'
+import { standUpVendor, waitFor, api, integration, fleetRobot, sampleTelemetry, assertArrives, assertOfflineRecovers, type VendorStack } from './harness.js'
 
 const P = 18801
 const SIM = 19001
@@ -14,24 +13,27 @@ const KEY = 'pbk_dev_campuseast'
 const SN1 = 'GSCN-F2-2024-0117'
 const RID1 = 'ext-gscn-f2-2024-0117'
 
-let stack: Awaited<ReturnType<typeof bootPlatform>>
-let sim: ChildProcess
-let adp: ChildProcess
-
-const simEnv = () => ({ GOSUNCN_SIM_PORT: String(SIM), GOSUNCN_SIM_ALARM_MS: '4000' })
+let vs: VendorStack
+let stack: VendorStack['stack']
 
 before(async () => {
-  stack = await bootPlatform(P)
-  sim = spawnProc('gosuncn/sim/main.ts', simEnv(), 'gsim')
-  adp = spawnProc('gosuncn/adapter/main.ts', { PLANTBOT_BASE: stack.base, GOSUNCN_BASE: `http://127.0.0.1:${SIM}`, PLANTBOT_KEY: KEY }, 'gadp')
-  await disablePinnedSchedules(stack, SITE, RID1) // 排程活水在别处验证，这里要可控场地
-  await waitFor(() => fleetRobot(stack, SITE, SN1), 40_000, 'GS·F2-01 registered')
+  vs = await standUpVendor({
+    port: P,
+    site: SITE,
+    serial: SN1,
+    robotId: RID1,
+    sim: { entry: 'gosuncn/sim/main.ts', env: { GOSUNCN_SIM_PORT: String(SIM), GOSUNCN_SIM_ALARM_MS: '4000' }, tag: 'gsim' },
+    adapter: {
+      entry: 'gosuncn/adapter/main.ts',
+      env: (base) => ({ PLANTBOT_BASE: base, GOSUNCN_BASE: `http://127.0.0.1:${SIM}`, PLANTBOT_KEY: KEY }),
+      tag: 'gadp',
+    },
+    registerTimeoutMs: 40_000,
+  })
+  stack = vs.stack
 })
 
-after(() => {
-  for (const p of [sim, adp]) p?.kill('SIGTERM')
-  stack.stop()
-})
+after(() => vs.stop())
 
 test('注册：两台 F2 以正确等级出现', { timeout: 30_000 }, async () => {
   const r1 = await fleetRobot(stack, SITE, SN1)
@@ -80,11 +82,7 @@ test('goto 闭环：tap-to-dispatch → navigateToPoint → 到点', { timeout: 
   const target = { x: -12, z: 7.6 }
   const r = await api(stack, 'POST', `/api/sites/${SITE}/robots/${RID1}/goto`, target)
   assert.equal(r.status, 200)
-  await waitFor(async () => {
-    const f = await sampleTelemetry(stack.base, SITE, RID1, 1500)
-    const t = f.at(-1)
-    return t && Math.hypot(t.x - target.x, t.z - target.z) < 0.8 ? t : null
-  }, 75_000, 'arrived at goto target')
+  await assertArrives(stack, SITE, RID1, target)
   const st = await integration(stack.base, KEY, 'POST', `/robots/${SN1}/state`, {})
   assert.equal(st.body.ordersPending, 0, 'order queue drained')
 })
@@ -171,14 +169,5 @@ test('线协议怪癖：Basic 登录闸 / 手动模式前置 / 10s 流地址', {
 })
 
 test('掉线→恢复：sim 重启后 20s 判 OFFLINE、随后自动回归', { timeout: 120_000 }, async () => {
-  sim.kill('SIGTERM')
-  await waitFor(async () => {
-    const f = await sampleTelemetry(stack.base, SITE, RID1, 1500)
-    return f.some((t) => t.mode === 'offline') ? true : null
-  }, 45_000, 'marked offline')
-  sim = spawnProc('gosuncn/sim/main.ts', simEnv(), 'gsim2')
-  await waitFor(async () => {
-    const f = await sampleTelemetry(stack.base, SITE, RID1, 1500)
-    return f.some((t) => t.mode && t.mode !== 'offline') ? true : null
-  }, 60_000, 'back online after sim restart')
+  await assertOfflineRecovers(vs, SITE, RID1, { recoverMs: 60_000 })
 })

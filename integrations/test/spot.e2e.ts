@@ -4,9 +4,8 @@
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import grpc from '@grpc/grpc-js'
-import { bootPlatform, spawnProc, waitFor, api, fleetRobot, sampleTelemetry, disablePinnedSchedules } from './harness.js'
+import { standUpVendor, waitFor, api, fleetRobot, sampleTelemetry, assertArrives, assertOfflineRecovers, type VendorStack } from './harness.js'
 import { api as bosdyn } from '../spot/loader.js'
-import type { ChildProcess } from 'node:child_process'
 
 const P = 18803
 const SIM = 19003
@@ -14,24 +13,26 @@ const SITE = 'plant-07'
 const SN = 'BD-91250107'
 const RID = 'ext-bd-91250107'
 
-let stack: Awaited<ReturnType<typeof bootPlatform>>
-let sim: ChildProcess
-let adp: ChildProcess
-
-const simEnv = () => ({ SPOT_SIM_PORT: String(SIM), SPOT_SIM_FAULT_S: '12' })
+let vs: VendorStack
+let stack: VendorStack['stack']
 
 before(async () => {
-  stack = await bootPlatform(P)
-  sim = spawnProc('spot/sim/main.ts', simEnv(), 'ssim')
-  adp = spawnProc('spot/adapter/main.ts', { PLANTBOT_BASE: stack.base, SPOT_HOST: '127.0.0.1', SPOT_PORT: String(SIM), PLANTBOT_KEY: 'pbk_dev_plant07' }, 'sadp')
-  await disablePinnedSchedules(stack, SITE, RID) // 排程活水在别处验证，这里要可控场地
-  await waitFor(() => fleetRobot(stack, SITE, SN), 50_000, 'Spot registered')
+  vs = await standUpVendor({
+    port: P,
+    site: SITE,
+    serial: SN,
+    robotId: RID,
+    sim: { entry: 'spot/sim/main.ts', env: { SPOT_SIM_PORT: String(SIM), SPOT_SIM_FAULT_S: '12' }, tag: 'ssim' },
+    adapter: {
+      entry: 'spot/adapter/main.ts',
+      env: (base) => ({ PLANTBOT_BASE: base, SPOT_HOST: '127.0.0.1', SPOT_PORT: String(SIM), PLANTBOT_KEY: 'pbk_dev_plant07' }),
+      tag: 'sadp',
+    },
+  })
+  stack = vs.stack
 })
 
-after(() => {
-  for (const p of [sim, adp]) p?.kill('SIGTERM')
-  stack.stop()
-})
+after(() => vs.stop())
 
 test('注册与遥测：会话舞蹈完成后 Spot 上线', { timeout: 40_000 }, async () => {
   const r = await fleetRobot(stack, SITE, SN)
@@ -58,11 +59,7 @@ test('goto 闭环：NavigateToAnchor → REACHED_GOAL', { timeout: 90_000 }, asy
   const target = { x: 8, z: 4 }
   const r = await api(stack, 'POST', `/api/sites/${SITE}/robots/${RID}/goto`, target)
   assert.equal(r.status, 200)
-  await waitFor(async () => {
-    const f = await sampleTelemetry(stack.base, SITE, RID, 1500)
-    const t = f.at(-1)
-    return t && Math.hypot(t.x - target.x, t.z - target.z) < 0.8 ? t : null
-  }, 75_000, 'arrived')
+  await assertArrives(stack, SITE, RID, target)
 })
 
 test('mission：逐点巡查 + pause/resume + done；abort 生效', { timeout: 240_000 }, async () => {
@@ -150,14 +147,5 @@ test('会话闸：无 token 拒访 / lease 独占', { timeout: 30_000 }, async (
 })
 
 test('掉线→恢复：sim 重启 → 会话拆除重舞 → 回归', { timeout: 150_000 }, async () => {
-  sim.kill('SIGTERM')
-  await waitFor(async () => {
-    const f = await sampleTelemetry(stack.base, SITE, RID, 1500)
-    return f.some((t) => t.mode === 'offline') ? true : null
-  }, 45_000, 'offline')
-  sim = spawnProc('spot/sim/main.ts', simEnv(), 'ssim2')
-  await waitFor(async () => {
-    const f = await sampleTelemetry(stack.base, SITE, RID, 1500)
-    return f.some((t) => t.mode && t.mode !== 'offline') ? true : null
-  }, 90_000, 'recovered after full session re-dance')
+  await assertOfflineRecovers(vs, SITE, RID, { recoverMs: 90_000 }) // 全套会话舞蹈重来
 })

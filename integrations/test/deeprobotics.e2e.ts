@@ -4,12 +4,11 @@
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import net from 'node:net'
-import { bootPlatform, spawnProc, waitFor, api, fleetRobot, sampleTelemetry, disablePinnedSchedules } from './harness.js'
+import { standUpVendor, spawnProc, waitFor, api, fleetRobot, sampleTelemetry, assertArrives, assertOfflineRecovers, type VendorStack } from './harness.js'
 import {
   FrameParser, encodeFrame, TYPE, buildRealtimeReq, buildNavTaskReq, buildCancelReq, defaultNavPoint,
   parseRealtimeResp, parseNavTaskResp, parseCancelResp,
 } from '../deeprobotics/protocol.js'
-import type { ChildProcess } from 'node:child_process'
 
 const P = 18802
 const SIM = 19002
@@ -17,22 +16,27 @@ const SITE = 'plant-12'
 const SN = 'X30-JY-2024-0007'
 const RID = 'ext-x30-jy-2024-0007'
 
-let stack: Awaited<ReturnType<typeof bootPlatform>>
-let sim: ChildProcess
-let adp: ChildProcess
+let vs: VendorStack
+let stack: VendorStack['stack']
 
 before(async () => {
-  stack = await bootPlatform(P)
-  sim = spawnProc('deeprobotics/sim/main.ts', { DR_SIM_PORT: String(SIM), DR_SIM_FAULT_S: '15', DR_SIM_LOCAL_PATROL_MS: '0' }, 'drsim')
-  adp = spawnProc('deeprobotics/adapter/main.ts', { PLANTBOT_BASE: stack.base, DR_HOST: '127.0.0.1', DR_PORT: String(SIM), PLANTBOT_KEY: 'pbk_dev_plant12' }, 'dradp')
-  await disablePinnedSchedules(stack, SITE, RID) // 排程活水在别处验证，这里要可控场地
-  await waitFor(() => fleetRobot(stack, SITE, SN), 40_000, 'X30 registered')
+  vs = await standUpVendor({
+    port: P,
+    site: SITE,
+    serial: SN,
+    robotId: RID,
+    sim: { entry: 'deeprobotics/sim/main.ts', env: { DR_SIM_PORT: String(SIM), DR_SIM_FAULT_S: '15', DR_SIM_LOCAL_PATROL_MS: '0' }, tag: 'drsim' },
+    adapter: {
+      entry: 'deeprobotics/adapter/main.ts',
+      env: (base) => ({ PLANTBOT_BASE: base, DR_HOST: '127.0.0.1', DR_PORT: String(SIM), PLANTBOT_KEY: 'pbk_dev_plant12' }),
+      tag: 'dradp',
+    },
+    registerTimeoutMs: 40_000,
+  })
+  stack = vs.stack
 })
 
-after(() => {
-  for (const p of [sim, adp]) p?.kill('SIGTERM')
-  stack.stop()
-})
+after(() => vs.stop())
 
 test('注册与遥测：X30 出现在 plant-12 并流动', { timeout: 40_000 }, async () => {
   const r = await fleetRobot(stack, SITE, SN)
@@ -52,11 +56,7 @@ test('goto 闭环：平台派单 → 1003 单点 → 到点 → done', { timeout
   const target = { x: 5, z: 3 }
   const r = await api(stack, 'POST', `/api/sites/${SITE}/robots/${RID}/goto`, target)
   assert.equal(r.status, 200)
-  await waitFor(async () => {
-    const f = await sampleTelemetry(stack.base, SITE, RID, 1500)
-    const t = f.at(-1)
-    return t && Math.hypot(t.x - target.x, t.z - target.z) < 0.8 ? t : null
-  }, 75_000, 'arrived')
+  await assertArrives(stack, SITE, RID, target)
 })
 
 test('mission：多航点 → 单次 1003 原生多点任务 → done；abort → 1004', { timeout: 180_000 }, async () => {
@@ -166,14 +166,5 @@ test('线协议：seq 回填 / 执行中 41793 拒单 / 1004 取消触发 1003 �
 })
 
 test('掉线→恢复：sim 重启 → OFFLINE → 自动重连回归', { timeout: 120_000 }, async () => {
-  sim.kill('SIGTERM')
-  await waitFor(async () => {
-    const f = await sampleTelemetry(stack.base, SITE, RID, 1500)
-    return f.some((t) => t.mode === 'offline') ? true : null
-  }, 45_000, 'offline')
-  sim = spawnProc('deeprobotics/sim/main.ts', { DR_SIM_PORT: String(SIM), DR_SIM_LOCAL_PATROL_MS: '0' }, 'drsim2')
-  await waitFor(async () => {
-    const f = await sampleTelemetry(stack.base, SITE, RID, 1500)
-    return f.some((t) => t.mode && t.mode !== 'offline') ? true : null
-  }, 60_000, 'recovered')
+  await assertOfflineRecovers(vs, SITE, RID, { recoverMs: 60_000 })
 })

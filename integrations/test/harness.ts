@@ -104,6 +104,79 @@ export async function disablePinnedSchedules(stack: { base: string; cookie: stri
   }
 }
 
+/** 一站式厂商 fixture：起平台 → 起 sim/adapter 对 → 静默钉死排程 → 等注册。
+ *  三个 suite 的 before/after 完全同构,收敛到这里;线协议等厂商特有用例
+ *  仍在各 suite 自己 spawn（那是保真断言的一部分,不该共享）。 */
+export interface VendorStack {
+  stack: Awaited<ReturnType<typeof bootPlatform>>
+  sim: ChildProcess
+  adp: ChildProcess
+  /** 掉线恢复用：按同一份 env 重生 sim */
+  respawnSim: () => void
+  stop: () => void
+}
+
+export async function standUpVendor(opts: {
+  port: number
+  site: string
+  serial: string
+  robotId: string
+  sim: { entry: string; env: Record<string, string>; tag: string }
+  adapter: { entry: string; env: (base: string) => Record<string, string>; tag: string }
+  registerTimeoutMs?: number
+}): Promise<VendorStack> {
+  const stack = await bootPlatform(opts.port)
+  const vs: VendorStack = {
+    stack,
+    sim: spawnProc(opts.sim.entry, opts.sim.env, opts.sim.tag),
+    adp: spawnProc(opts.adapter.entry, opts.adapter.env(stack.base), opts.adapter.tag),
+    respawnSim: () => {
+      vs.sim = spawnProc(opts.sim.entry, opts.sim.env, `${opts.sim.tag}2`)
+    },
+    stop: () => {
+      for (const p of [vs.sim, vs.adp]) p?.kill('SIGTERM')
+      stack.stop()
+    },
+  }
+  await disablePinnedSchedules(stack, opts.site, opts.robotId) // 排程活水在别处验证，这里要可控场地
+  await waitFor(() => fleetRobot(stack, opts.site, opts.serial), opts.registerTimeoutMs ?? 50_000, `${opts.serial} registered`)
+  return vs
+}
+
+/** 共享断言：goto 闭环到点（遥测距目标 < 0.8 m） */
+export async function assertArrives(
+  stack: { base: string },
+  siteId: string,
+  robotId: string,
+  target: { x: number; z: number },
+  timeoutMs = 75_000,
+): Promise<void> {
+  await waitFor(async () => {
+    const f = await sampleTelemetry(stack.base, siteId, robotId, 1500)
+    const t = f.at(-1)
+    return t && Math.hypot(t.x - target.x, t.z - target.z) < 0.8 ? t : null
+  }, timeoutMs, 'arrived at goto target')
+}
+
+/** 共享断言：杀 sim → 平台判 OFFLINE → 重生 → 自动回归 */
+export async function assertOfflineRecovers(
+  vs: VendorStack,
+  siteId: string,
+  robotId: string,
+  opts?: { offlineMs?: number; recoverMs?: number },
+): Promise<void> {
+  vs.sim.kill('SIGTERM')
+  await waitFor(async () => {
+    const f = await sampleTelemetry(vs.stack.base, siteId, robotId, 1500)
+    return f.some((t) => t.mode === 'offline') ? true : null
+  }, opts?.offlineMs ?? 45_000, 'marked offline')
+  vs.respawnSim()
+  await waitFor(async () => {
+    const f = await sampleTelemetry(vs.stack.base, siteId, robotId, 1500)
+    return f.some((t) => t.mode && t.mode !== 'offline') ? true : null
+  }, opts?.recoverMs ?? 90_000, 'back online after sim restart')
+}
+
 /** WS 遥测采样：取 windowMs 内某机器人的全部 tel 帧 */
 export async function sampleTelemetry(base: string, siteId: string, robotId: string, windowMs: number): Promise<any[]> {
   const { default: WebSocket } = await import('ws')

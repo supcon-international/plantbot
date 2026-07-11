@@ -8,6 +8,7 @@
 import net from 'node:net'
 import { makeLog } from '../../shared/log.js'
 import { PlantbotClient, type PlantbotOrder } from '../../shared/plantbot.js'
+import { waitForSite, streamsToFactsheet, reportFault, pumpOrders, pickProfile, type VendorProfile } from '../../shared/bridge.js'
 import {
   FrameParser, encodeFrame, TYPE, ERROR_STATUS,
   buildRealtimeReq, buildCancelReq, buildQueryReq, buildNavTaskReq, defaultNavPoint,
@@ -22,7 +23,7 @@ const DR_PORT = Number(process.env.DR_PORT ?? 30000)
 const STREAM_BASE = (process.env.STREAM_BASE ?? '/media').replace(/\/$/, '')
 // One X30 adapter per site — DR_PROFILE selects identity + channels + key + dock.
 // dock（充电桩，世界系）由集成方标定，必须与该实例 sim 的 DR_SIM_HOME_* 同点。
-const DR_PROFILES = {
+const DR_PROFILES: Record<string, VendorProfile> = {
   plant12: {
     serial: 'X30-JY-2024-0007',
     callsign: 'X30·HB',
@@ -43,10 +44,10 @@ const DR_PROFILES = {
       { id: 'x30ce-therm', name: 'Thermal', kind: 'thermal', file: 'thermal.mp4' },
     ],
   },
-} as const
-const DR_PROFILE = DR_PROFILES[(process.env.DR_PROFILE as keyof typeof DR_PROFILES) ?? 'plant12'] ?? DR_PROFILES.plant12
+}
+const DR_PROFILE = pickProfile(DR_PROFILES, process.env.DR_PROFILE, 'plant12')
 const SERIAL = DR_PROFILE.serial
-const DOCK = DR_PROFILE.dock
+const DOCK = DR_PROFILE.dock!
 
 const plantbot = new PlantbotClient({ key: process.env.PLANTBOT_KEY ?? DR_PROFILE.key, log })
 
@@ -212,13 +213,7 @@ async function runNav(points: NavPoint[], label: string): Promise<{ ok: boolean;
   if (res.errorCode === 0) return { ok: true, note: `${label} · ${statusText(res.errorStatus)}` }
   if (res.errorCode === 2) return { ok: false, note: `已取消 · ${statusText(res.errorStatus)}` }
   // 失败终态 → 同时作为本体故障事件上报
-  void plantbot.event({
-    type: 'fault',
-    robotSerial: SERIAL,
-    detail: `导航任务失败 · ErrorStatus ${res.errorStatus} ${statusText(res.errorStatus)}`,
-    severity: 'high',
-    category: 'robot-fault',
-  })
+  reportFault(plantbot, SERIAL, `导航任务失败 · ErrorStatus ${res.errorStatus} ${statusText(res.errorStatus)}`)
   return { ok: false, note: statusText(res.errorStatus) }
 }
 
@@ -275,13 +270,7 @@ async function main() {
     if (first) break
     await new Promise((r) => setTimeout(r, 2000))
   }
-  const site = await (async () => {
-    for (;;) {
-      const s = await plantbot.site()
-      if (s) return s
-      await new Promise((r) => setTimeout(r, 3000))
-    }
-  })()
+  const site = await waitForSite(plantbot)
   waypoints = site.waypoints.map((w) => ({ id: w.id, x: w.x, z: w.z }))
 
   await plantbot.registerUntilUp({
@@ -293,7 +282,7 @@ async function main() {
     level: 'dispatchable',
     protocol: 'robotserver_sdk wire (TCP EB90 + PatrolDevice XML)',
     home: toWorld(first),
-    streams: DR_PROFILE.streams.map((s) => ({ id: s.id, name: s.name, kind: s.kind, url: `${STREAM_BASE}/${s.file}` })),
+    streams: streamsToFactsheet(DR_PROFILE.streams, STREAM_BASE),
   })
   log.info(`${DR_PROFILE.callsign}（${SERIAL}）已注册 · robotserver 无 payload 读数面`)
 
@@ -317,19 +306,11 @@ async function main() {
     })
     // 定位丢失沿触发 → 本体故障事件（协议无事件面，从状态位导出）
     if (s.Location === 1 && lastLocation === 0) {
-      void plantbot.event({
-        type: 'fault',
-        robotSerial: SERIAL,
-        detail: '定位丢失（Location=1）· 激光不匹配环境，需人工初始化位置',
-        severity: 'high',
-        category: 'robot-fault',
-      })
+      reportFault(plantbot, SERIAL, '定位丢失（Location=1）· 激光不匹配环境，需人工初始化位置')
       log.warn('上报定位丢失故障事件')
     }
     lastLocation = s.Location
-    if (rep && rep.ordersPending > 0) {
-      for (const order of await plantbot.pullOrders(SERIAL)) void execOrder(order)
-    }
+    await pumpOrders(plantbot, SERIAL, rep, execOrder)
   }, 1000)
 }
 

@@ -206,7 +206,6 @@ const minioPic = (bucket: string) => `/robotservice/minioservice/robotv2/${bucke
 export class GoRobotFleet {
   robots: SimRobot[]
   alarms: AlarmRecord[] = []
-  runAlarms: RunAlarm[] = []
   private alarmSeq = 75_000
   onAlarm?: (a: AlarmRecord) => void
   onRunAlarm?: (a: RunAlarm) => void
@@ -504,8 +503,6 @@ export class GoRobotFleet {
         modelPic: '/robotservice/file/defaultimg/img_robot-F2.png',
         deviceName: r.robotName,
       }
-      this.runAlarms.unshift(a)
-      if (this.runAlarms.length > 40) this.runAlarms.pop()
       this.onRunAlarm?.(a)
       this.scheduleRunAlarm()
     }, 480_000 + Math.random() * 600_000)

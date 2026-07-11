@@ -11,6 +11,7 @@ import WebSocket from 'ws'
 import { createHash } from 'node:crypto'
 import { makeLog } from '../../shared/log.js'
 import { PlantbotClient, type PlantbotOrder } from '../../shared/plantbot.js'
+import { waitForSite, streamsToFactsheet, reportFault, pumpOrders, runWaypointMission, type MissionRun } from '../../shared/bridge.js'
 
 const log = makeLog('gosuncn-adp')
 
@@ -18,11 +19,11 @@ const GOSUNCN_BASE = (process.env.GOSUNCN_BASE ?? 'http://127.0.0.1:9101').repla
 const GOSUNCN_USER = process.env.GOSUNCN_USER ?? 'campus01'
 const GOSUNCN_PASS = process.env.GOSUNCN_PASS ?? 'gorobot@2025'
 const STREAM_BASE = (process.env.STREAM_BASE ?? '/media').replace(/\/$/, '')
+// 单站多机：一个 adapter 驱动 campus 全部 F2（与 spot/deeprobotics 的
+// 「单机多站 profile」相反），场站 key 只有一个兜底
+const SITE_KEY = process.env.PLANTBOT_KEY ?? 'pbk_dev_campuseast'
 
-const plantbot = new PlantbotClient({
-  key: process.env.PLANTBOT_KEY ?? 'pbk_dev_campuseast',
-  log,
-})
+const plantbot = new PlantbotClient({ key: SITE_KEY, log })
 
 // ---- 标定：campus_laser_0710 800×440px ↔ campus-east 世界米（集成方实测所得）----
 const CALIB = {
@@ -142,13 +143,6 @@ async function action<T = any>(path: string, params: Record<string, string | num
 
 // ---------- 任务执行器（平台 mission 订单 → navigateToPoint 逐点巡查） ----------
 
-interface MissionRun {
-  orderId: string
-  missionId?: string
-  aborted: boolean
-  paused: boolean
-}
-
 interface Waypoint {
   id: string
   x: number
@@ -180,37 +174,20 @@ async function navAndWait(u: Unit, x: number, z: number, timeoutMs = 90_000): Pr
   }
 }
 
-async function runMission(u: Unit, order: PlantbotOrder) {
+function runMission(u: Unit, order: PlantbotOrder) {
   const run: MissionRun = { orderId: order.id, missionId: order.payload.missionId, aborted: false, paused: false }
   u.mission = run
-  const steps = order.payload.steps ?? []
-  log.info(`${u.callsign} 开始任务「${order.payload.name}」· ${steps.length} 步`)
-  let doneSteps = 0
-  for (const step of steps) {
-    if (run.aborted) break
-    while (run.paused && !run.aborted) await new Promise((r) => setTimeout(r, 500))
-    const wp = waypoints.find((w) => w.id === step.waypointId)
-    if (!wp) continue
-    const ok = await navAndWait(u, wp.x, wp.z)
-    if (!ok) {
-      if (!run.aborted) {
-        await plantbot.orderStatus(order.id, 'failed', `stalled at ${step.waypointId}`)
-        u.mission = undefined
-        return
-      }
-      break
-    }
-    // 点位动作：以动作时长驻留（抓拍/热扫等由机器人本体完成，这里如实等待）
-    const dwell = step.actions?.reduce((s, a) => s + (a.durationS ?? 3), 0) ?? 4
-    await new Promise((r) => setTimeout(r, Math.min(dwell, 20) * 1000))
-    doneSteps++
-  }
-  await plantbot.orderStatus(
-    order.id,
-    run.aborted ? 'failed' : 'done',
-    run.aborted ? `aborted by operator after ${doneSteps}/${steps.length} waypoints` : `${doneSteps} waypoints inspected · captures uploaded`,
-  )
-  u.mission = undefined
+  log.info(`${u.callsign} 开始任务「${order.payload.name}」· ${order.payload.steps?.length ?? 0} 步`)
+  void runWaypointMission({
+    pb: plantbot,
+    order,
+    run,
+    waypoints,
+    // 点位动作以动作时长驻留（抓拍/热扫由机器人本体完成）——runner 统一处理
+    navTo: async (x, z) => ({ ok: await navAndWait(u, x, z) }),
+    doneNote: (n) => `${n} waypoints inspected · captures uploaded`,
+    onSettled: () => (u.mission = undefined),
+  })
 }
 
 async function execOrder(u: Unit, order: PlantbotOrder) {
@@ -234,7 +211,7 @@ async function execOrder(u: Unit, order: PlantbotOrder) {
       return
     }
     case 'mission':
-      void runMission(u, order)
+      runMission(u, order)
       return
     case 'announce': {
       const res = await action<any>('/robotservice/device/voiceSoundtextSet.action', { soundtext: order.payload.text, deviceId: u.deviceId, broadcastPriority: 1 }, 'POST')
@@ -302,13 +279,7 @@ async function main() {
   }
 
   // 平台侧注册（factsheet）——场站航点表同时拉回来给任务执行器用
-  const site = await (async () => {
-    for (;;) {
-      const s = await plantbot.site()
-      if (s) return s
-      await new Promise((r) => setTimeout(r, 3000))
-    }
-  })()
+  const site = await waitForSite(plantbot)
   waypoints = site.waypoints.map((w) => ({ id: w.id, x: w.x, z: w.z }))
 
   for (const u of UNITS) {
@@ -323,7 +294,7 @@ async function main() {
       level: u.level,
       protocol: 'GRobot cloud API (.action RPC + WS push)',
       home,
-      streams: u.streams.map((s) => ({ id: s.id, name: s.name, kind: s.kind as any, url: `${STREAM_BASE}/${s.file}` })),
+      streams: streamsToFactsheet(u.streams, STREAM_BASE),
     })
   }
 
@@ -354,9 +325,7 @@ async function main() {
         mode,
         errors: s.exceptionCode ? [String(s.exceptionCode)] : undefined,
       })
-      if (u.level === 'dispatchable' && rep && rep.ordersPending > 0) {
-        for (const order of await plantbot.pullOrders(u.serial)) void execOrder(u, order)
-      }
+      if (u.level === 'dispatchable') await pumpOrders(plantbot, u.serial, rep, (o) => execOrder(u, o))
     }
   }, 1000)
 
@@ -428,13 +397,7 @@ function connectWs() {
       for (const a of frame.data ?? []) {
         const u = UNITS.find((x) => x.deviceId === a.deviceId)
         if (!u) continue
-        await plantbot.event({
-          type: 'fault',
-          robotSerial: u.serial,
-          detail: `${a.code} ${a.name} · ${String(a.describe ?? '').split('。')[0]}`,
-          severity: 'high',
-          category: 'robot-fault',
-        })
+        reportFault(plantbot, u.serial, `${a.code} ${a.name} · ${String(a.describe ?? '').split('。')[0]}`)
         log.info(`本体故障上报 ${a.code} ${a.name}`)
       }
     }

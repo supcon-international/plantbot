@@ -6,9 +6,13 @@
 // lease/estop/timesync 是 adapter 内部细节，不上浮到平台 API。
 
 import grpc from '@grpc/grpc-js'
-import { api, graphNav, ts, okHeader, estopResponse, quatToYaw } from '../loader.js'
+import { api, graphNav, ts, estopResponse, quatToYaw } from '../loader.js'
 import { makeLog } from '../../shared/log.js'
 import { PlantbotClient, type PlantbotOrder } from '../../shared/plantbot.js'
+import {
+  waitForSite, streamsToFactsheet, reportFault, pumpOrders, runWaypointMission,
+  pickProfile, type VendorProfile, type MissionRun,
+} from '../../shared/bridge.js'
 
 const log = makeLog('spot-adp')
 
@@ -20,7 +24,7 @@ const ESTOP_TIMEOUT_S = 9
 
 // One Spot adapter per site — SPOT_PROFILE selects the identity + channel set +
 // platform key, so the same code drives plant-07's Spot and campus's Spot.
-const PROFILES = {
+const PROFILES: Record<string, VendorProfile> = {
   plant07: {
     serial: 'BD-91250107',
     callsign: 'SPOT·A',
@@ -39,8 +43,8 @@ const PROFILES = {
       { id: 'spotce-therm', name: 'Spot CAM IR', kind: 'thermal', file: 'night_walkway.mp4' },
     ],
   },
-} as const
-const PROFILE = PROFILES[(process.env.SPOT_PROFILE as keyof typeof PROFILES) ?? 'plant07'] ?? PROFILES.plant07
+}
+const PROFILE = pickProfile(PROFILES, process.env.SPOT_PROFILE, 'plant07')
 const SERIAL = PROFILE.serial
 
 const plantbot = new PlantbotClient({ key: process.env.PLANTBOT_KEY ?? PROFILE.key, log })
@@ -234,7 +238,7 @@ async function dance(): Promise<void> {
 
 let lastState: any = null
 let lastFaultIds = new Set<number>()
-let missionRun: { orderId: string; aborted: boolean; paused: boolean } | null = null
+let missionRun: MissionRun | null = null
 let waypoints: { id: string; x: number; z: number }[] = []
 
 async function poseFromState(rs: any): Promise<{ x: number; z: number; heading: number } | null> {
@@ -278,21 +282,12 @@ async function stateLoop() {
   const faults: any[] = rs.behavior_fault_state?.faults ?? []
   for (const f of faults) {
     const fid = Number(f.behavior_fault_id)
-    if (!lastFaultIds.has(fid)) {
-      void plantbot.event({
-        type: 'fault',
-        robotSerial: SERIAL,
-        detail: `BehaviorFault #${fid} · ${CAUSE[f.cause] ?? `cause ${f.cause}`}${f.status === 1 ? ' · 可清除' : ''}`,
-        severity: 'high',
-        category: 'robot-fault',
-      })
-    }
+    if (!lastFaultIds.has(fid))
+      reportFault(plantbot, SERIAL, `BehaviorFault #${fid} · ${CAUSE[f.cause] ?? `cause ${f.cause}`}${f.status === 1 ? ' · 可清除' : ''}`)
   }
   lastFaultIds = new Set(faults.map((f) => Number(f.behavior_fault_id)))
 
-  if (rep && rep.ordersPending > 0) {
-    for (const order of await plantbot.pullOrders(SERIAL)) void execOrder(order)
-  }
+  await pumpOrders(plantbot, SERIAL, rep, execOrder)
 }
 
 // ---------- 运动（NavigateToAnchor + feedback 轮询）----------
@@ -368,31 +363,17 @@ async function execOrder(order: PlantbotOrder) {
       return
     }
     case 'mission': {
-      const steps = order.payload.steps ?? []
       missionRun = { orderId: order.id, aborted: false, paused: false }
-      log.info(`任务「${order.payload.name}」· ${steps.length} 步（NavigateToAnchor 逐点）`)
-      let done = 0
-      for (const step of steps) {
-        if (missionRun.aborted) break
-        while (missionRun.paused && !missionRun.aborted) await new Promise((r) => setTimeout(r, 500))
-        const wp = waypoints.find((w) => w.id === step.waypointId)
-        if (!wp) continue
-        const r = await navigateTo(wp.x, wp.z)
-        if (!r.ok) {
-          await plantbot.orderStatus(order.id, 'failed', missionRun.aborted ? `aborted after ${done}/${steps.length}` : `stalled at ${step.waypointId}: ${r.note}`)
-          missionRun = null
-          return
-        }
-        const dwell = step.actions?.reduce((s, a) => s + (a.durationS ?? 3), 0) ?? 4
-        await new Promise((r2) => setTimeout(r2, Math.min(dwell, 20) * 1000))
-        done++
-      }
-      await plantbot.orderStatus(
-        order.id,
-        missionRun.aborted ? 'failed' : 'done',
-        missionRun.aborted ? `aborted after ${done}/${steps.length}` : `${done} anchors inspected · imagery captured`,
-      )
-      missionRun = null
+      log.info(`任务「${order.payload.name}」· ${order.payload.steps?.length ?? 0} 步（NavigateToAnchor 逐点）`)
+      await runWaypointMission({
+        pb: plantbot,
+        order,
+        run: missionRun,
+        waypoints,
+        navTo: navigateTo,
+        doneNote: (n) => `${n} anchors inspected · imagery captured`,
+        onSettled: () => (missionRun = null),
+      })
       return
     }
     case 'pause':
@@ -420,13 +401,7 @@ async function execOrder(order: PlantbotOrder) {
 
 async function main() {
   void dance()
-  const site = await (async () => {
-    for (;;) {
-      const s = await plantbot.site()
-      if (s) return s
-      await new Promise((r) => setTimeout(r, 3000))
-    }
-  })()
+  const site = await waitForSite(plantbot)
   waypoints = site.waypoints.map((w) => ({ id: w.id, x: w.x, z: w.z }))
 
   // 等会话就绪后注册（用真实位姿作 home；注册前不进状态上报环）
@@ -447,7 +422,7 @@ async function main() {
     level: 'dispatchable',
     protocol: 'bosdyn.api gRPC (auth+timesync+lease+estop+power)',
     home: pose ? { x: +pose.x.toFixed(1), z: +pose.z.toFixed(1) } : undefined,
-    streams: PROFILE.streams.map((s) => ({ id: s.id, name: s.name, kind: s.kind, url: `${STREAM_BASE}/${s.file}` })),
+    streams: streamsToFactsheet(PROFILE.streams, STREAM_BASE),
   })
   const srcs = await call(clients.image, 'ListImageSources', { header: header() }, md()).catch(() => null)
   log.info(`已注册 ${PROFILE.callsign}（${SERIAL}）· 机身相机 ${srcs?.image_sources?.length ?? 0} 源`)
