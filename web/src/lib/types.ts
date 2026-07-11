@@ -37,6 +37,9 @@ export interface SiteCamera {
   name: string
   place: string
   stream: string
+  /** production RTSP source — relayed via go2rtc, snapshotted via ffmpeg */
+  rtsp?: string
+  /** demo loop under /media (dev fallback) */
   file?: string
   live: boolean
   source: string
@@ -121,7 +124,8 @@ export interface EventTypeDef {
 export interface ApiKeyRec {
   id: string
   label: string
-  key: string
+  /** masked display — the plaintext key is returned exactly once, on creation */
+  prefix: string
   createdAt: number
   lastUsedAt?: number
 }
@@ -252,7 +256,9 @@ export interface StreamSession {
   id: string
   channelId: string
   url: string
-  protocol: 'file' | 'hls' | 'webrtc' | 'rtsp'
+  protocol: 'file' | 'hls' | 'webrtc' | 'rtsp' | 'mse'
+  /** mse only: false → MEDIA_RELAY (go2rtc) not configured server-side */
+  relayOnline?: boolean
   createdAt: number
   expiresAt: number | null
 }

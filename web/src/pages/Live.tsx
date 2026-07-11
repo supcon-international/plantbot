@@ -101,12 +101,27 @@ function PlayerOverlay({ feed, session }: { feed: Feed; session: StreamSession |
   )
 }
 
-/** a feed tile = session lease + the right transport for its protocol */
+/** a feed tile = session lease + the right transport for its protocol:
+ *  file → native loop · mse → go2rtc relay (session.url is the stream name) */
 function FeedTile({ feed }: { feed: Feed }) {
   const session = useSession(feed.channelId)
+  const t = useT()
+  if (session?.protocol === 'mse' && session.relayOnline === false)
+    return (
+      <>
+        <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 bg-black text-ink-3">
+          <span className="mono text-[11px] tracking-[0.14em]">{t('live.relayOffline')}</span>
+          <span className="mono text-[9.5px] text-ink-3/70">MEDIA_RELAY (go2rtc)</span>
+        </div>
+        <PlayerOverlay feed={feed} session={session} />
+      </>
+    )
   return (
     <>
-      <FeedPlayer stream={feed.stream} file={session?.protocol === 'file' ? session.url : feed.file} />
+      <FeedPlayer
+        stream={session?.protocol === 'mse' ? session.url : feed.stream}
+        file={session?.protocol === 'file' ? session.url : session?.protocol === 'mse' ? undefined : feed.file}
+      />
       <PlayerOverlay feed={feed} session={session} />
     </>
   )

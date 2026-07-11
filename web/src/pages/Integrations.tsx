@@ -37,6 +37,8 @@ export function Integrations() {
   const clock = useApp((s) => s.clock)
   const [sum, setSum] = useState<Summary | null>(null)
   const [keyLabel, setKeyLabel] = useState('')
+  /** plaintext appears exactly once — from the create response, never the list */
+  const [freshKey, setFreshKey] = useState<{ id: string; key: string } | null>(null)
   const [typeDraft, setTypeDraft] = useState({ id: '', label: '', severity: 'info' as Severity })
   const [copied, setCopied] = useState<string | null>(null)
   const [mapDraft, setMapDraft] = useState({ resolution: 0.05, originX: -16, originZ: -9, name: '' })
@@ -76,18 +78,13 @@ export function Integrations() {
       r.onerror = rej
       r.readAsDataURL(mapFile)
     })
-    const key = sum?.apiKeys[0]
-    // map upload rides the integration API — reuse (or mint) a site key
-    const k = key ?? ((await api.createApiKey('map upload (auto)')) as { apiKey: ApiKeyRec }).apiKey
-    await fetch(`${BASE}/api/integration/v1/maps`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${k.key}` },
-      body: JSON.stringify({
-        name: mapDraft.name || mapFile.name,
-        resolution: Number(mapDraft.resolution),
-        origin: [Number(mapDraft.originX), Number(mapDraft.originZ)],
-        image: dataUrl,
-      }),
+    // admin-session route — keys are hashed at rest, so the console can't
+    // borrow one; adapters keep using the integration API for uploads
+    await api.uploadMap(siteId, {
+      name: mapDraft.name || mapFile.name,
+      resolution: Number(mapDraft.resolution),
+      origin: [Number(mapDraft.originX), Number(mapDraft.originZ)],
+      image: dataUrl,
     })
     setBusy(false)
     setMapFile(null)
@@ -96,7 +93,7 @@ export function Integrations() {
   }
 
   const curlBase = `${location.origin}${BASE}/api/integration/v1`
-  const demoKey = sum?.apiKeys[0]?.key ?? 'pbk_…'
+  const demoKey = freshKey?.key ?? 'pbk_<your-site-key>'
 
   return (
     <div className="mx-auto max-w-[1200px] space-y-4 p-3 md:p-4">
@@ -126,24 +123,38 @@ export function Integrations() {
               />
               <Button
                 variant="signal"
-                onClick={() => api.createApiKey(keyLabel).then(() => (setKeyLabel(''), reload()))}
+                onClick={() =>
+                  api.createApiKey(keyLabel).then((r: { apiKey?: ApiKeyRec & { key: string } }) => {
+                    if (r.apiKey) setFreshKey({ id: r.apiKey.id, key: r.apiKey.key })
+                    setKeyLabel('')
+                    reload()
+                  })
+                }
                 className="mono h-auto shrink-0 py-1.5 text-[11px] normal-case tracking-[0.1em]"
               >
                 {t('integ.newKey')}
               </Button>
             </div>
+            {freshKey && (
+              <div className="border border-(--signal) bg-surface-2 p-2.5">
+                <div className="microlabel" style={{ color: 'var(--signal)' }}>{t('integ.keyOnce')}</div>
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="mono min-w-0 flex-1 truncate text-[11px] text-ink">{freshKey.key}</span>
+                  <Button variant="ghost" size="sm" onClick={() => copy(freshKey.key, 'fresh')} className="mono h-auto gap-1 px-1 py-0.5 text-[10.5px] normal-case tracking-normal hover:bg-transparent">
+                    <Copy size={11} /> {copied === 'fresh' ? 'copied' : 'copy'}
+                  </Button>
+                </div>
+              </div>
+            )}
             {(sum?.apiKeys ?? []).map((k) => (
               <div key={k.id} className="border border-line bg-surface-2 p-2.5">
                 <div className="flex items-center gap-2">
                   <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink-2">{k.label}</span>
-                  <Button variant="ghost" size="sm" onClick={() => copy(k.key, k.id)} className="mono h-auto gap-1 px-1 py-0.5 text-[10.5px] normal-case tracking-normal hover:bg-transparent">
-                    <Copy size={11} /> {copied === k.id ? 'copied' : 'copy'}
-                  </Button>
                   <Button variant="ghost" size="iconSm" onClick={() => api.deleteApiKey(k.id).then(reload)} title={t('integ.revoke')} className="size-6 hover:bg-transparent hover:text-crit">
                     <Trash2 size={12} />
                   </Button>
                 </div>
-                <div className="mono mt-1 truncate text-[11px] text-ink-3">{k.key}</div>
+                <div className="mono mt-1 truncate text-[11px] text-ink-3">{k.prefix}</div>
                 <div className="microlabel mt-1">
                   {t('integ.created')} {new Date(k.createdAt).toISOString().slice(0, 10)} · {t('integ.lastUsed')}{' '}
                   {k.lastUsedAt ? fmtAgo(k.lastUsedAt, clock) : t('integ.never')}

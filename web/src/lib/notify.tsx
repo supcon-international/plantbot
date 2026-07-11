@@ -30,5 +30,8 @@ function EventToast({ ev, toastId }: { ev: DetectionEvent; toastId: string | num
 }
 
 export function notifyEvent(ev: DetectionEvent) {
+  // configuration surfaces (site builder / accounts) are no place for an
+  // event firehose — the EVENTS badge still counts them
+  if (location.pathname.includes('/sites')) return
   toast.custom((id) => <EventToast ev={ev} toastId={id} />, { duration: 7000 })
 }

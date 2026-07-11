@@ -8,8 +8,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
-export function Login() {
+/** gate mode: rendered standalone by the Shell when PB_PUBLIC_VIEW=0 —
+ *  no router navigation, the shell re-renders once the session lands */
+export function Login({ gate = false }: { gate?: boolean }) {
   const login = useAuth((s) => s.login)
+  const demo = useAuth((s) => s.demo)
   const t = useT()
   const nav = useNavigate()
   const [username, setUsername] = useState('')
@@ -24,7 +27,7 @@ export function Login() {
     const fail = await login(username, password)
     setBusy(false)
     if (fail) setErr(fail)
-    else nav('/')
+    else if (!gate) nav('/')
   }
 
   return (
@@ -37,7 +40,7 @@ export function Login() {
                 <LogIn size={15} />
                 <span className="text-[15px] font-medium">{t('login.title')}</span>
               </div>
-              <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-3">{t('login.sub')}</p>
+              <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-3">{t(gate ? 'login.gated' : 'login.sub')}</p>
             </div>
             <div>
               <Label className="mb-1.5" htmlFor="login-user">
@@ -78,7 +81,7 @@ export function Login() {
             >
               {t('login.go')}
             </Button>
-            <p className="mono text-[10.5px] leading-relaxed text-ink-3/80">{t('login.hint')}</p>
+            {demo && <p className="mono text-[10.5px] leading-relaxed text-ink-3/80">{t('login.hint')}</p>}
           </form>
         </CardContent>
       </Card>

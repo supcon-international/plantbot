@@ -63,6 +63,10 @@ export const sfetch = (path: string, init?: RequestInit) =>
 interface AuthState {
   me: Me | null
   loaded: boolean
+  /** PB_PUBLIC_VIEW=0 → anonymous browsing disabled, login gate covers the app */
+  publicView: boolean
+  /** PB_DEMO=1 → demo instance (seeded accounts hint on the login card) */
+  demo: boolean
   refresh: () => Promise<void>
   login: (username: string, password: string) => Promise<string | null>
   logout: () => Promise<void>
@@ -74,10 +78,12 @@ interface AuthState {
 export const useAuth = create<AuthState>((set, get) => ({
   me: null,
   loaded: false,
+  publicView: true,
+  demo: false,
   refresh: async () => {
     try {
-      const me = (await (await apiFetch('/api/auth/me')).json()) as Me
-      set({ me, loaded: true })
+      const me = (await (await apiFetch('/api/auth/me')).json()) as Me & { publicView?: boolean; demo?: boolean }
+      set({ me, loaded: true, publicView: me.publicView !== false, demo: me.demo === true })
     } catch {
       set({ loaded: true })
     }
@@ -90,21 +96,29 @@ export const useAuth = create<AuthState>((set, get) => ({
     })
     if (!r.ok) return ((await r.json().catch(() => null)) as { error?: string } | null)?.error ?? 'login failed'
     await get().refresh()
+    // gated deployments: the site list and WS room need the fresh session
+    api.listSites().then(({ sites }) => useApp.setState({ sites })).catch(() => {})
+    reconnectRealtime()
     return null
   },
   logout: async () => {
     await apiFetch('/api/auth/logout', { method: 'POST' })
     await get().refresh()
   },
-  roleFor: (siteId) => get().me?.sites.find((s) => s.id === siteId)?.role ?? 'viewer',
+  // per-site role from auth/me, falling back to the '*' wildcard — an empty
+  // platform has no sites yet, and the platform admin still needs their rank
+  roleFor: (siteId) => {
+    const me = get().me
+    return me?.sites.find((s) => s.id === siteId)?.role ?? me?.user?.roles['*'] ?? 'viewer'
+  },
   can: (min) => ROLE_RANK[get().roleFor(useSite.getState().siteId)] >= ROLE_RANK[min],
 }))
 
-/** reactive role hook for the current site */
+/** reactive role hook for the current site (same wildcard fallback as roleFor) */
 export function useRole(): Role {
   const me = useAuth((s) => s.me)
   const siteId = useSite((s) => s.siteId)
-  return me?.sites.find((s) => s.id === siteId)?.role ?? 'viewer'
+  return me?.sites.find((s) => s.id === siteId)?.role ?? me?.user?.roles['*'] ?? 'viewer'
 }
 
 export function useCan(min: Role): boolean {
@@ -117,6 +131,8 @@ interface AppState {
   connected: boolean
   site?: SiteInfo
   sites: SiteSummary[]
+  /** true once the first /api/sites round-trip resolved (empty-state gate) */
+  sitesLoaded: boolean
   robots: RobotSpec[]
   cameras: SiteCamera[]
   waypoints: Waypoint[]
@@ -163,6 +179,7 @@ const LIFECYCLE_PATH: Record<Exclude<EventLifecycle, 'new'>, string> = {
 export const useApp = create<AppState>((set) => ({
   connected: false,
   sites: [],
+  sitesLoaded: false,
   robots: [],
   cameras: [],
   waypoints: [],
@@ -222,7 +239,13 @@ export const api = {
     }).then((r) => r.json()),
   deleteRule: (id: string) => sfetch(`/rules/${id}`, { method: 'DELETE' }),
   getCatalog: () => sfetch('/catalog').then((r) => r.json()),
-  listSites: () => apiFetch('/api/sites').then((r) => r.json() as Promise<{ sites: SiteSummary[] }>),
+  // tolerant on purpose: gated deployments answer 401 here before sign-in —
+  // an empty list keeps the shell alive instead of crashing on `{error}`
+  listSites: () =>
+    apiFetch('/api/sites').then(async (r) => {
+      const j = (await r.json().catch(() => null)) as { sites?: SiteSummary[] } | null
+      return { sites: j?.sites ?? [] }
+    }),
   // integrations admin panel
   integrations: () => sfetch('/integrations').then((r) => r.json()),
   createApiKey: (label: string) =>
@@ -278,6 +301,29 @@ export const api = {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(command),
     }).then((r) => r.json()),
+  // site builder (admin)
+  createSite: (body: { id?: string; name: string; operator?: string }) =>
+    apiFetch('/api/sites', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json()),
+  deleteSite: (siteId: string) => apiFetch(`/api/sites/${siteId}`, { method: 'DELETE' }).then((r) => r.json()),
+  patchSiteMeta: (siteId: string, body: unknown) =>
+    apiFetch(`/api/sites/${siteId}/meta`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json()),
+  saveGeometry: (siteId: string, body: unknown) =>
+    apiFetch(`/api/sites/${siteId}/geometry`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json()),
+  uploadMap: (siteId: string, body: unknown) =>
+    apiFetch(`/api/sites/${siteId}/map`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json()),
+  fleet: (siteId: string) => apiFetch(`/api/sites/${siteId}/fleet`).then((r) => r.json()),
+  // calibration transforms
+  transforms: (siteId: string) => apiFetch(`/api/sites/${siteId}/transforms`).then((r) => r.json()),
+  saveTransform: (siteId: string, body: unknown) =>
+    apiFetch(`/api/sites/${siteId}/transforms`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json()),
+  deleteTransform: (siteId: string, id: string) => apiFetch(`/api/sites/${siteId}/transforms/${id}`, { method: 'DELETE' }),
+  // users (platform admin)
+  listUsers: () => apiFetch('/api/users').then((r) => r.json()),
+  createUser: (body: unknown) =>
+    apiFetch('/api/users', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json()),
+  patchUser: (username: string, body: unknown) =>
+    apiFetch(`/api/users/${username}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json()),
+  deleteUser: (username: string) => apiFetch(`/api/users/${username}`, { method: 'DELETE' }).then((r) => r.json()),
 }
 
 // ---------- websocket lifecycle (per-site rooms) ----------
@@ -294,12 +340,12 @@ export function startRealtime() {
   api
     .listSites()
     .then(({ sites }) => {
-      useApp.setState({ sites })
+      useApp.setState({ sites, sitesLoaded: true })
       // heal a stale persisted site id
       if (!sites.some((s) => s.id === useSite.getState().siteId) && sites[0])
         useSite.getState().setSite(sites[0].id)
     })
-    .catch(() => {})
+    .catch(() => useApp.setState({ sitesLoaded: true }))
   connect()
   setInterval(() => useApp.setState({ clock: Date.now() }), 1000)
   useSite.subscribe((state, prev) => {
@@ -332,6 +378,14 @@ export function startRealtime() {
     ws?.close()
     connect()
   })
+}
+
+/** force a fresh WS room join (after login on gated deployments, site create) */
+export function reconnectRealtime() {
+  generation++
+  retry = 0
+  ws?.close()
+  connect()
 }
 
 function connect() {
@@ -416,6 +470,19 @@ function connect() {
       useApp.setState({ eventTypes: msg.eventTypes })
     } else if (msg.t === 'site') {
       useApp.setState({ site: msg.site })
+    } else if (msg.t === 'geo') {
+      // site builder saved — geometry applies live
+      useApp.setState((s) => ({
+        site: msg.site ?? s.site,
+        waypoints: msg.waypoints ?? s.waypoints,
+        zones: msg.zones ?? s.zones,
+        cameras: msg.cameras ?? s.cameras,
+        channels: msg.channels ?? s.channels,
+      }))
+    } else if (msg.t === 'channels') {
+      useApp.setState({ channels: msg.channels })
+    } else if (msg.t === 'maps') {
+      useApp.setState({ maps: msg.maps?.maps ?? [], transforms: msg.maps?.transforms ?? [] })
     }
   }
 

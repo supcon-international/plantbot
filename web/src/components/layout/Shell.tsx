@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import {
   Bot,
+  Building2,
   Cctv,
   LayoutGrid,
   LogIn,
@@ -9,12 +10,15 @@ import {
   Map as MapIcon,
   Moon,
   Plug,
+  Plus,
   Route,
   Settings2,
   ShieldAlert,
   Sun,
 } from 'lucide-react'
+import { useNavigate as useNav2 } from 'react-router'
 import { useApp, useAuth, useCan, useRole, useSite } from '../../lib/store'
+import { Login } from '../../pages/Login'
 import { useDataSaver } from '../../lib/media'
 import { useTheme } from '../../lib/theme'
 import { useT, useLang, type Lang } from '../../lib/i18n'
@@ -32,7 +36,11 @@ const NAV = [
   { to: '/map', key: 'nav.map', icon: MapIcon },
   { to: '/events', key: 'nav.events', icon: ShieldAlert },
 ]
-const NAV_ADMIN = [...NAV, { to: '/integrations', key: 'nav.integrations', icon: Plug }]
+const NAV_ADMIN = [
+  ...NAV,
+  { to: '/integrations', key: 'nav.integrations', icon: Plug },
+  { to: '/sites', key: 'nav.sites', icon: Building2 },
+]
 
 function Brand({ compact = false }: { compact?: boolean }) {
   const t = useT()
@@ -207,6 +215,29 @@ function RouteStage({ routeKey }: { routeKey: string }) {
   )
 }
 
+/** production empty state — a fresh (non-demo) deployment has no sites yet */
+function NoSitesHero() {
+  const t = useT()
+  const isAdmin = useCan('admin')
+  const nav = useNav2()
+  return (
+    <div className="flex h-full items-center justify-center p-6">
+      <div className="max-w-md space-y-4 border border-line bg-surface p-8 text-center">
+        <Building2 size={28} strokeWidth={1.2} className="mx-auto text-ink-3" />
+        <div className="text-[16px] font-medium text-ink">{t('sb.emptyTitle')}</div>
+        <p className="text-[13px] leading-relaxed text-ink-3">{t('sb.emptyDesc')}</p>
+        {isAdmin ? (
+          <Button variant="signal" onClick={() => nav('/sites')} className="mono text-[11.5px] normal-case tracking-[0.12em]">
+            <Plus size={13} /> {t('sb.newSite')}
+          </Button>
+        ) : (
+          <p className="mono text-[11px] text-ink-3">{t('sb.emptyNeedAdmin')}</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function Shell() {
   const location = useLocation()
   const lang = useLang((s) => s.lang)
@@ -215,6 +246,11 @@ export function Shell() {
   const nav = isAdmin ? NAV_ADMIN : NAV
   const robots = useApp((s) => s.robots)
   const site = useApp((s) => s.site)
+  const sites = useApp((s) => s.sites)
+  const sitesLoaded = useApp((s) => s.sitesLoaded)
+  const authLoaded = useAuth((s) => s.loaded)
+  const publicView = useAuth((s) => s.publicView)
+  const authedUser = useAuth((s) => s.me?.user ?? null)
   const critCount = useApp((s) => s.events.filter((e) => !e.acked && (e.severity === 'critical' || e.severity === 'high')).length)
 
   const page = useMemo(() => {
@@ -230,12 +266,28 @@ export function Shell() {
     if (path === '/events') return { title: t('ev.center') }
     if (path === '/integrations') return { title: t('integ.title') }
     if (path === '/login') return { title: t('login.title') }
+    if (path === '/sites') return { title: t('nav.sitesTitle') }
+    if (path.startsWith('/sites/')) return { title: t('sb.title') }
     return { title: t('shell.page.overview') }
   }, [location.pathname, robots, site?.name, t])
 
   useEffect(() => {
     document.documentElement.lang = lang
   }, [lang])
+
+  // PB_PUBLIC_VIEW=0 deployments: nothing renders before sign-in
+  if (authLoaded && !publicView && !authedUser) {
+    return (
+      <div className="app-shell">
+        <main className="app-main col-span-full row-span-full">
+          <Login gate />
+        </main>
+      </div>
+    )
+  }
+
+  const emptyPlatform =
+    sitesLoaded && sites.length === 0 && location.pathname !== '/sites' && location.pathname !== '/login'
 
   return (
     <div className="app-shell">
@@ -274,7 +326,7 @@ export function Shell() {
       <Toaster />
 
       <main className="app-main">
-        <RouteStage routeKey={`${location.pathname}${location.search}`} />
+        {emptyPlatform ? <NoSitesHero /> : <RouteStage routeKey={`${location.pathname}${location.search}`} />}
       </main>
     </div>
   )

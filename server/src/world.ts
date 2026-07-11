@@ -37,8 +37,27 @@ import {
   ROBOT_CATALOG,
   UNIT_COLORS,
 } from './fleet.js'
-import type { SiteDef } from './sites.js'
-import { grabFrame } from './frames.js'
+import type { SiteDef, SeedMissionDef } from './sites.js'
+import type { Persist } from './config.js'
+import { grabFrame, type FrameSource } from './frames.js'
+import { ensureRelayStream, relayConfigured, relayName } from './media.js'
+import type { Waypoint, Zone, Building, SiteCamera, SiteMapMeta } from './fleet.js'
+
+/** everything a World needs at runtime — geometry is data (SQLite), not code */
+export interface SiteRuntime {
+  id: string
+  name: string
+  operator: string
+  bounds: { x: [number, number]; z: [number, number] }
+  map: SiteMapMeta | null
+  dockWp: string
+  splat?: { name: string; url: string }
+  buildings: Building[]
+  waypoints: Waypoint[]
+  zones: Zone[]
+  cameras: SiteCamera[]
+  transforms: FrameTransform[]
+}
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const PUB = process.env.PUBLIC_BASE ?? ''
@@ -263,13 +282,17 @@ const SEV_RANK: Record<Severity, number> = { critical: 0, high: 1, info: 2, low:
 
 export class World {
   readonly id: string
-  readonly def: SiteDef
   site: SiteInfo
+  demo: boolean
   robots: RobotSpec[]
-  cameras: SiteDef['cameras']
-  waypoints: SiteDef['waypoints']
-  zones: SiteDef['zones']
-  buildings: SiteDef['buildings']
+  cameras: SiteCamera[]
+  waypoints: Waypoint[]
+  zones: Zone[]
+  buildings: Building[]
+  dockWp: string
+  splat?: { name: string; url: string }
+  /** calibration transforms (stored) — merged with the occupancy-derived one in maps() */
+  transforms: FrameTransform[] = []
   nav = new Map<string, NavState>()
   missions: Mission[] = []
   templates: MissionTemplate[] = []
@@ -286,7 +309,7 @@ export class World {
   onEvent?: (ev: DetectionEvent) => void
   onReadings?: (batch: Reading[]) => void
 
-  private wpById: Map<string, SiteDef['waypoints'][number]>
+  private wpById: Map<string, Waypoint>
   private ruleSeq = 1
   private evSeq = 1
   private missionSeq = 100
@@ -297,29 +320,121 @@ export class World {
   private sessSeq = 1
   private thresholdClock = 0
   private thresholdLastFired = new Map<string, number>()
+  private persist?: Persist
 
-  constructor(def: SiteDef) {
-    this.id = def.id
-    this.def = def
+  constructor(rt: SiteRuntime, opts?: { persist?: Persist; demo?: boolean }) {
+    this.id = rt.id
+    this.persist = opts?.persist
+    this.demo = opts?.demo ?? false
     this.site = {
-      id: def.id,
-      name: def.name,
-      operator: def.operator,
-      bounds: def.bounds,
-      map: def.map,
+      id: rt.id,
+      name: rt.name,
+      operator: rt.operator,
+      bounds: rt.bounds,
+      map: rt.map,
     }
     this.robots = [] // pure integration layer: units only ever arrive via registerExternal
-    this.cameras = def.cameras
-    this.waypoints = def.waypoints
-    this.zones = def.zones
-    this.buildings = def.buildings
-    this.wpById = new Map(def.waypoints.map((w) => [w.id, w]))
+    this.cameras = rt.cameras
+    this.waypoints = rt.waypoints
+    this.zones = rt.zones
+    this.buildings = rt.buildings
+    this.dockWp = rt.dockWp
+    this.splat = rt.splat
+    this.transforms = rt.transforms
+    this.wpById = new Map(rt.waypoints.map((w) => [w.id, w]))
     this.eventTypes = [
       ...BUILTIN_MODELS.map((m) => ({ id: m, label: m, severity: 'info' as Severity, builtin: true })),
       { id: 'fault', label: 'robot fault', severity: 'high' as Severity, detail: 'Robot health stream', builtin: true },
     ]
-    for (const t of def.eventTypeSeeds ?? []) this.addEventType(t)
+  }
+
+  /** replace the editable geometry (site builder saves) — takes effect live */
+  setGeometry(g: { waypoints: Waypoint[]; zones: Zone[]; cameras: SiteCamera[]; dockWp: string; bounds?: SiteInfo['bounds'] }) {
+    this.waypoints = g.waypoints
+    this.zones = g.zones
+    this.cameras = g.cameras
+    this.dockWp = g.dockWp
+    if (g.bounds) this.site.bounds = g.bounds
+    this.wpById = new Map(g.waypoints.map((w) => [w.id, w]))
+  }
+
+  /** restore persisted ops state after a restart (blobs parsed by the caller's loader) */
+  hydrate(ops: {
+    rules: DetectionRule[]
+    templates: MissionTemplate[]
+    schedules: Schedule[]
+    missions: Mission[]
+    events: DetectionEvent[]
+    orders: AdapterOrder[]
+    readings: Reading[]
+  }, seqs: { rule: number; ev: number; mission: number; order: number; tmpl: number; sched: number; cmd: number }) {
+    this.rules = ops.rules
+    this.templates = ops.templates
+    this.schedules = ops.schedules
+    this.missions = ops.missions
+    this.events = ops.events // loader returns newest-first, matching pushEvent order
+    this.orders = ops.orders
+    for (const r of ops.readings) this.pushReading(r)
+    this.ruleSeq = seqs.rule + 1
+    this.evSeq = seqs.ev + 1
+    this.missionSeq = Math.max(100, seqs.mission + 1)
+    this.orderSeq = seqs.order + 1
+    this.tmplSeq = seqs.tmpl + 1
+    this.schedSeq = seqs.sched + 1
+    this.cmdSeq = seqs.cmd + 1
+    // an order the adapter had pulled (acked) but never settled is re-queued:
+    // after a restart the vendor side has lost the in-flight run, so an acked
+    // order would sit forever. Inspection runs are idempotent — re-dispatching
+    // is safe even if the robot never actually stopped.
+    for (const o of this.orders) {
+      if (o.state === 'acked') {
+        o.state = 'pending'
+        this.persist?.order(o)
+      }
+    }
+    // a run that was active when the platform died and whose order is gone
+    // can never settle — fail it instead of showing a zombie forever
+    for (const m of this.missions) {
+      if (m.status !== 'active') continue
+      const live = this.orders.some((o) => o.payload.missionId === m.id && (o.state === 'pending' || o.state === 'acked'))
+      if (!live) {
+        m.status = 'failed'
+        m.endedAt = Date.now()
+        m.results.push({
+          ts: Date.now(), stepIdx: m.currentStep, waypointId: m.steps[m.currentStep]?.waypointId ?? '—',
+          action: 'wait', ok: false, note: 'platform restarted mid-run — no live order to settle',
+        })
+        this.persist?.mission(m)
+      }
+    }
+  }
+
+  /** first-creation seeding (demo import / new site) — never re-runs on boot */
+  seedFromDef(def: Pick<SiteDef, 'ruleSeeds' | 'missionSeeds'>) {
     for (const s of def.ruleSeeds) this.addRule({ kind: 'sim', ...s, enabled: true, builtin: true })
+    this.seedMissions(def.missionSeeds)
+  }
+
+  /** watchdog: an active run that never settles (adapter died mid-mission,
+   *  result report lost) would sit active forever — fail it after 6 h */
+  sweepStaleRuns(maxAgeMs = 6 * 3600_000) {
+    const now = Date.now()
+    for (const m of this.missions) {
+      if (m.status !== 'active' || !m.startedAt || now - m.startedAt < maxAgeMs) continue
+      m.status = 'failed'
+      m.endedAt = now
+      m.results.push({
+        ts: now,
+        stepIdx: m.currentStep,
+        waypointId: m.steps[m.currentStep]?.waypointId ?? '—',
+        action: 'wait',
+        ok: false,
+        note: 'watchdog: run exceeded 6h without settling',
+      })
+      const s = m.robotId ? this.nav.get(m.robotId) : undefined
+      if (s?.missionId === m.id) s.missionId = undefined
+      this.persist?.mission(m)
+    }
   }
 
   // ---------- fleet ----------
@@ -438,8 +553,15 @@ export class World {
 
   // ---------- channels + stream sessions ----------
 
-  /** derive the channel list — robot payloads with footage plus fixed site cameras */
+  /** derive the channel list — robot payloads with footage plus fixed site cameras.
+   *  RTSP is the production source kind; local demo loops stay `file`. */
   channels(robotId?: string): Channel[] {
+    const srcOf = (url?: string, rtsp?: string): Channel['source'] =>
+      rtsp || url?.startsWith('rtsp://')
+        ? { kind: 'rtsp', url: rtsp || url! }
+        : url
+          ? { kind: 'file', file: url }
+          : { kind: 'hls', url: '' }
     const out: Channel[] = []
     for (const r of this.robots) {
       if (robotId && r.id !== robotId) continue
@@ -459,7 +581,7 @@ export class World {
           role,
           label: `${r.callsign} · ${p.name}`,
           codec: 'h264',
-          source: p.file ? { kind: 'file', file: p.file } : { kind: 'hls', url: p.file ?? '' },
+          source: srcOf(p.file),
           streamKey: p.stream,
         })
       }
@@ -471,21 +593,64 @@ export class World {
           role: 'fixed',
           label: c.name,
           codec: 'h264',
-          source: c.file ? { kind: 'file', file: c.file } : { kind: 'hls', url: c.stream },
+          source: srcOf(c.file, c.rtsp),
           streamKey: c.stream,
         })
     return out
   }
 
-  /** open a playback lease. Demo file sources never expire; live ones get a TTL. */
+  /** channels for client consumption — RTSP URLs carry credentials and stay
+   *  server-side; viewers only need the source kind (playback goes through
+   *  session leases, snapshots through the evidence service) */
+  publicChannels(robotId?: string): Channel[] {
+    return this.channels(robotId).map((c) =>
+      c.source.kind === 'rtsp' ? { ...c, source: { kind: 'rtsp' as const, url: '' } } : c,
+    )
+  }
+
+  /** cameras for client consumption — same rule: rtsp:// (credentials) is
+   *  admin-only, everyone else sees the camera minus its source URL */
+  publicCameras(): SiteCamera[] {
+    return this.cameras.map(({ rtsp: _rtsp, ...c }) => c)
+  }
+
+  /** where a snapshot for this stream key comes from (evidence service) */
+  frameSource(streamKey: string): FrameSource | null {
+    const ch = this.channels().find((c) => c.streamKey === streamKey || c.id === streamKey)
+    if (!ch) return null
+    if (ch.source.kind === 'rtsp') return { kind: 'rtsp', url: ch.source.url }
+    if (ch.source.kind === 'file') {
+      const base = ch.source.file.split('/').pop()
+      return base ? { kind: 'file', file: base } : null
+    }
+    return null
+  }
+
+  /** open a playback lease. Demo file sources never expire; RTSP goes through
+   *  the go2rtc relay — the session url is the relay stream name the web
+   *  player passes to <BASE>/stream/api/ws?src=… */
   openSession(channelId: string): StreamSession | null {
     const ch = this.channels().find((c) => c.id === channelId)
     if (!ch) return null
     const id = `SS-${this.id}-${String(this.sessSeq++).padStart(4, '0')}`
-    const s: StreamSession =
-      ch.source.kind === 'file'
-        ? { id, channelId, url: ch.source.file, protocol: 'file', createdAt: Date.now(), expiresAt: null }
-        : { id, channelId, url: ch.source.url, protocol: ch.source.kind === 'rtsp' ? 'rtsp' : 'hls', createdAt: Date.now(), expiresAt: Date.now() + 120_000 }
+    let s: StreamSession
+    if (ch.source.kind === 'file') {
+      s = { id, channelId, url: ch.source.file, protocol: 'file', createdAt: Date.now(), expiresAt: null }
+    } else if (ch.source.kind === 'rtsp') {
+      const name = relayName(this.id, ch.streamKey ?? ch.id)
+      ensureRelayStream(name, ch.source.url)
+      s = {
+        id,
+        channelId,
+        url: name,
+        protocol: 'mse',
+        relayOnline: relayConfigured(),
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 120_000,
+      }
+    } else {
+      s = { id, channelId, url: ch.source.url, protocol: 'hls', createdAt: Date.now(), expiresAt: Date.now() + 120_000 }
+    }
     this.sessions.set(id, s)
     if (this.sessions.size > 300) {
       const oldest = [...this.sessions.keys()][0]
@@ -551,7 +716,10 @@ export class World {
       this.pushReading(rd)
       accepted.push(rd)
     }
-    if (accepted.length) this.onReadings?.(accepted)
+    if (accepted.length) {
+      this.persist?.readings(accepted)
+      this.onReadings?.(accepted)
+    }
     return accepted.length
   }
 
@@ -582,6 +750,7 @@ export class World {
   private addRule(r: Omit<DetectionRule, 'id' | 'firedCount'>) {
     const rule: DetectionRule = { ...r, id: `RL-${String(this.ruleSeq++).padStart(2, '0')}`, firedCount: 0 }
     this.rules.push(rule)
+    this.persist?.rule(rule)
     return rule
   }
 
@@ -621,6 +790,7 @@ export class World {
     const r = this.rules.find((x) => x.id === id)
     if (!r) return undefined
     Object.assign(r, patch)
+    this.persist?.rule(r)
     return r
   }
 
@@ -628,6 +798,7 @@ export class World {
     const i = this.rules.findIndex((x) => x.id === id && !x.builtin)
     if (i < 0) return false
     this.rules.splice(i, 1)
+    this.persist?.ruleDeleted(id)
     return true
   }
 
@@ -689,6 +860,7 @@ export class World {
       acked: false,
     }
     this.pushEvent(ev)
+    this.persist?.event(ev)
     return ev
   }
 
@@ -714,7 +886,8 @@ export class World {
     r.lastFiredAt = ts
 
     const evidence = opts?.evidence ?? []
-    const frame = await grabFrame(r.source)
+    const src = this.frameSource(r.source)
+    const frame = src ? await grabFrame(src) : null
     if (frame) {
       const file = `${this.id}_ev-${ts.toString(36)}-${Math.floor(Math.random() * 46_656).toString(36)}.jpg`
       writeFileSync(join(SNAP_DIR, file), frame)
@@ -807,6 +980,7 @@ export class World {
     if (!ev) return undefined
     ev.lifecycle = to
     ev.acked = true
+    this.persist?.event(ev)
     return ev
   }
 
@@ -815,7 +989,8 @@ export class World {
   }
 
   async missionSnapshot(stream: string, missionId: string): Promise<string | undefined> {
-    const frame = await grabFrame(stream, 6000)
+    const src = this.frameSource(stream)
+    const frame = src ? await grabFrame(src, 6000) : null
     if (!frame) return undefined
     const file = `${this.id}_${missionId}-${Date.now().toString(36)}.jpg`
     writeFileSync(join(SNAP_DIR, file), frame)
@@ -823,9 +998,9 @@ export class World {
     return `${PUB}/api/snapshots/${file}`
   }
 
-  async seedEvents() {
+  async seedEvents(eventSeedMins: number[]) {
     const now = Date.now()
-    const plan = this.def.eventSeedMins.map((m) => ({ rule: this.pickRule()!, ago: m * 60_000 }))
+    const plan = eventSeedMins.map((m) => ({ rule: this.pickRule()!, ago: m * 60_000 }))
     // force the most severe rules into the recent history so the board has depth
     const bySeverity = [...this.rules].sort((a, b) => SEV_RANK[a.severity] - SEV_RANK[b.severity])
     for (let i = 0; i < Math.min(4, bySeverity.length); i++) if (plan[i + 1]) plan[i + 1].rule = bySeverity[i]
@@ -835,6 +1010,7 @@ export class World {
       if (e.lifecycle === 'new') {
         e.lifecycle = Math.random() < 0.3 ? 'dismissed' : 'resolved'
         e.acked = true
+        this.persist?.event(e)
       }
     }
   }
@@ -860,6 +1036,7 @@ export class World {
       createdAt: Date.now(),
     }
     this.templates.push(t)
+    this.persist?.template(t)
     return t
   }
 
@@ -867,6 +1044,8 @@ export class World {
     const i = this.templates.findIndex((t) => t.id === id && !t.builtin)
     if (i < 0) return false
     this.templates.splice(i, 1)
+    this.persist?.templateDeleted(id)
+    for (const s of this.schedules.filter((x) => x.templateId === id)) this.persist?.scheduleDeleted(s.id)
     this.schedules = this.schedules.filter((s) => s.templateId !== id)
     return true
   }
@@ -910,6 +1089,7 @@ export class World {
             : this.nextRun(input.cadence, now),
     }
     this.schedules.push(s)
+    this.persist?.schedule(s)
     return s
   }
 
@@ -918,6 +1098,7 @@ export class World {
     if (!s) return undefined
     Object.assign(s, patch)
     if (patch.cadence) s.nextRunAt = this.nextRun(patch.cadence, Date.now())
+    this.persist?.schedule(s)
     return s
   }
 
@@ -925,6 +1106,7 @@ export class World {
     const i = this.schedules.findIndex((s) => s.id === id)
     if (i < 0) return false
     this.schedules.splice(i, 1)
+    this.persist?.scheduleDeleted(id)
     return true
   }
 
@@ -949,6 +1131,8 @@ export class World {
       s.lastRunAt = now
       s.runCount++
       s.nextRunAt = s.cadence.kind === 'once' ? undefined : this.nextRun(s.cadence, now)
+      this.persist?.mission(m)
+      this.persist?.schedule(s)
     }
   }
 
@@ -974,9 +1158,11 @@ export class World {
     }
     this.missions.push(m)
     if (this.missions.length > 120) {
+      // memory cap only — the finished run stays queryable in SQLite
       const i = this.missions.findIndex((x) => x.status === 'done' || x.status === 'aborted' || x.status === 'failed')
       if (i >= 0) this.missions.splice(i, 1)
     }
+    this.persist?.mission(m)
     return m
   }
 
@@ -984,6 +1170,7 @@ export class World {
     const m = this.missions.find((x) => x.id === id)
     if (!m || m.status !== 'active') return undefined
     m.paused = paused
+    this.persist?.mission(m)
     // an externally-executed mission must hear about it, or only the UI pauses
     const r = m.robotId ? this.robots.find((x) => x.id === m.robotId) : undefined
     if (r?.adapter === 'external') this.enqueueOrder(r.id, paused ? 'pause' : 'resume', { missionId: m.id })
@@ -1001,13 +1188,17 @@ export class World {
       let acked = false
       for (const o of this.orders)
         if (o.payload.missionId === m.id) {
-          if (o.state === 'pending') o.state = 'failed'
-          else if (o.state === 'acked' && o.kind === 'mission') acked = true
+          if (o.state === 'pending') {
+            o.state = 'failed'
+            o.updatedAt = Date.now()
+            this.persist?.order(o)
+          } else if (o.state === 'acked' && o.kind === 'mission') acked = true
         }
       if (acked) this.enqueueOrder(m.robotId, 'abort', { missionId: m.id })
     }
     m.status = 'aborted'
     m.endedAt = Date.now()
+    this.persist?.mission(m)
     return m
   }
 
@@ -1035,6 +1226,7 @@ export class World {
       rec.reason = reason
       this.commandLog.unshift(rec)
       if (this.commandLog.length > 80) this.commandLog.pop()
+      this.persist?.command(rec) // audit trail — retention-swept, not ring-capped
       return rec
     }
     const r = this.robots.find((x) => x.id === robotId)
@@ -1056,7 +1248,8 @@ export class World {
       case 'dock': {
         // keep the dock semantic — the adapter may swap in the vendor's own
         // return-to-charge routine instead of plain navigation
-        const dock = this.wpById.get(this.def.dockWp)!
+        const dock = this.wpById.get(this.dockWp)
+        if (!dock) return done(false, 'no dock waypoint configured for this site')
         this.enqueueOrder(robotId, 'goto', { x: dock.x, z: dock.z, dock: true })
         return done(true)
       }
@@ -1109,15 +1302,11 @@ export class World {
         note: 'p_world = px · resolution + origin (top-left anchored, x→east, z→south)',
       })
     }
-    if (this.def.splat)
-      maps.push({ id: 'splat', kind: 'splat', name: this.def.splat.name, url: this.def.splat.url })
-    // demo geodetic anchor — a similarity fit, the shape a real survey calibration takes
-    transforms.push({
-      from: 'world',
-      to: 'wgs84',
-      params: { s: 1 / 111_320, thetaRad: 0, t: this.id === 'plant-07' ? [121.474, 31.233] : [121.605, 31.37] },
-      note: 'lon = x·s + t[0] · lat = -z·s + t[1] (small-area approximation)',
-    })
+    if (this.splat)
+      maps.push({ id: 'splat', kind: 'splat', name: this.splat.name, url: this.splat.url })
+    // stored calibration transforms (calibration UI / demo seeds) sit alongside
+    // the occupancy-derived one
+    transforms.push(...this.transforms)
     return { maps, transforms }
   }
 
@@ -1135,6 +1324,7 @@ export class World {
     }
     this.orders.push(o)
     if (this.orders.length > 200) this.orders.shift()
+    this.persist?.order(o)
     return o
   }
 
@@ -1143,6 +1333,7 @@ export class World {
     for (const o of out) {
       o.state = 'acked'
       o.updatedAt = Date.now()
+      this.persist?.order(o)
     }
     return out
   }
@@ -1152,6 +1343,7 @@ export class World {
     if (!o) return undefined
     o.state = state
     o.updatedAt = Date.now()
+    this.persist?.order(o)
     // only the mission order itself settles the mission — pause/resume/abort
     // orders carry missionId purely as a reference
     if (o.kind === 'mission' && o.payload.missionId) {
@@ -1171,6 +1363,7 @@ export class World {
             ok: state === 'done',
             note,
           })
+        this.persist?.mission(m)
       }
     }
     return o
@@ -1212,6 +1405,7 @@ export class World {
       m.startedAt = now
       m.currentStep = 0
       m.progress = 0
+      this.persist?.mission(m)
       // hand the whole mission to the adapter as one order (VDA5050-style);
       // pin nav.missionId so robot-scoped pause/resume/abort commands resolve it
       this.nav.get(robot.id)!.missionId = m.id
@@ -1269,11 +1463,11 @@ export class World {
     return out
   }
 
-  // ---------- seeding ----------
+  // ---------- seeding (first site creation only — demo import / new site) ----------
 
-  seedMissions() {
+  seedMissions(missionSeeds: SeedMissionDef[]) {
     let stagger = 0
-    for (const seed of this.def.missionSeeds) {
+    for (const seed of missionSeeds) {
       if (seed.done) {
         // backdated completed run + the route it followed, registered as a reusable template
         const t = this.createTemplate({ name: seed.name, steps: seed.steps, builtin: true })
@@ -1294,6 +1488,7 @@ export class World {
           ok: true,
           note: r.note,
         }))
+        this.persist?.mission(m) // re-persist: backdated fields were set after creation
       } else if (seed.recurring) {
         // recurring seeds become template + interval schedule — the schedule drives every run
         const t = this.createTemplate({ name: seed.name, steps: seed.steps, builtin: true })

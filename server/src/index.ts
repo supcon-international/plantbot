@@ -1,55 +1,127 @@
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify'
-import cors from '@fastify/cors'
 import fastifyStatic from '@fastify/static'
 import { WebSocketServer, WebSocket } from 'ws'
 import { readFileSync, existsSync, writeFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { SITES } from './sites.js'
-import { World, SNAP_DIR, EXTERNAL_STALE_MS } from './world.js'
+import { DEMO_SITES, type SiteDef } from './sites.js'
+import { World, SNAP_DIR, EXTERNAL_STALE_MS, type SiteRuntime } from './world.js'
 import {
-  loadConfig,
-  getConfig,
-  saveConfig,
-  newApiKey,
-  findApiKey,
-  roleFor,
-  MAPS_DIR,
-  type ExternalRec,
+  importLegacyConfig, sweepRetention, MAPS_DIR,
+  bootUsers, listUsers, createUser, updateUser, deleteUser, roleFor, type Role,
+  listApiKeys, newApiKey, deleteApiKey, findApiKey, seedApiKeys,
+  listSiteRows, getSiteRow, createSiteRow, patchSiteRow, deleteSiteRow,
+  loadGeometry, saveGeometry, listTransforms, saveTransform, deleteTransform,
+  getSiteMap, saveSiteMap,
+  listExternals, saveExternal, deleteExternal,
+  listEventTypes, saveEventType, deleteEventTypeRec,
+  makePersist, loadSiteOps, loadSeqs, queryReadings,
+  type SiteRow, type ExternalRec,
 } from './config.js'
-import { requestUser, requireRole, issueSession, clearSession, login, publicUser } from './auth.js'
-import { ROBOT_CATALOG, METRIC_DEFS, type Command } from './fleet.js'
-import { grabFrame } from './frames.js'
+import { requestUser, requireRole, issueSession, clearSession, login, loginThrottled, publicUser, PUBLIC_VIEW } from './auth.js'
+import { ROBOT_CATALOG, METRIC_DEFS, type Command, type Waypoint, type Zone, type SiteCamera } from './fleet.js'
+import { relayConfigured } from './media.js'
+import type { DetectionRule, DetectionEvent, Mission, AdapterOrder } from './world.js'
+import type { MissionTemplate, Schedule, Reading } from './fleet.js'
 
 const PUB = process.env.PUBLIC_BASE ?? ''
+const DEMO = process.env.PB_DEMO === '1'
 
-// ---------- boot worlds ----------
+// ---------- boot: durable store ----------
 
-const worlds = new Map<string, World>(SITES.map((def) => [def.id, new World(def)]))
-const config = loadConfig([...worlds.keys()])
+importLegacyConfig()
+bootUsers()
 
-// replay durable per-site config into the runtime worlds
-for (const [siteId, sc] of Object.entries(config.sites)) {
-  const w = worlds.get(siteId)
-  if (!w) continue
-  for (const t of sc.eventTypes) w.addEventType(t)
-  for (const ext of sc.externals) w.registerExternal(ext)
-  if (sc.map) {
-    w.site.map = {
-      image: `${PUB}/api/sites/${siteId}/map-image?v=${sc.map.uploadedAt}`,
-      resolution: sc.map.resolution,
-      width: sc.map.width,
-      height: sc.map.height,
-      origin: sc.map.origin,
-      source: sc.map.source,
-    }
+// first boot with PB_DEMO=1 on an empty sites table → import the demo yards.
+// Production starts empty; sites are created in the Site Builder.
+const importedNow: string[] = []
+if (DEMO && listSiteRows().length === 0) {
+  for (const def of DEMO_SITES) {
+    createSiteRow({
+      id: def.id, name: def.name, operator: def.operator, bounds: def.bounds,
+      dockWp: def.dockWp, splat: def.splat, buildings: def.buildings, mapMeta: def.map ?? undefined, demo: true,
+    })
+    saveGeometry(def.id, { waypoints: def.waypoints, zones: def.zones, cameras: def.cameras })
+    for (const t of def.eventTypeSeeds ?? []) saveEventType(def.id, t)
+    for (const t of def.transformSeeds ?? []) saveTransform(def.id, t)
+    importedNow.push(def.id)
+  }
+  console.log(`[boot] demo sites imported: ${importedNow.join(', ')}`)
+}
+
+seedApiKeys(listSiteRows().map((s) => s.id))
+sweepRetention()
+
+// ---------- world lifecycle (sites are data — Worlds start and stop at runtime) ----------
+
+const worlds = new Map<string, World>()
+const rooms = new Map<string, Set<WebSocket>>()
+
+function buildRuntime(row: SiteRow): SiteRuntime {
+  const geo = loadGeometry(row.id)
+  const uploaded = getSiteMap(row.id)
+  return {
+    id: row.id,
+    name: row.name,
+    operator: row.operator,
+    bounds: row.bounds,
+    dockWp: row.dockWp,
+    splat: row.splat,
+    buildings: row.buildings,
+    map: uploaded
+      ? {
+          image: `${PUB}/api/sites/${row.id}/map-image?v=${uploaded.uploadedAt}`,
+          resolution: uploaded.resolution,
+          width: uploaded.width,
+          height: uploaded.height,
+          origin: uploaded.origin,
+          source: uploaded.source,
+        }
+      : (row.mapMeta ?? null),
+    transforms: listTransforms(row.id),
+    ...geo,
   }
 }
 
+function startWorld(row: SiteRow, opts?: { fresh?: SiteDef }): World {
+  const w = new World(buildRuntime(row), { persist: makePersist(row.id), demo: row.demo })
+  worlds.set(w.id, w)
+  rooms.set(w.id, rooms.get(w.id) ?? new Set())
+  w.onEvent = (ev) => broadcast(w.id, { t: 'event', event: ev })
+  w.onReadings = (batch) => broadcast(w.id, { t: 'readings', items: batch })
+  if (opts?.fresh) {
+    // first creation only — seeds persist through the write-through hooks
+    for (const t of opts.fresh.eventTypeSeeds ?? []) w.addEventType(t)
+    w.seedFromDef(opts.fresh)
+  } else {
+    for (const t of listEventTypes(row.id)) w.addEventType(t)
+    const ops = loadSiteOps(row.id)
+    w.hydrate(
+      {
+        rules: ops.rules as DetectionRule[],
+        templates: ops.templates as MissionTemplate[],
+        schedules: ops.schedules as Schedule[],
+        missions: ops.missions as Mission[],
+        events: ops.events as DetectionEvent[],
+        orders: ops.orders as AdapterOrder[],
+        readings: ops.readings as Reading[],
+      },
+      loadSeqs(row.id),
+    )
+  }
+  for (const rec of listExternals(row.id)) w.registerExternal(rec)
+  return w
+}
+
+for (const row of listSiteRows()) {
+  startWorld(row, importedNow.includes(row.id) ? { fresh: DEMO_SITES.find((d) => d.id === row.id)! } : undefined)
+}
+
 const app = Fastify({ logger: false, bodyLimit: 24 * 1024 * 1024 })
-await app.register(cors, { origin: true, credentials: true })
-// demo footage served directly (Range-capable) — every channel plays a
-// local loop; snapshots are cut from the same files via ffmpeg
+// no CORS layer: dev runs same-origin behind the vite proxy, production
+// same-origin behind nginx — cross-origin browsers have no business here
+// demo footage served directly (Range-capable) — file channels play these
+// loops; snapshots are cut from the same files (or straight from RTSP)
 await app.register(fastifyStatic, {
   root: join(dirname(fileURLToPath(import.meta.url)), '..', 'media'),
   prefix: '/media/',
@@ -57,10 +129,21 @@ await app.register(fastifyStatic, {
   maxAge: '1h',
 })
 
+// PB_PUBLIC_VIEW=0 → every browser API needs a session (integration API keeps
+// its own Bearer auth; login/health/media stay open so the gate is escapable)
+if (!PUBLIC_VIEW) {
+  app.addHook('onRequest', async (req, reply) => {
+    const url = req.url
+    if (!url.startsWith('/api/')) return
+    if (url.startsWith('/api/auth/') || url.startsWith('/api/health') || url.startsWith('/api/integration/')) return
+    if (requestUser(req)) return
+    return reply.code(401).send({ error: 'sign in required', gated: true })
+  })
+}
+
 // ---------- websocket (per-site rooms) ----------
 
 const wss = new WebSocketServer({ noServer: true })
-const rooms = new Map<string, Set<WebSocket>>([...worlds.keys()].map((id) => [id, new Set()]))
 
 function broadcast(siteId: string, msg: unknown) {
   const s = JSON.stringify(msg)
@@ -69,41 +152,39 @@ function broadcast(siteId: string, msg: unknown) {
 
 wss.on('connection', (ws, req) => {
   const url = new URL(req.url ?? '/ws', 'http://x')
-  const siteId = url.searchParams.get('site') ?? SITES[0].id
+  const siteId = url.searchParams.get('site') ?? ''
   const w = worlds.get(siteId)
   if (!w) {
     ws.close(4004, 'unknown site')
     return
   }
   rooms.get(siteId)!.add(ws)
-  ws.send(
-    JSON.stringify({
-      t: 'hello',
-      siteId,
-      site: w.site,
-      robots: w.robots,
-      cameras: w.cameras,
-      waypoints: w.waypoints,
-      zones: w.zones,
-      buildings: w.buildings,
-      events: w.listEvents(80),
-      missions: w.missions,
-      templates: w.templates,
-      schedules: w.schedules,
-      rules: w.rules,
-      eventTypes: w.eventTypes,
-      metricDefs: METRIC_DEFS,
-      channels: w.channels(),
-      maps: w.maps(),
-    }),
-  )
-  ws.on('close', () => rooms.get(siteId)!.delete(ws))
-  ws.on('error', () => rooms.get(siteId)!.delete(ws))
+  ws.send(JSON.stringify(helloFrame(w)))
+  ws.on('close', () => rooms.get(siteId)?.delete(ws))
+  ws.on('error', () => rooms.get(siteId)?.delete(ws))
 })
 
-for (const w of worlds.values()) {
-  w.onEvent = (ev) => broadcast(w.id, { t: 'event', event: ev })
-  w.onReadings = (batch) => broadcast(w.id, { t: 'readings', items: batch })
+function helloFrame(w: World) {
+  return {
+    t: 'hello',
+    siteId: w.id,
+    site: w.site,
+    robots: w.robots,
+    cameras: w.publicCameras(),
+    waypoints: w.waypoints,
+    zones: w.zones,
+    buildings: w.buildings,
+    dockWp: w.dockWp,
+    events: w.listEvents(80),
+    missions: w.missions,
+    templates: w.templates,
+    schedules: w.schedules,
+    rules: w.rules,
+    eventTypes: w.eventTypes,
+    metricDefs: METRIC_DEFS,
+    channels: w.publicChannels(),
+    maps: w.maps(),
+  }
 }
 
 // ---------- helpers ----------
@@ -134,9 +215,12 @@ function integrationSite(req: FastifyRequest, reply: FastifyReply): World | null
 
 app.post<{ Body: { username?: string; password?: string } }>('/api/auth/login', async (req, reply) => {
   const { username, password } = req.body ?? {}
-  const u = username && password ? login(username, password) : null
+  if (!username || !password) return reply.code(401).send({ error: 'invalid credentials' })
+  if (loginThrottled(req.ip, username))
+    return reply.code(429).send({ error: 'too many attempts — locked for 15 minutes' })
+  const u = login(req.ip, username, password)
   if (!u) return reply.code(401).send({ error: 'invalid credentials' })
-  issueSession(reply, u.username)
+  issueSession(req, reply, u.username)
   return { user: publicUser(u) }
 })
 
@@ -149,30 +233,175 @@ app.get('/api/auth/me', async (req) => {
   const u = requestUser(req)
   return {
     user: publicUser(u),
-    sites: SITES.map((s) => ({ id: s.id, name: s.name, operator: s.operator, role: roleFor(u, s.id) })),
+    publicView: PUBLIC_VIEW,
+    demo: DEMO,
+    sites: listSiteRows().map((s) => ({ id: s.id, name: s.name, operator: s.operator, role: roleFor(u, s.id) })),
   }
+})
+
+// ---------- users (platform admin) ----------
+
+const sanitizeUser = (u: { username: string; displayName: string; roles: Record<string, Role>; seeded?: boolean }) => ({
+  username: u.username,
+  displayName: u.displayName,
+  roles: u.roles,
+  seeded: !!u.seeded,
+})
+
+app.get('/api/users', { preHandler: requireRole('admin') }, async () => ({
+  users: listUsers().map(sanitizeUser),
+}))
+
+app.post('/api/users', { preHandler: requireRole('admin') }, async (req, reply) => {
+  const b = (req.body ?? {}) as { username?: string; displayName?: string; password?: string; roles?: Record<string, Role> }
+  if (!b.username || !b.password || !b.roles) return reply.code(400).send({ error: 'username, password, roles required' })
+  if (b.password.length < 8) return reply.code(400).send({ error: 'password must be at least 8 characters' })
+  const u = createUser({ username: b.username, displayName: b.displayName, password: b.password, roles: b.roles })
+  if (!u) return reply.code(409).send({ error: 'username taken or invalid' })
+  return { user: sanitizeUser(u) }
+})
+
+app.patch('/api/users/:username', { preHandler: requireRole('admin') }, async (req, reply) => {
+  const b = (req.body ?? {}) as { displayName?: string; roles?: Record<string, Role>; password?: string }
+  if (b.password !== undefined && b.password.length < 8)
+    return reply.code(400).send({ error: 'password must be at least 8 characters' })
+  const u = updateUser((req.params as P).username, b)
+  if (!u) return reply.code(404).send({ error: 'not found' })
+  return { user: sanitizeUser(u) }
+})
+
+app.delete('/api/users/:username', { preHandler: requireRole('admin') }, async (req, reply) => {
+  const me = requestUser(req)
+  const target = (req.params as P).username
+  if (me?.username === target) return reply.code(400).send({ error: 'cannot delete your own account' })
+  if (!deleteUser(target)) return reply.code(400).send({ error: 'not found, or last remaining admin' })
+  return { ok: true }
 })
 
 // ---------- global ----------
 
-app.get('/api/health', async () => ({ ok: true, ts: Date.now(), sites: [...worlds.keys()] }))
+app.get('/api/health', async () => ({ ok: true, ts: Date.now(), demo: DEMO, relay: relayConfigured(), sites: [...worlds.keys()] }))
 
 app.get('/api/sites', async (req) => {
   const u = requestUser(req)
   return {
-    sites: SITES.map((s) => {
-      const w = worlds.get(s.id)!
+    sites: listSiteRows().map((s) => {
+      const w = worlds.get(s.id)
       return {
         id: s.id,
         name: s.name,
         operator: s.operator,
         role: roleFor(u, s.id),
-        robots: w.robots.length,
-        openAlerts: w.events.filter((e) => e.lifecycle === 'new' && (e.severity === 'critical' || e.severity === 'high')).length,
+        demo: s.demo,
+        robots: w?.robots.length ?? 0,
+        openAlerts: w?.events.filter((e) => e.lifecycle === 'new' && (e.severity === 'critical' || e.severity === 'high')).length ?? 0,
       }
     }),
   }
 })
+
+// ---------- site lifecycle (Site Builder) ----------
+
+app.post('/api/sites', { preHandler: requireRole('admin') }, async (req, reply) => {
+  const b = (req.body ?? {}) as { id?: string; name?: string; operator?: string; bounds?: { x: [number, number]; z: [number, number] } }
+  if (!b.name?.trim()) return reply.code(400).send({ error: 'name required' })
+  const id = (b.id?.trim() || b.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32)
+  if (!id) return reply.code(400).send({ error: 'invalid id' })
+  if (getSiteRow(id)) return reply.code(409).send({ error: `site '${id}' already exists` })
+  const bounds = b.bounds ?? { x: [-20, 20] as [number, number], z: [-12, 12] as [number, number] }
+  createSiteRow({ id, name: b.name.trim(), operator: b.operator?.trim() || 'Plantbot Operations', bounds, dockWp: '', buildings: [], demo: false })
+  saveGeometry(id, { waypoints: [], zones: [], cameras: [] })
+  const w = startWorld(getSiteRow(id)!)
+  return { site: { id: w.id, name: w.site.name, operator: w.site.operator } }
+})
+
+app.patch(`/api/sites/:siteId/meta`, { preHandler: requireRole('admin') }, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  const b = (req.body ?? {}) as { name?: string; operator?: string; bounds?: { x: [number, number]; z: [number, number] } }
+  patchSiteRow(w.id, { name: b.name, operator: b.operator, bounds: b.bounds })
+  if (b.name) w.site.name = b.name
+  if (b.operator) w.site.operator = b.operator
+  if (b.bounds) w.site.bounds = b.bounds
+  broadcast(w.id, { t: 'site', site: w.site })
+  return { site: w.site }
+})
+
+app.delete(`/api/sites/:siteId`, { preHandler: requireRole('admin') }, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  const row = getSiteRow(w.id)
+  if (row?.demo && DEMO) return reply.code(400).send({ error: 'demo sites are rebuilt at boot — disable PB_DEMO to remove them' })
+  for (const c of rooms.get(w.id) ?? []) c.close(4010, 'site deleted')
+  rooms.delete(w.id)
+  worlds.delete(w.id)
+  deleteSiteRow(w.id)
+  return { ok: true }
+})
+
+/** geometry save — the whole editable surface in one transaction, applied live */
+app.put(`/api/sites/:siteId/geometry`, { preHandler: requireRole('admin') }, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  const b = (req.body ?? {}) as { waypoints?: Waypoint[]; zones?: Zone[]; cameras?: SiteCamera[]; dockWp?: string; bounds?: { x: [number, number]; z: [number, number] } }
+  const waypoints = Array.isArray(b.waypoints) ? b.waypoints : w.waypoints
+  const zones = Array.isArray(b.zones) ? b.zones : w.zones
+  const cameras = (Array.isArray(b.cameras) ? b.cameras : w.cameras).map((c) => ({
+    ...c,
+    stream: c.stream || c.id,
+    live: !!c.rtsp,
+    source: c.rtsp ? 'RTSP camera' : c.file ? 'NVR loop · demo footage' : '—',
+  }))
+  if (new Set(waypoints.map((x) => x.id)).size !== waypoints.length)
+    return reply.code(400).send({ error: 'duplicate waypoint ids' })
+  const dockWp = b.dockWp !== undefined ? b.dockWp : w.dockWp
+  if (dockWp && !waypoints.some((x) => x.id === dockWp))
+    return reply.code(400).send({ error: `dock waypoint '${dockWp}' is not in the waypoint list` })
+  saveGeometry(w.id, { waypoints, zones, cameras })
+  patchSiteRow(w.id, { dockWp, bounds: b.bounds })
+  w.setGeometry({ waypoints, zones, cameras, dockWp, bounds: b.bounds })
+  broadcast(w.id, { t: 'geo', site: w.site, waypoints, zones, cameras: w.publicCameras(), dockWp, channels: w.publicChannels() })
+  return { ok: true, waypoints: waypoints.length, zones: zones.length, cameras: cameras.length }
+})
+
+/** occupancy upload (Site Builder) — same convention as the integration API */
+app.post(`/api/sites/:siteId/map`, { preHandler: requireRole('admin') }, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  return uploadOccupancy(w, (req.body ?? {}) as Record<string, unknown>, reply)
+})
+
+// ---------- calibration transforms ----------
+
+app.get(`/api/sites/:siteId/transforms`, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  return { transforms: listTransforms(w.id) }
+})
+
+app.post(`/api/sites/:siteId/transforms`, { preHandler: requireRole('admin') }, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  const b = (req.body ?? {}) as { id?: string; from?: string; to?: string; params?: { s: number; thetaRad: number; t: [number, number] }; note?: string }
+  if (!b.from || !b.to || !b.params || typeof b.params.s !== 'number')
+    return reply.code(400).send({ error: 'from, to, params {s, thetaRad, t:[x,z]} required' })
+  const id = (b.id?.trim() || `${b.from}->${b.to}`).toLowerCase().replace(/[^a-z0-9>_-]+/g, '-').slice(0, 48)
+  saveTransform(w.id, { id, from: b.from, to: b.to, params: b.params, note: b.note })
+  w.transforms = listTransforms(w.id)
+  broadcast(w.id, { t: 'maps', maps: w.maps() })
+  return { transform: { id, from: b.from, to: b.to, params: b.params, note: b.note } }
+})
+
+app.delete(`/api/sites/:siteId/transforms/:id`, { preHandler: requireRole('admin') }, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  if (!deleteTransform(w.id, (req.params as P).id)) return reply.code(404).send({ error: 'not found' })
+  w.transforms = listTransforms(w.id)
+  broadcast(w.id, { t: 'maps', maps: w.maps() })
+  return { ok: true }
+})
+
+// ---------- snapshots ----------
 
 app.get<{ Params: { file: string } }>('/api/snapshots/:file', async (req, reply) => {
   const file = (req.params as P).file.replace(/[^A-Za-z0-9._-]/g, '')
@@ -190,7 +419,11 @@ const S = '/api/sites/:siteId'
 app.get(`${S}/fleet`, async (req: FastifyRequest, reply) => {
   const w = world(req, reply)
   if (!w) return
-  return { site: w.site, robots: w.robots, cameras: w.cameras, waypoints: w.waypoints, zones: w.zones, buildings: w.buildings }
+  // camera rtsp:// URLs embed credentials — only site admins (who edit them
+  // in the Site Builder) get them back; everyone else gets the public shape
+  const admin = roleFor(requestUser(req), w.id) === 'admin'
+  const cameras = admin ? w.cameras : w.publicCameras()
+  return { site: w.site, robots: w.robots, cameras, waypoints: w.waypoints, zones: w.zones, buildings: w.buildings, dockWp: w.dockWp }
 })
 
 app.get(`${S}/catalog`, async (req: FastifyRequest, reply) => {
@@ -203,7 +436,7 @@ app.get(`${S}/catalog`, async (req: FastifyRequest, reply) => {
 app.get(`${S}/map-image`, async (req: FastifyRequest, reply) => {
   const w = world(req, reply)
   if (!w) return
-  const rec = getConfig().sites[w.id]?.map
+  const rec = getSiteMap(w.id)
   if (!rec) return reply.code(404).send({ error: 'no uploaded map' })
   const p = join(MAPS_DIR, rec.file)
   if (!existsSync(p)) return reply.code(404).send({ error: 'map file missing' })
@@ -219,9 +452,7 @@ app.delete(`${S}/external-robots/:id`, { preHandler: requireRole('admin') }, asy
   if (!w) return
   const robot = w.robots.find((r) => r.id === (req.params as P).id)
   if (!robot || !w.removeExternal((req.params as P).id)) return reply.code(404).send({ error: 'not found' })
-  const sc = getConfig().sites[w.id]
-  sc.externals = sc.externals.filter((e) => e.serial !== robot.serial)
-  saveConfig()
+  deleteExternal(w.id, robot.serial)
   broadcast(w.id, { t: 'fleet', robots: w.robots })
   return { ok: true }
 })
@@ -231,13 +462,13 @@ app.delete(`${S}/external-robots/:id`, { preHandler: requireRole('admin') }, asy
 app.get(`${S}/channels`, async (req: FastifyRequest, reply) => {
   const w = world(req, reply)
   if (!w) return
-  return { channels: w.channels() }
+  return { channels: w.publicChannels() }
 })
 
 app.get(`${S}/robots/:id/channels`, async (req: FastifyRequest, reply) => {
   const w = world(req, reply)
   if (!w) return
-  return { channels: w.channels((req.params as P).id) }
+  return { channels: w.publicChannels((req.params as P).id) }
 })
 
 app.post(`${S}/channels/:chId/sessions`, async (req: FastifyRequest, reply) => {
@@ -267,7 +498,10 @@ app.get(`${S}/channels/:chId/snapshot`, async (req: FastifyRequest, reply) => {
   if (!w) return
   const ch = w.channels().find((c) => c.id === decodeURIComponent((req.params as P).chId))
   if (!ch?.streamKey) return reply.code(404).send({ error: 'channel has no snapshot source' })
-  const frame = await grabFrame(ch.streamKey)
+  const src = w.frameSource(ch.streamKey)
+  if (!src) return reply.code(404).send({ error: 'channel has no snapshot source' })
+  const { grabFrame } = await import('./frames.js')
+  const frame = await grabFrame(src)
   if (!frame) return reply.code(503).send({ error: 'snapshot unavailable' })
   reply.header('cache-control', 'no-store')
   reply.type('image/jpeg')
@@ -288,7 +522,8 @@ app.get(`${S}/robots/:id/readings`, async (req: FastifyRequest, reply) => {
   const robotId = (req.params as P).id
   return {
     metrics: w.robotMetrics(robotId),
-    readings: w.listReadings(robotId, q.metric || undefined, Number(q.since ?? 0), Number(q.limit ?? 200)),
+    // served from SQLite — survives restarts, bounded by retention (7 d)
+    readings: queryReadings(w.id, robotId, q.metric || undefined, Number(q.since ?? 0), Number(q.limit ?? 200)),
   }
 })
 
@@ -300,32 +535,16 @@ app.get(`${S}/events`, async (req: FastifyRequest, reply) => {
   return { events: w.listEvents(Number((req.query as any)?.limit ?? 120)) }
 })
 
-app.post(`${S}/events/:id/ack`, { preHandler: requireRole('operator') }, async (req: FastifyRequest, reply) => {
-  const w = world(req, reply)
-  if (!w) return
-  const ev = w.ackEvent((req.params as P).id)
-  if (!ev) return reply.code(404).send({ error: 'not found' })
-  broadcast(w.id, { t: 'lifecycle', id: ev.id, lifecycle: ev.lifecycle })
-  return { ok: true }
-})
-
-app.post(`${S}/events/:id/resolve`, { preHandler: requireRole('operator') }, async (req: FastifyRequest, reply) => {
-  const w = world(req, reply)
-  if (!w) return
-  const ev = w.setLifecycle((req.params as P).id, 'resolved')
-  if (!ev) return reply.code(404).send({ error: 'not found' })
-  broadcast(w.id, { t: 'lifecycle', id: ev.id, lifecycle: ev.lifecycle })
-  return { ok: true }
-})
-
-app.post(`${S}/events/:id/dismiss`, { preHandler: requireRole('operator') }, async (req: FastifyRequest, reply) => {
-  const w = world(req, reply)
-  if (!w) return
-  const ev = w.setLifecycle((req.params as P).id, 'dismissed')
-  if (!ev) return reply.code(404).send({ error: 'not found' })
-  broadcast(w.id, { t: 'lifecycle', id: ev.id, lifecycle: ev.lifecycle })
-  return { ok: true }
-})
+for (const [action, to] of [['ack', 'acked'], ['resolve', 'resolved'], ['dismiss', 'dismissed']] as const) {
+  app.post(`${S}/events/:id/${action}`, { preHandler: requireRole('operator') }, async (req: FastifyRequest, reply) => {
+    const w = world(req, reply)
+    if (!w) return
+    const ev = w.setLifecycle((req.params as P).id, to)
+    if (!ev) return reply.code(404).send({ error: 'not found' })
+    broadcast(w.id, { t: 'lifecycle', id: ev.id, lifecycle: ev.lifecycle })
+    return { ok: true }
+  })
+}
 
 /** dismissed events keep their evidence — this is the negative-sample training export */
 app.get(`${S}/events/export`, { preHandler: requireRole('operator') }, async (req: FastifyRequest, reply) => {
@@ -389,9 +608,7 @@ app.post(`${S}/event-types`, { preHandler: requireRole('admin') }, async (req: F
   if (!b.id || !b.label) return reply.code(400).send({ error: 'id and label required' })
   const t = w.addEventType(b)
   if (!t) return reply.code(409).send({ error: 'id taken or invalid' })
-  const sc = getConfig().sites[w.id]
-  sc.eventTypes.push({ id: t.id, label: t.label, severity: t.severity, detail: t.detail, category: t.category })
-  saveConfig()
+  saveEventType(w.id, { id: t.id, label: t.label, severity: t.severity, detail: t.detail, category: t.category })
   broadcast(w.id, { t: 'eventTypes', eventTypes: w.eventTypes })
   return { eventType: t }
 })
@@ -400,19 +617,17 @@ app.delete(`${S}/event-types/:id`, { preHandler: requireRole('admin') }, async (
   const w = world(req, reply)
   if (!w) return
   if (!w.deleteEventType((req.params as P).id)) return reply.code(404).send({ error: 'not found or builtin' })
-  const sc = getConfig().sites[w.id]
-  sc.eventTypes = sc.eventTypes.filter((t) => t.id !== (req.params as P).id)
-  saveConfig()
+  deleteEventTypeRec(w.id, (req.params as P).id)
   broadcast(w.id, { t: 'eventTypes', eventTypes: w.eventTypes })
   return { ok: true }
 })
 
-// -- api keys (admin) --
+// -- api keys (admin; the plaintext key appears exactly once, on creation) --
 
 app.get(`${S}/api-keys`, { preHandler: requireRole('admin') }, async (req: FastifyRequest, reply) => {
   const w = world(req, reply)
   if (!w) return
-  return { apiKeys: getConfig().sites[w.id].apiKeys }
+  return { apiKeys: listApiKeys(w.id) }
 })
 
 app.post(`${S}/api-keys`, { preHandler: requireRole('admin') }, async (req: FastifyRequest, reply) => {
@@ -424,11 +639,7 @@ app.post(`${S}/api-keys`, { preHandler: requireRole('admin') }, async (req: Fast
 app.delete(`${S}/api-keys/:id`, { preHandler: requireRole('admin') }, async (req: FastifyRequest, reply) => {
   const w = world(req, reply)
   if (!w) return
-  const sc = getConfig().sites[w.id]
-  const before = sc.apiKeys.length
-  sc.apiKeys = sc.apiKeys.filter((k) => k.id !== (req.params as P).id)
-  if (sc.apiKeys.length === before) return reply.code(404).send({ error: 'not found' })
-  saveConfig()
+  if (!deleteApiKey(w.id, (req.params as P).id)) return reply.code(404).send({ error: 'not found' })
   return { ok: true }
 })
 
@@ -439,7 +650,7 @@ app.get(`${S}/integrations`, { preHandler: requireRole('admin') }, async (req: F
   if (!w) return
   const now = Date.now()
   return {
-    apiKeys: getConfig().sites[w.id].apiKeys,
+    apiKeys: listApiKeys(w.id),
     eventTypes: w.eventTypes,
     externals: w.robots
       .filter((r) => r.adapter === 'external')
@@ -458,6 +669,7 @@ app.get(`${S}/integrations`, { preHandler: requireRole('admin') }, async (req: F
       }),
     orders: w.orders.slice(-30).reverse(),
     map: w.site.map,
+    relay: relayConfigured(),
   }
 })
 
@@ -533,7 +745,7 @@ app.get(`${S}/maps`, async (req: FastifyRequest, reply) => {
   return w.maps()
 })
 
-// -- commands (semantic, server-validated; velocity deadman lives here, not in clients) --
+// -- commands (semantic, server-validated) --
 
 app.post(`${S}/robots/:id/commands`, { preHandler: requireRole('operator') }, async (req: FastifyRequest, reply) => {
   const w = world(req, reply)
@@ -560,24 +772,6 @@ app.get(`${S}/missions`, async (req: FastifyRequest, reply) => {
   return { missions: w.missions }
 })
 
-app.post(`${S}/missions/:id/pause`, { preHandler: requireRole('operator') }, async (req: FastifyRequest, reply) => {
-  const w = world(req, reply)
-  if (!w) return
-  const m = w.pauseMission((req.params as P).id, true)
-  if (!m) return reply.code(404).send({ error: 'not active' })
-  broadcast(w.id, { t: 'missions', missions: w.missions })
-  return { mission: m }
-})
-
-app.post(`${S}/missions/:id/resume`, { preHandler: requireRole('operator') }, async (req: FastifyRequest, reply) => {
-  const w = world(req, reply)
-  if (!w) return
-  const m = w.pauseMission((req.params as P).id, false)
-  if (!m) return reply.code(404).send({ error: 'not active' })
-  broadcast(w.id, { t: 'missions', missions: w.missions })
-  return { mission: m }
-})
-
 app.post(`${S}/missions`, { preHandler: requireRole('operator') }, async (req: FastifyRequest, reply) => {
   const w = world(req, reply)
   if (!w) return
@@ -592,6 +786,24 @@ app.post(`${S}/missions`, { preHandler: requireRole('operator') }, async (req: F
     steps: b.steps,
     templateId: b.templateId,
   })
+  broadcast(w.id, { t: 'missions', missions: w.missions })
+  return { mission: m }
+})
+
+app.post(`${S}/missions/:id/pause`, { preHandler: requireRole('operator') }, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  const m = w.pauseMission((req.params as P).id, true)
+  if (!m) return reply.code(404).send({ error: 'not active' })
+  broadcast(w.id, { t: 'missions', missions: w.missions })
+  return { mission: m }
+})
+
+app.post(`${S}/missions/:id/resume`, { preHandler: requireRole('operator') }, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  const m = w.pauseMission((req.params as P).id, false)
+  if (!m) return reply.code(404).send({ error: 'not active' })
   broadcast(w.id, { t: 'missions', missions: w.missions })
   return { mission: m }
 })
@@ -649,10 +861,9 @@ app.post(`${I}/robots`, async (req: FastifyRequest<{ Body: any }>, reply) => {
     streams: Array.isArray(b.streams) ? b.streams : undefined,
   }
   const robot = w.registerExternal(rec)
-  const sc = getConfig().sites[w.id]
-  sc.externals = [...sc.externals.filter((e) => e.serial !== rec.serial), rec]
-  saveConfig()
+  saveExternal(w.id, rec)
   broadcast(w.id, { t: 'fleet', robots: w.robots })
+  broadcast(w.id, { t: 'channels', channels: w.publicChannels() })
   return { robot: { id: robot.id, callsign: robot.callsign, integrationLevel: robot.integrationLevel } }
 })
 
@@ -661,9 +872,7 @@ app.delete(`${I}/robots/:serial`, async (req: FastifyRequest<{ Params: { serial:
   if (!w) return
   const robot = w.robotBySerial(req.params.serial)
   if (!robot || !w.removeExternal(robot.id)) return reply.code(404).send({ error: 'not found' })
-  const sc = getConfig().sites[w.id]
-  sc.externals = sc.externals.filter((e) => e.serial !== req.params.serial)
-  saveConfig()
+  deleteExternal(w.id, req.params.serial)
   broadcast(w.id, { t: 'fleet', robots: w.robots })
   return { ok: true }
 })
@@ -735,12 +944,9 @@ app.post(`${I}/snapshot`, async (req: FastifyRequest<{ Body: any }>, reply) => {
 /** ROS map_server-style occupancy upload: image is a base64 PNG data URL;
  *  origin = scene coords of the image's TOP-LEFT pixel, x→east, z→south
  *  (from a ROS map.yaml: originX stays, originZ = -(origin_y + height*resolution)) */
-app.post(`${I}/maps`, async (req: FastifyRequest<{ Body: any }>, reply) => {
-  const w = integrationSite(req, reply)
-  if (!w) return
-  const b = (req.body ?? {}) as any
+async function uploadOccupancy(w: World, b: Record<string, unknown>, reply: FastifyReply) {
   const m = /^data:image\/png;base64,(.+)$/.exec(String(b.image ?? ''))
-  if (!m || typeof b.resolution !== 'number' || !Array.isArray(b.origin) || b.origin.length < 2)
+  if (!m || typeof b.resolution !== 'number' || !Array.isArray(b.origin) || (b.origin as number[]).length < 2)
     return reply.code(400).send({ error: 'image (png data URL), resolution (m/px), origin [x,z] required' })
   const buf = Buffer.from(m[1], 'base64')
   if (buf.length < 24 || buf.readUInt32BE(12) !== 0x49484452)
@@ -751,32 +957,27 @@ app.post(`${I}/maps`, async (req: FastifyRequest<{ Body: any }>, reply) => {
   const uploadedAt = Date.now()
   const file = `${w.id}-${uploadedAt}.png`
   writeFileSync(join(MAPS_DIR, file), buf)
-  const rec = {
-    file,
+  const origin = [Number((b.origin as number[])[0]), Number((b.origin as number[])[1])] as [number, number]
+  saveSiteMap(w.id, { file, resolution: b.resolution, width, height, origin, source: String(b.name ?? 'occupancy upload'), uploadedAt })
+  w.site.map = {
+    image: `${PUB}/api/sites/${w.id}/map-image?v=${uploadedAt}`,
     resolution: b.resolution,
     width,
     height,
-    origin: [Number(b.origin[0]), Number(b.origin[1])] as [number, number],
-    source: String(b.name ?? 'integration upload'),
-    uploadedAt,
-  }
-  getConfig().sites[w.id].map = rec
-  saveConfig()
-  w.site.map = {
-    image: `${PUB}/api/sites/${w.id}/map-image?v=${uploadedAt}`,
-    resolution: rec.resolution,
-    width,
-    height,
-    origin: rec.origin,
-    source: rec.source,
+    origin,
+    source: String(b.name ?? 'occupancy upload'),
   }
   broadcast(w.id, { t: 'site', site: w.site })
   return { map: w.site.map }
+}
+
+app.post(`${I}/maps`, async (req: FastifyRequest<{ Body: any }>, reply) => {
+  const w = integrationSite(req, reply)
+  if (!w) return
+  return uploadOccupancy(w, (req.body ?? {}) as Record<string, unknown>, reply)
 })
 
 // ---------- runtime loops ----------
-
-for (const w of worlds.values()) w.seedMissions()
 
 // 4 Hz: fire schedules, dispatch queued runs, broadcast the telemetry snapshot
 setInterval(() => {
@@ -789,41 +990,63 @@ setInterval(() => {
   for (const w of worlds.values()) broadcast(w.id, { t: 'missions', missions: w.missions, schedules: w.schedules })
 }, 1000)
 
+// hourly: retention sweeps + zombie-run watchdog
+setInterval(() => {
+  sweepRetention()
+  for (const w of worlds.values()) w.sweepStaleRuns()
+}, 3600_000)
+
+// demo blood — only with PB_DEMO=1 and only on demo sites: a synthetic event
+// stream driven by the enabled rules. Production events come exclusively from
+// integrations and threshold detectors.
 function scheduleNextEvent(w: World) {
   const delay = 18_000 + Math.random() * 34_000
   setTimeout(async () => {
+    if (!worlds.has(w.id)) return // site deleted
     try {
       const ev = await w.generateEvent()
       if (ev) broadcast(w.id, { t: 'event', event: ev })
     } catch (e) {
-      console.error('[sim] event failed', e)
+      console.error('[demo] event failed', e)
     }
     scheduleNextEvent(w)
   }, delay)
+}
+
+if (DEMO) {
+  // freshly imported demo sites get a backdated event history once (persisted)
+  setTimeout(() => {
+    Promise.all(
+      importedNow.map((id) => {
+        const def = DEMO_SITES.find((d) => d.id === id)
+        const w = worlds.get(id)
+        return def && w ? w.seedEvents(def.eventSeedMins) : Promise.resolve()
+      }),
+    ).catch((e) => console.error('[demo] seed failed', e))
+  }, 6000)
+  for (const w of worlds.values()) if (w.demo) scheduleNextEvent(w)
 }
 
 // ---------- boot ----------
 
 const PORT = Number(process.env.API_PORT ?? 8787)
 await app.listen({ port: PORT, host: process.env.API_HOST ?? '0.0.0.0' })
-console.log(`[api] listening on :${PORT} · sites: ${[...worlds.keys()].join(', ')}`)
+console.log(
+  `[api] listening on :${PORT} · sites: ${[...worlds.keys()].join(', ') || '(none — create one in the Site Builder)'}` +
+    ` · demo=${DEMO ? 'on' : 'off'} · publicView=${PUBLIC_VIEW ? 'on' : 'off'} · relay=${relayConfigured() ? 'on' : 'off'}`,
+)
 
 app.server.on('upgrade', (req, socket, head) => {
-  if (req.url?.startsWith('/ws')) {
-    wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req))
-  } else {
+  if (!req.url?.startsWith('/ws')) {
     socket.destroy()
+    return
   }
+  if (!PUBLIC_VIEW && !requestUser({ headers: req.headers } as FastifyRequest)) {
+    socket.destroy()
+    return
+  }
+  wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req))
 })
-
-setTimeout(() => {
-  Promise.all([...worlds.values()].map((w) => w.seedEvents()))
-    .then(() => {
-      console.log('[sim] seeded event history')
-      for (const w of worlds.values()) scheduleNextEvent(w)
-    })
-    .catch((e) => console.error('[sim] seed failed', e))
-}, 6000)
 
 for (const sig of ['SIGINT', 'SIGTERM'] as const) {
   process.on(sig, () => process.exit(0))

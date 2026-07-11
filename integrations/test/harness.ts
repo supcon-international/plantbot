@@ -48,7 +48,7 @@ export async function waitFor<T>(fn: () => Promise<T | null | undefined | false>
 
 export async function bootPlatform(port: number): Promise<{ base: string; cookie: string; stop: () => void; proc: ChildProcess }> {
   const dataDir = mkdtempSync(join(tmpdir(), 'pb-e2e-'))
-  const proc = spawnProc('server/src/index.ts', { API_PORT: String(port), PB_DATA_DIR: dataDir, PB_DEV_KEYS: '1' }, `platform:${port}`)
+  const proc = spawnProc('server/src/index.ts', { API_PORT: String(port), PB_DATA_DIR: dataDir, PB_DEV_KEYS: '1', PB_DEMO: '1' }, `platform:${port}`)
   const base = `http://127.0.0.1:${port}`
   await waitFor(async () => (await fetch(`${base}/api/sites`)).ok, 20_000, 'platform up')
   // operator 会话（admin 全站）

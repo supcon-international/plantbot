@@ -14,7 +14,9 @@
 | **FLEET** 机器人 | 全部经三层集成架构接入的外部机器人（波士顿动力 Spot / 云深处 X30 四足 + 高新兴 GS Patrol F2 轮式）分组管理；接入向导只列有 adaptor 的三种型号；**传感器覆盖矩阵**（optical/thermal/OGI/gas/acoustic/LiDAR × 机型）；X30 与 Spot 带官方 URDF 数字孪生（walk/trot 步态动画），GS·F2 用 silhouette；payload 3D 标注联动 |
 | **MAP** 地图 | 双模式：**OPS MAP**（SLAM OccupancyGrid 栅格底图 → 主题化 canvas 渲染 + waypoint/zone/实时位姿/规划路径矢量层，点击航点即可 teleop 派遣）/ **3D SCAN**（高斯 splat 场景 + 实时 marker） |
 | **EVENTS** 事件 | **三列看板**（Critical / High / Routine）+ 表格视图 + **规则定义**：检测模型 × 视频源 × 置信度阈值 × severity，可新建/启停/调阈值——规则实时约束事件生成器;规则模型下拉同时提供**自定义事件类型** |
-| **多场站** | 顶栏一键切换场站（Plant 07 工业园区 / Plant 12 海港储运站 / **Campus East 校园安防**）。每站独立 World 实例：任务调度、A* 规划网格、规则、事件流、WebSocket 房间全部隔离；**机器人全部经 adaptor 接入,平台无原生机队** |
+| **多场站 · 建站 UX** | 顶栏一键切换场站;每站独立 World 实例（任务调度/规则/事件流/WS 房间全隔离）。**场站是数据**：SITES 页新建场站 → **Site Builder** 地图中心编辑（上传 SLAM 占据栅格、点选航点、画区域、RTSP 摄像头、充电桩、坐标系标定）,保存即实时生效,零改码零重启。演示三站（Plant 07 / Plant 12 / Campus East）仅 `PB_DEMO=1` 首启播种 |
+| **持久化 · SQLite** | 全部运行态入 `server/data/plantbot.db`（node:sqlite,零依赖）：任务历史/事件流/规则/排程/读数(7d)/订单/审计。重启不丢数据,孤儿任务由看门狗收尸;旧 config.json 自动迁移 |
+| **安全** | API key 哈希存储（明文仅创建时一次）、登录限速+锁定、CORS 全移除（严格同源）、`PB_PUBLIC_VIEW=0` 全站登录门禁、用户管理 UI（角色 × 场站矩阵）、`PB_DEMO` 开关隔离演示血浆 |
 | **Campus East 安防场景** | **三厂商三 adaptor 一屏协同**：波士顿动力 Spot（gRPC）+ 云深处 X30（robotserver TCP）+ 高新兴 GS Patrol F2 ×2（GoRobot 云），全部经三层集成架构接入,平台无原生机队。Checkpoint 停顿巡逻（大门→图书馆→食堂→宿舍）、周界夜巡（热成像）由排程钉给各外部机器人驱动;GS·F2 直报**可疑背包**事件;安防词表：跌倒 / 尾随 / 人员聚集 / 电动车占道,真实巡逻画面 |
 | **用户与角色** | 匿名即可浏览（公开演示保留）;登录升权。三档角色 × 场站授权矩阵（Orbit/InOrbit 式）：`viewer` 只读 / `operator` 建任务·派遣·ACK / `admin` 规则·开通·集成配置。演示账户 `admin / operator / viewer`,密码 `plantbot`（生产用 `PB_*_PASSWORD` 环境变量轮换） |
 | **集成开放 API** | 语义对齐 **VDA 5050**（factsheet/state/order），接入级别学 **Open-RMF**（`state-only` / `dispatchable`），地图上传走 **ROS map_server** 约定（PNG+resolution+origin,上传即在 3D 地图渲染底图）;自定义事件类型注册 + ingest + 证据抓帧服务。场站级 API Key,admin 面板管理。详见 [docs/integration.md](docs/integration.md) |
@@ -22,7 +24,7 @@
 
 ## 快速开始
 
-前置依赖:**Node ≥ 20**、**pnpm ≥ 9**、**ffmpeg**(素材转码与事件快照)、**python3 + numpy**(高斯场景调平烘焙)。
+前置依赖:**Node ≥ 22.5**(平台用内建 node:sqlite;推荐 Node 24 LTS)、**pnpm ≥ 9**、**ffmpeg**(素材转码与事件/RTSP 快照)、**python3 + numpy**(高斯场景调平烘焙)。可选:**go2rtc**(接真 RTSP 摄像头/机器人流时的媒体中继,`MEDIA_RELAY` 指向)。
 
 ```bash
 git clone https://github.com/supcon-international/plantbot.git && cd plantbot
@@ -47,10 +49,13 @@ web/     Vite 7 · React 19 · TS · Tailwind v4 · zustand · react-router 7
                  6 路巡检环路走原生 <video>（/media 静态直出，零掉帧）
 
 server/  Fastify 5 + ws + @fastify/static（/media，Range）——纯集成层,无运动仿真
-           - /api/sites/:id/*（会话+RBAC）与 /api/integration/v1（Bearer key）双面
+           - SQLite 持久层（node:sqlite/WAL）:场站建模/任务/事件/规则/读数全入库,
+             World 内存热路径 + 写穿 + 启动水合;场站运行时 CRUD（动态起停 World）
+           - /api/sites/:id/*（会话+RBAC）与 /api/integration/v1（Bearer key,哈希存储）双面
            - mission 引擎：模板→排程→run；调度器按优先级/电量/能力挑外部机器人,
              整单作为 VDA5050 式订单交给 adapter,执行/暂停/中止都走订单闭环
-           - 事件生成由启用中的规则驱动，快照从对应流抓真实帧
+           - 事件生成由启用中的规则驱动（PB_DEMO 限定）,快照 ffmpeg 抓帧（file 或 RTSP 直抓）
+           - 视频面 RTSP-first:go2rtc 中继（MEDIA_RELAY）出 MSE 租约,demo 环路走 file 直放
 
 integrations/  三层集成（simulator ⇄ adapter ⇄ platform），10 个独立 Node 进程（5 对）
            - spot/      官方 bosdyn.api proto ×59；sim=gRPC server（lease/estop/power 闸），

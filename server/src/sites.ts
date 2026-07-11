@@ -1,10 +1,11 @@
-// Site registry — one SiteDef per yard. Everything a World needs to boot:
-// geometry, cameras, seed rules/missions/event vocabulary. No fleets live
-// here — Plantbot is a pure integration layer, robots arrive through the
-// vendor adapters and the seeds below pin their ext-* ids (self-healing:
-// a pinned run stays queued until its adapter registers).
-// Plant 07 is the original demo yard; Plant 12 is a compact harbor terminal
-// that proves per-site isolation (own rules, missions, event stream).
+// DEMO site seeds — imported into SQLite once, on the first boot with
+// PB_DEMO=1 (the root `pnpm dev` script sets it). Production boots with an
+// empty sites table and sites are created in the Site Builder UI; after the
+// first import these defs are never read again (the DB is the source of
+// truth, fully editable). No fleets live here — Plantbot is a pure
+// integration layer, robots arrive through the vendor adapters and the seeds
+// below pin their ext-* ids (self-healing: a pinned run stays queued until
+// its adapter registers).
 
 import type {
   Building,
@@ -75,6 +76,8 @@ export interface SiteDef {
   splat?: { name: string; url: string }
   /** site-specific event vocabulary, registered at boot (integration systems can post these) */
   eventTypeSeeds?: { id: string; label: string; severity: Severity; detail?: string; category?: EventCategory }[]
+  /** demo calibration transforms (e.g. the wgs84 anchor) — stored, editable in the calibration UI */
+  transformSeeds?: { id: string; from: string; to: string; params: { s: number; thetaRad: number; t: [number, number] }; note?: string }[]
 }
 
 const A = (type: ActionType, durationS: number) => ({ type, durationS })
@@ -274,6 +277,15 @@ const plant07: SiteDef = {
   ],
   eventSeedMins: [3, 7, 12, 19, 26, 34, 47, 58, 73, 95, 121, 148, 176, 204],
   splat: { name: 'Warehouse 3DGS scan', url: 'assets/scenes/plant_yard.splat' },
+  transformSeeds: [
+    {
+      id: 'wgs84-anchor',
+      from: 'world',
+      to: 'wgs84',
+      params: { s: 1 / 111_320, thetaRad: 0, t: [121.474, 31.233] },
+      note: 'lon = x·s + t[0] · lat = -z·s + t[1] (small-area approximation)',
+    },
+  ],
 }
 
 // ============================================================ Plant 12 — Harbor Terminal
@@ -407,6 +419,15 @@ const plant12: SiteDef = {
     },
   ],
   eventSeedMins: [4, 11, 21, 38, 55, 79, 110, 150, 190],
+  transformSeeds: [
+    {
+      id: 'wgs84-anchor',
+      from: 'world',
+      to: 'wgs84',
+      params: { s: 1 / 111_320, thetaRad: 0, t: [121.605, 31.37] },
+      note: 'lon = x·s + t[0] · lat = -z·s + t[1] (small-area approximation)',
+    },
+  ],
 }
 
 // ============================================================ Campus East — security patrol
@@ -630,6 +651,15 @@ const campus: SiteDef = {
     { id: 'ebike-blocking', label: 'E-bike blocking', severity: 'high', category: 'security', detail: 'E-bike parked in a fire lane / egress route' },
     { id: 'tailgating', label: 'Tailgating', severity: 'high', category: 'security', detail: 'Multiple entries on a single credential at a gate' },
   ],
+  transformSeeds: [
+    {
+      id: 'wgs84-anchor',
+      from: 'world',
+      to: 'wgs84',
+      params: { s: 1 / 111_320, thetaRad: 0, t: [121.605, 31.37] },
+      note: 'lon = x·s + t[0] · lat = -z·s + t[1] (small-area approximation)',
+    },
+  ],
 }
 
-export const SITES: SiteDef[] = [plant07, plant12, campus]
+export const DEMO_SITES: SiteDef[] = [plant07, plant12, campus]

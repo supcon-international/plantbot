@@ -10,6 +10,8 @@ import { MapPage } from './pages/MapPage'
 import { Events } from './pages/Events'
 import { Login } from './pages/Login'
 import { Integrations } from './pages/Integrations'
+import { Sites } from './pages/Sites'
+import { SiteBuilder } from './pages/SiteBuilder'
 
 export function App() {
   return (
@@ -25,6 +27,8 @@ export function App() {
           <Route path="events" element={<Events />} />
           <Route path="login" element={<Login />} />
           <Route path="integrations" element={<Integrations />} />
+          <Route path="sites" element={<Sites />} />
+          <Route path="sites/:siteId" element={<SiteBuilder />} />
         </Route>
       </Routes>
     </BrowserRouter>

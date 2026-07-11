@@ -43,6 +43,9 @@ export interface SiteCamera {
   name: string
   place: string
   stream: string
+  /** production source — the platform relays it via go2rtc, snapshots via ffmpeg */
+  rtsp?: string
+  /** demo loop served from /media (dev fallback when no RTSP is configured) */
   file?: string
   live: boolean
   source: string
@@ -130,12 +133,15 @@ export interface Channel {
   streamKey?: string
 }
 
-/** explicit playback lease — GoRobot's implicit 10-second URL, made a resource */
+/** explicit playback lease — GoRobot's implicit 10-second URL, made a resource.
+ *  'mse': url is a go2rtc relay stream name for <BASE>/stream/api/ws?src=<url> */
 export interface StreamSession {
   id: string
   channelId: string
   url: string
-  protocol: 'file' | 'hls' | 'webrtc' | 'rtsp'
+  protocol: 'file' | 'hls' | 'webrtc' | 'rtsp' | 'mse'
+  /** mse only: false when no MEDIA_RELAY is configured — player shows relay-offline */
+  relayOnline?: boolean
   createdAt: number
   /** null → static demo loop, never expires */
   expiresAt: number | null

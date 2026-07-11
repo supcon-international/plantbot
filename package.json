@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "scripts": {
     "setup": "node scripts/setup.mjs",
-    "dev": "concurrently -k -n server,web,robots -c blue,cyan,magenta \"PB_DEV_KEYS=1 pnpm --filter server dev\" \"pnpm --filter web dev\" \"pnpm --filter integrations dev\"",
+    "dev": "concurrently -k -n server,web,robots -c blue,cyan,magenta \"PB_DEMO=1 PB_DEV_KEYS=1 SESSION_SECRET=plantbot-dev-only pnpm --filter server dev\" \"pnpm --filter web dev\" \"pnpm --filter integrations dev\"",
     "dev:core": "concurrently -k -n server,web -c blue,cyan \"pnpm --filter server dev\" \"pnpm --filter web dev\"",
     "build": "pnpm --filter web build"
   },
