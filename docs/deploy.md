@@ -39,8 +39,11 @@ Restart=on-failure
 
 全部机器人来自 `integrations/`：3 套厂商代码 → 10 个运行进程（5 对）——plant-07 = SPOT·A、
 plant-12 = X30·HB、campus-east = SPOT·CE + X30·CE + GS·F2×2（gosuncn 一对驱动两台）。
-演示环境 sim+adapter 都跑；接真机时只部署 adapter。每对一个 systemd unit（模式同
-plantbot.service，`WorkingDirectory` 指 `integrations/`，`ExecStart` 指
+演示环境 sim+adapter 都跑；接真机时只部署 adapter。生产采用**单编排器 unit**
+`plantbot-integrations.service`：`ExecStart` 跑一个仓库外的 `plantbot-run-integrations.mjs`
+（进程表与 `integrations/scripts/dev-all.mjs` 逐进程一致,崩溃 2s 重生,日志带前缀进同一 journal;
+密钥/流前缀经 `EnvironmentFile=/home/ubuntu/plantbot-integrations.env` 注入,不硬编码）。
+需要按对拆 unit 时模式同 plantbot.service（`WorkingDirectory` 指 `integrations/`,`ExecStart` 指
 `node node_modules/tsx/dist/cli.mjs <vendor>/{sim,adapter}/main.ts`）。多实例经 profile 选身份：
 spot 传 `SPOT_PROFILE=plant07|campus`（sim 另配 `SPOT_SERIAL/SPOT_NICK/SPOT_SIM_HOME_*/SPOT_SIM_DOCK_*`），
 deeprobotics 传 `DR_PROFILE=plant12|campus`（sim 另配 `DR_SIM_HOME_*`，须与 profile 的 dock 同点），
@@ -57,6 +60,8 @@ Environment=STREAM_BASE=/robots/media      # 子路径部署时注册流地址�
 
 真实秘钥值同样记录在 `/home/ubuntu/plantbot-credentials.txt`，不入库。sim 侧无秘密（本地回环监听）。
 掉线语义：adapter 停止 = 机器人 20s 后显示 OFFLINE（注册信息在 `config.json` 持久，重启平台仍在场）。
+
+清库重播种的正确顺序：**先 stop 平台再删 `config.json`**（运行中的平台有 2s 延迟落盘,先删后重启会被写回旧状态）,然后 start 平台 → start 集成层（adapter 启动时注册,平台必须已就绪）。
 
 ## 更新流程（在服务器上）
 
