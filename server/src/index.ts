@@ -6,7 +6,7 @@ import { readFileSync, existsSync, writeFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { SITES } from './sites.js'
-import { World, SNAP_DIR } from './world.js'
+import { World, SNAP_DIR, EXTERNAL_STALE_MS } from './world.js'
 import {
   loadConfig,
   getConfig,
@@ -18,7 +18,7 @@ import {
   type ExternalRec,
 } from './config.js'
 import { requestUser, requireRole, issueSession, clearSession, login, publicUser } from './auth.js'
-import { ROBOT_CATALOG, PAYLOAD_CATALOG, METRIC_DEFS, type Command } from './fleet.js'
+import { ROBOT_CATALOG, METRIC_DEFS, type Command } from './fleet.js'
 import { grabFrame } from './frames.js'
 
 const PUB = process.env.PUBLIC_BASE ?? ''
@@ -102,13 +102,8 @@ wss.on('connection', (ws, req) => {
 })
 
 for (const w of worlds.values()) {
-  w.onResult = (m, res) => broadcast(w.id, { t: 'missionResult', missionId: m.id, result: res, missions: w.missions })
   w.onEvent = (ev) => broadcast(w.id, { t: 'event', event: ev })
   w.onReadings = (batch) => broadcast(w.id, { t: 'readings', items: batch })
-  for (const r of w.robots) {
-    const s = w.nav.get(r.id)
-    if (s) s.onResult = (m, res) => broadcast(w.id, { t: 'missionResult', missionId: m.id, result: res, missions: w.missions })
-  }
 }
 
 // ---------- helpers ----------
@@ -200,7 +195,9 @@ app.get(`${S}/fleet`, async (req: FastifyRequest, reply) => {
 
 app.get(`${S}/catalog`, async (req: FastifyRequest, reply) => {
   if (!world(req, reply)) return
-  return { models: ROBOT_CATALOG, payloads: PAYLOAD_CATALOG }
+  // integration catalog: the models with a vendor adapter — the connect
+  // wizard renders these as an onboarding guide, nothing is created here
+  return { models: ROBOT_CATALOG }
 })
 
 app.get(`${S}/map-image`, async (req: FastifyRequest, reply) => {
@@ -215,42 +212,7 @@ app.get(`${S}/map-image`, async (req: FastifyRequest, reply) => {
   return reply.send(readFileSync(p))
 })
 
-// -- provisioning (admin) --
-
-app.post(`${S}/robots`, { preHandler: requireRole('admin') }, async (req: FastifyRequest, reply) => {
-  const w = world(req, reply)
-  if (!w) return
-  const b = (req.body ?? {}) as any
-  if (!b.model || !b.ip || !b.home) return reply.code(400).send({ error: 'model, ip, home required' })
-  const robot = w.registerRobot({
-    model: b.model,
-    callsign: b.callsign,
-    ip: b.ip,
-    protocol: b.protocol,
-    home: b.home,
-    payloadIds: Array.isArray(b.payloadIds) ? b.payloadIds : [],
-  })
-  if (!robot) return reply.code(400).send({ error: 'unknown model' })
-  broadcast(w.id, { t: 'fleet', robots: w.robots })
-  return { robot }
-})
-
-app.post(`${S}/robots/:id/payloads`, { preHandler: requireRole('admin') }, async (req: FastifyRequest, reply) => {
-  const w = world(req, reply)
-  if (!w) return
-  const inst = w.installPayload((req.params as P).id, ((req.body ?? {}) as any).payloadId)
-  if (!inst) return reply.code(404).send({ error: 'unknown robot or payload' })
-  broadcast(w.id, { t: 'fleet', robots: w.robots })
-  return { payload: inst }
-})
-
-app.delete(`${S}/robots/:id/payloads/:pid`, { preHandler: requireRole('admin') }, async (req: FastifyRequest, reply) => {
-  const w = world(req, reply)
-  if (!w) return
-  if (!w.removePayload((req.params as P).id, (req.params as P).pid)) return reply.code(404).send({ error: 'not found' })
-  broadcast(w.id, { t: 'fleet', robots: w.robots })
-  return { ok: true }
-})
+// -- fleet administration (units join via the integration API, not here) --
 
 app.delete(`${S}/external-robots/:id`, { preHandler: requireRole('admin') }, async (req: FastifyRequest, reply) => {
   const w = world(req, reply)
@@ -428,7 +390,7 @@ app.post(`${S}/event-types`, { preHandler: requireRole('admin') }, async (req: F
   const t = w.addEventType(b)
   if (!t) return reply.code(409).send({ error: 'id taken or invalid' })
   const sc = getConfig().sites[w.id]
-  sc.eventTypes.push({ id: t.id, label: t.label, severity: t.severity, detail: t.detail })
+  sc.eventTypes.push({ id: t.id, label: t.label, severity: t.severity, detail: t.detail, category: t.category })
   saveConfig()
   broadcast(w.id, { t: 'eventTypes', eventTypes: w.eventTypes })
   return { eventType: t }
@@ -490,7 +452,7 @@ app.get(`${S}/integrations`, { preHandler: requireRole('admin') }, async (req: F
           model: r.model,
           level: r.integrationLevel,
           lastSeen: ext?.lastSeen ?? 0,
-          online: ext ? now - ext.lastSeen < 20_000 : false,
+          online: ext ? now - ext.lastSeen < EXTERNAL_STALE_MS : false,
           mode: ext?.mode,
         }
       }),
@@ -697,7 +659,7 @@ app.post(`${I}/robots`, async (req: FastifyRequest<{ Body: any }>, reply) => {
 app.delete(`${I}/robots/:serial`, async (req: FastifyRequest<{ Params: { serial: string } }>, reply) => {
   const w = integrationSite(req, reply)
   if (!w) return
-  const robot = w.robots.find((r) => r.serial === req.params.serial && r.adapter === 'external')
+  const robot = w.robotBySerial(req.params.serial)
   if (!robot || !w.removeExternal(robot.id)) return reply.code(404).send({ error: 'not found' })
   const sc = getConfig().sites[w.id]
   sc.externals = sc.externals.filter((e) => e.serial !== req.params.serial)
@@ -709,7 +671,7 @@ app.delete(`${I}/robots/:serial`, async (req: FastifyRequest<{ Params: { serial:
 app.post(`${I}/robots/:serial/state`, async (req: FastifyRequest<{ Params: { serial: string }; Body: any }>, reply) => {
   const w = integrationSite(req, reply)
   if (!w) return
-  const robot = w.robots.find((r) => r.serial === req.params.serial && r.adapter === 'external')
+  const robot = w.robotBySerial(req.params.serial)
   if (!robot) return reply.code(404).send({ error: 'robot not registered' })
   w.ingestState(robot.id, req.body ?? {})
   return { ok: true, ordersPending: w.orders.filter((o) => o.robotId === robot.id && o.state === 'pending').length }
@@ -718,7 +680,7 @@ app.post(`${I}/robots/:serial/state`, async (req: FastifyRequest<{ Params: { ser
 app.get(`${I}/robots/:serial/orders`, async (req: FastifyRequest<{ Params: { serial: string } }>, reply) => {
   const w = integrationSite(req, reply)
   if (!w) return
-  const robot = w.robots.find((r) => r.serial === req.params.serial && r.adapter === 'external')
+  const robot = w.robotBySerial(req.params.serial)
   if (!robot) return reply.code(404).send({ error: 'robot not registered' })
   return { orders: w.pullOrders(robot.id) }
 })
@@ -739,7 +701,7 @@ app.post(`${I}/events`, async (req: FastifyRequest<{ Body: any }>, reply) => {
   if (!w) return
   const b = (req.body ?? {}) as any
   if (!b.type) return reply.code(400).send({ error: 'type required (register it under event-types first)' })
-  const robot = b.robotSerial ? w.robots.find((r) => r.serial === b.robotSerial) : undefined
+  const robot = b.robotSerial ? w.robotBySerial(b.robotSerial) : undefined
   // ingestEvent broadcasts through World.onEvent — no duplicate fan-out here
   const ev = w.ingestEvent({ ...b, robotId: robot?.id })
   if (!ev) return reply.code(400).send({ error: `unregistered event type '${b.type}'` })
@@ -750,7 +712,7 @@ app.post(`${I}/events`, async (req: FastifyRequest<{ Body: any }>, reply) => {
 app.post(`${I}/robots/:serial/readings`, async (req: FastifyRequest<{ Params: { serial: string }; Body: any }>, reply) => {
   const w = integrationSite(req, reply)
   if (!w) return
-  const robot = w.robots.find((r) => r.serial === req.params.serial && r.adapter === 'external')
+  const robot = w.robotBySerial(req.params.serial)
   if (!robot) return reply.code(404).send({ error: 'robot not registered' })
   const items = Array.isArray((req.body as any)?.readings) ? (req.body as any).readings : []
   const accepted = w.ingestReadings(robot.id, items) // accepted readings broadcast via World.onReadings
@@ -812,19 +774,14 @@ app.post(`${I}/maps`, async (req: FastifyRequest<{ Body: any }>, reply) => {
   return { map: w.site.map }
 })
 
-// ---------- simulation loops ----------
+// ---------- runtime loops ----------
 
 for (const w of worlds.values()) w.seedMissions()
 
-let last = Date.now()
+// 4 Hz: fire schedules, dispatch queued runs, broadcast the telemetry snapshot
 setInterval(() => {
   const now = Date.now()
-  const dt = Math.min(0.5, (now - last) / 1000)
-  last = now
-  for (const w of worlds.values()) {
-    const tel = w.tick(dt)
-    broadcast(w.id, { t: 'tel', ts: now, data: tel })
-  }
+  for (const w of worlds.values()) broadcast(w.id, { t: 'tel', ts: now, data: w.tick() })
 }, 250)
 
 // mission/schedule state sync (assignments/completions/next-run countdowns) at 1 Hz

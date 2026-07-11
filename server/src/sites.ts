@@ -1,11 +1,13 @@
 // Site registry — one SiteDef per yard. Everything a World needs to boot:
-// geometry, seed fleet, planner obstacles, seed rules/missions.
+// geometry, cameras, seed rules/missions/event vocabulary. No fleets live
+// here — Plantbot is a pure integration layer, robots arrive through the
+// vendor adapters and the seeds below pin their ext-* ids (self-healing:
+// a pinned run stays queued until its adapter registers).
 // Plant 07 is the original demo yard; Plant 12 is a compact harbor terminal
-// that proves per-site isolation (own fleet, rules, missions, planner grid).
+// that proves per-site isolation (own rules, missions, event stream).
 
 import type {
   Building,
-  RobotSpec,
   Severity,
   SiteCamera,
   SiteMapMeta,
@@ -14,8 +16,8 @@ import type {
   MissionStep,
   ActionType,
   DetectionModel,
+  EventCategory,
 } from './fleet.js'
-import type { PlannerDef } from './planner.js'
 
 const PUB = process.env.PUBLIC_BASE ?? ''
 const media = (f: string) => `${PUB}/media/${f}`
@@ -63,9 +65,7 @@ export interface SiteDef {
   zones: Zone[]
   buildings: Building[]
   cameras: SiteCamera[]
-  robots: RobotSpec[]
-  planner: PlannerDef
-  /** low-battery return dock */
+  /** where the dock command sends units (adapters may swap in the vendor's own charge routine) */
   dockWp: string
   ruleSeeds: RuleSeed[]
   missionSeeds: SeedMissionDef[]
@@ -74,7 +74,7 @@ export interface SiteDef {
   /** 3DGS scan of the yard, if one exists — listed as a first-class map asset */
   splat?: { name: string; url: string }
   /** site-specific event vocabulary, registered at boot (integration systems can post these) */
-  eventTypeSeeds?: { id: string; label: string; severity: Severity; detail?: string }[]
+  eventTypeSeeds?: { id: string; label: string; severity: Severity; detail?: string; category?: EventCategory }[]
 }
 
 const A = (type: ActionType, durationS: number) => ({ type, durationS })
@@ -173,24 +173,6 @@ const plant07: SiteDef = {
       ],
     },
   ],
-  planner: {
-    bounds: { x: [-16, 16], z: [-9, 9] },
-    rects: [
-      [-5.6, -3.5, 5.6, 1.1], // parked truck (+margin)
-      [-10.1, -1.4, -8.3, 0.7], // pallet stack W
-      [7.6, 1.2, 9.9, 3.3], // pallet stack E
-      [-3.1, 2.6, -0.8, 4.7], // pallet stack S
-      [-14.8, 4.4, -10.2, 8.5], // substation
-      [8.0, -7.4, 13.8, -4.9], // workshop
-      [-15.4, -8.0, -12.4, -5.8], // charge depot walls
-    ],
-    circles: [
-      [13.7, 6.2, 1.5],
-      [13.8, 2.9, 1.3],
-    ],
-    carve: [[-14.4, -7.6, -12.4, -6.2]], // dock approach
-  },
-  robots: [],
   cameras: [
     {
       id: 'perimeter-cam',
@@ -363,24 +345,6 @@ const plant12: SiteDef = {
       ],
     },
   ],
-  planner: {
-    bounds: { x: [-13, 13], z: [-8, 8] },
-    rects: [
-      [-12.0, 2.4, -7.4, 5.6], // control room (+margin)
-      [-5.6, 2.6, 3.4, 7.4], // warehouse
-      [-12.8, 5.4, -9.6, 7.6], // charge bay walls
-      [-6.2, -3.6, 6.2, -2.0], // pipe rack
-      [0.0, -0.6, 2.4, 1.6], // manifold skid
-      [10.6, -7.4, 12.6, -5.0], // crane base
-    ],
-    circles: [
-      [7.4, 2.6, 1.55],
-      [10.6, 2.8, 1.55],
-      [9.0, 6.0, 1.35],
-    ],
-    carve: [[-11.8, 6.0, -9.8, 7.0]], // charge bay approach
-  },
-  robots: [],
   cameras: [
     {
       id: 'berth-cam',
@@ -446,9 +410,10 @@ const plant12: SiteDef = {
 }
 
 // ============================================================ Campus East — security patrol
-// Dense mixed-robot security scenario: 8 sim units here plus 2 virtual
-// Gosuncn GS Patrol F2 units that join through the integration API at boot
-// (see gosim.ts) — 10 units, 6 models, one dispatcher.
+// Three vendors, three adapters, one dispatcher on one site: Boston Dynamics
+// Spot (bosdyn gRPC) + DeepRobotics X30 (robotserver TCP) + Gosuncn GS Patrol
+// F2 ×2 (GoRobot cloud) — every unit arrives through integrations/, none is
+// platform-native. Seeds below pin their ext-* serials.
 
 const campus: SiteDef = {
   id: 'campus-east',
@@ -552,24 +517,6 @@ const campus: SiteDef = {
       ],
     },
   ],
-  planner: {
-    bounds: { x: [-20, 20], z: [-11, 11] },
-    rects: [
-      [-16, -10, -9.2, -6.6], // dorm 1
-      [-7.6, -10, -0.8, -6.6], // dorm 2
-      [1.8, -10, 8.2, -6.9], // canteen
-      [-18.2, -4.2, -13.2, 1.8], // teaching A
-      [-11.6, -4.2, -6.8, 0.8], // teaching B
-      [-3.4, -3.2, 3.4, 2.4], // library
-      [6.6, -4.6, 12.2, -1.2], // lab
-      [9.4, 2.2, 18.2, 3.2], // stadium stand
-      [-1.8, 8.9, 1.8, 10.4], // gatehouse
-      [-19.4, -1.2, -17.4, 1.8], // charge shed walls
-      [-2.4, 6.9, 0.4, 7.8], // bike racks (south of the library, clear of the fire lane)
-    ],
-    circles: [[13.4, -3.4, 1.1]],
-    carve: [[-18.9, -0.6, -17.4, 1.2]], // dock approach
-  },
   cameras: [
     {
       id: 'gate-cam',
@@ -608,7 +555,6 @@ const campus: SiteDef = {
       source: 'NVR loop · demo footage',
     },
   ],
-  robots: [],
   ruleSeeds: [
     { name: 'Perimeter crossing at night', model: 'person', kind: 'onboard-cv', source: 'x30ce-optical', sourceName: 'X30·CE · Optical', zone: 'North fence — restricted', threshold: 0.7, severity: 'critical', robotId: 'ext-x30-jy-2024-0031' },
     { name: 'Unattended bag — gate', model: 'unattended-bag', kind: 'cloud-cv', source: 'gate-cam', sourceName: 'Main gate camera', zone: 'Main gate check', threshold: 0.6, severity: 'high' },
@@ -678,11 +624,11 @@ const campus: SiteDef = {
   ],
   eventSeedMins: [2, 5, 9, 14, 21, 29, 39, 52, 66, 84, 105, 130, 158, 188, 218],
   eventTypeSeeds: [
-    { id: 'unattended-bag', label: 'Unattended bag', severity: 'high', detail: 'Static bag, no owner in radius — left-object protocol' },
-    { id: 'crowding', label: 'Crowd density', severity: 'info', detail: 'Queue/crowd density above comfort threshold' },
-    { id: 'fall', label: 'Person fallen', severity: 'high', detail: 'Person down and not recovering — medical dispatch check' },
-    { id: 'ebike-blocking', label: 'E-bike blocking', severity: 'high', detail: 'E-bike parked in a fire lane / egress route' },
-    { id: 'tailgating', label: 'Tailgating', severity: 'high', detail: 'Multiple entries on a single credential at a gate' },
+    { id: 'unattended-bag', label: 'Unattended bag', severity: 'high', category: 'security', detail: 'Static bag, no owner in radius — left-object protocol' },
+    { id: 'crowding', label: 'Crowd density', severity: 'info', category: 'security', detail: 'Queue/crowd density above comfort threshold' },
+    { id: 'fall', label: 'Person fallen', severity: 'high', category: 'security', detail: 'Person down and not recovering — medical dispatch check' },
+    { id: 'ebike-blocking', label: 'E-bike blocking', severity: 'high', category: 'security', detail: 'E-bike parked in a fire lane / egress route' },
+    { id: 'tailgating', label: 'Tailgating', severity: 'high', category: 'security', detail: 'Multiple entries on a single credential at a gate' },
   ],
 }
 

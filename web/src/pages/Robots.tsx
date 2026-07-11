@@ -1,13 +1,11 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { Plus, X, Camera, Flame, Radar, Wind, AudioWaveform, Compass, ScanEye, Dog, Car, Check, PawPrint, Truck } from 'lucide-react'
+import { Plus, X, Camera, Flame, Radar, Wind, AudioWaveform, Compass, ScanEye, Dog, Car, Check, Copy, PawPrint, Truck, ArrowUpRight } from 'lucide-react'
 import { useApp, api, useCan } from '../lib/store'
 import { useT, useLang, IDX } from '../lib/i18n'
+import { BASE } from '../lib/base'
 import { Panel, PanelHead, BatteryBar, ModeChip, Modal } from '../components/ui'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 const RobotThumb = lazy(() => import('../three/RobotThumb').then((m) => ({ default: m.RobotThumb })))
 import type { PayloadSpec, RobotModelSpec, RobotSpec } from '../lib/types'
@@ -42,240 +40,163 @@ export function TwinPlaceholder({ family, label }: { family: 'quadruped' | 'ugv'
   )
 }
 
-function ProvisionWizard({ onClose }: { onClose: () => void }) {
+/** per-vendor adapter launch recipe — mirrors integrations/ package scripts */
+const ADAPTER_CMD: Record<string, (base: string) => string> = {
+  Spot: (base) =>
+    `cd integrations && \\\n  SPOT_HOST=<robot-ip> SPOT_PORT=443 \\\n  PLANTBOT_BASE=${base} PLANTBOT_KEY=<pbk_…> \\\n  pnpm run adapter:spot`,
+  'Jueying X30': (base) =>
+    `cd integrations && \\\n  DR_HOST=<robot-ip> DR_PORT=30000 \\\n  PLANTBOT_BASE=${base} PLANTBOT_KEY=<pbk_…> \\\n  pnpm run adapter:deeprobotics`,
+  'GS Patrol F2': (base) =>
+    `cd integrations && \\\n  GOSUNCN_BASE=<grobot-cloud-url> \\\n  PLANTBOT_BASE=${base} PLANTBOT_KEY=<pbk_…> \\\n  pnpm run adapter:gosuncn`,
+}
+
+/** connect wizard = integration guide. Plantbot is a pure integration layer:
+ *  nothing is created here — the unit registers itself once its vendor
+ *  adapter comes up with a site API key. */
+function ConnectGuide({ onClose }: { onClose: () => void }) {
   const t = useT()
   const lang = useLang((s) => s.lang)
   const li = IDX[lang]
   const nav = useNavigate()
-  const waypoints = useApp((s) => s.waypoints)
-  const robots = useApp((s) => s.robots)
+  const canAdmin = useCan('admin')
 
   const [models, setModels] = useState<RobotModelSpec[]>([])
-  const [payloads, setPayloads] = useState<PayloadSpec[]>([])
   useEffect(() => {
-    api.getCatalog().then((c) => {
-      setModels(c.models ?? [])
-      setPayloads(c.payloads ?? [])
-    })
+    api.getCatalog().then((c) => setModels(c.models ?? []))
   }, [])
 
   const [step, setStep] = useState(0)
   const [model, setModel] = useState<RobotModelSpec | null>(null)
-  const [callsign, setCallsign] = useState('')
-  const [ip, setIp] = useState(() => `10.7.31.${60 + Math.floor(Math.random() * 30)}`)
-  const [protocol, setProtocol] = useState('')
-  const [homeWp, setHomeWp] = useState('WP-09')
-  const [picked, setPicked] = useState<string[]>(['ptz-4mp', 'lidar-m360'])
-  const [busy, setBusy] = useState(false)
-  const [created, setCreated] = useState<RobotSpec | null>(null)
+  const [copied, setCopied] = useState(false)
 
-  const suggestion = useMemo(() => {
-    if (!model) return ''
-    const code = model.model.includes('Lite3') ? 'L3' : model.model.includes('X30') ? 'X30' : model.model.includes('M20') ? 'M20' : 'HSK'
-    const n = robots.filter((r) => r.model === model.model).length + 1
-    return `${model.vendor.startsWith('DEEP') ? 'JY·' : ''}${code}-${String(n).padStart(2, '0')}`
-  }, [model, robots])
-
-  const submit = async () => {
-    if (!model || busy) return
-    setBusy(true)
-    const wp = waypoints.find((w) => w.id === homeWp)
-    const res = await api.registerRobot({
-      model: model.model,
-      callsign: callsign || undefined,
-      ip,
-      protocol: protocol || undefined,
-      home: wp ? { x: wp.x, z: wp.z } : { x: 0, z: 0 },
-      payloadIds: picked,
-    })
-    setBusy(false)
-    if (res.robot) setCreated(res.robot)
-  }
-
-  const steps = [t('fl.wiz.stepModel'), t('fl.wiz.stepLink'), t('fl.wiz.stepPayload')]
+  const launchCmd = model ? (ADAPTER_CMD[model.model]?.(`${location.origin}${BASE}`) ?? '') : ''
+  const steps = [t('fl.wiz.stepModel'), t('fl.wiz.stepGuide')]
 
   return (
     <Modal onClose={onClose} wide title={t('fl.wiz.title')}>
       <div className="flex max-h-[86dvh] flex-col">
         <div className="flex items-center justify-between border-b border-line px-4 py-3">
           <span className="microlabel">{t('fl.wiz.title')}</span>
-          {!created && (
-            <div className="mono hidden items-center gap-2 text-[11px] tracking-[0.1em] text-ink-3 sm:flex">
-              {steps.map((s, i) => (
-                <span key={s} className="flex items-center gap-2">
-                  {i > 0 && <span className="h-px w-4 bg-line-2" />}
-                  <span style={{ color: i === step ? 'var(--color-accent)' : i < step ? 'var(--color-ink-2)' : undefined }}>
-                    {i + 1} {s.toUpperCase()}
-                  </span>
+          <div className="mono hidden items-center gap-2 text-[11px] tracking-[0.1em] text-ink-3 sm:flex">
+            {steps.map((s, i) => (
+              <span key={s} className="flex items-center gap-2">
+                {i > 0 && <span className="h-px w-4 bg-line-2" />}
+                <span style={{ color: i === step ? 'var(--color-accent)' : i < step ? 'var(--color-ink-2)' : undefined }}>
+                  {i + 1} {s.toUpperCase()}
                 </span>
-              ))}
-            </div>
-          )}
+              </span>
+            ))}
+          </div>
           <Button variant="ghost" size="iconSm" onClick={onClose} aria-label="close">
             <X size={16} />
           </Button>
         </div>
 
-        {created ? (
-          <div className="space-y-4 p-8 text-center">
-            <div className="mono text-[14px] text-accent">{t('fl.wiz.done.title')}</div>
-            <div className="mono text-[20px] text-ink">{created.callsign}</div>
-            <div className="mx-auto max-w-sm text-[13px] text-ink-2">{t('fl.wiz.done.desc')}</div>
-            <Button
-              variant="signal"
-              onClick={() => nav(`/robots/${created.id}`)}
-              className="mono h-auto px-4 py-2 text-[12px] normal-case tracking-[0.12em]"
-            >
-              {t('fl.wiz.viewUnit')}
-            </Button>
-          </div>
-        ) : (
-          <>
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">
-              {step === 0 && (
-                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                  {models.map((m) => {
-                    const sel = model?.model === m.model
-                    return (
-                      <button
-                        key={m.model}
-                        onClick={() => {
-                          setModel(m)
-                          setProtocol(m.protocol)
-                        }}
-                        className="panel-hover border p-3 text-left"
-                        style={{ borderColor: sel ? 'var(--color-accent)' : 'var(--color-line)' }}
-                      >
-                        <div className="flex items-baseline justify-between gap-2">
-                          <span className="text-[14px] font-medium text-ink">{m.model}</span>
-                          {sel && <Check size={13} className="shrink-0 text-accent" />}
-                        </div>
-                        <div className="microlabel mt-0.5">{m.vendor}</div>
-                        <div className="mono mt-2 text-[11.5px] text-ink-2">
-                          {m.massKg} kg · {m.ipRating} · {m.maxSpeed} m/s · {m.enduranceMin} min
-                        </div>
-                        <div className="mt-1.5 text-[12px] leading-snug text-ink-3">{m.blurb[li]}</div>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-
-              {step === 1 && model && (
-                <div className="space-y-3.5">
-                  <div className="flex items-center justify-between border-b border-line/60 pb-2.5">
-                    <span className="microlabel">{t('fl.wiz.stepModel')}</span>
-                    <span className="mono text-[12px] text-ink-2">
-                      {model.model} · {model.firmware}
-                    </span>
-                  </div>
-                  <div>
-                    <Label className="mb-1.5">{t('fl.wiz.callsign')}</Label>
-                    <Input className="mono bg-surface-2 py-2 text-[13px]" placeholder={suggestion} value={callsign} onChange={(e) => setCallsign(e.target.value)} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label className="mb-1.5">{t('fl.wiz.address')}</Label>
-                      <Input className="mono bg-surface-2 py-2 text-[13px]" value={ip} onChange={(e) => setIp(e.target.value)} inputMode="decimal" />
-                    </div>
-                    <div>
-                      <Label className="mb-1.5">{t('fl.wiz.transport')}</Label>
-                      <Select value={protocol} onValueChange={setProtocol}>
-                        <SelectTrigger className="mono w-full bg-surface-2 text-[12px] normal-case tracking-normal">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {[model.protocol, 'ROS2 / DDS · Ethernet', 'MQTT bridge · 5G-U', 'REST poll · Wi-Fi'].map((p) => (
-                            <SelectItem key={p} value={p}>
-                              {p}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div>
-                    <Label className="mb-1.5">{t('fl.wiz.home')}</Label>
-                    <Select value={homeWp} onValueChange={setHomeWp}>
-                      <SelectTrigger className="mono w-full bg-surface-2 text-[12px] normal-case tracking-normal">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {waypoints.map((w) => (
-                          <SelectItem key={w.id} value={w.id}>
-                            {w.id} · {w.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              )}
-
-              {step === 2 && (
-                <div className="space-y-3">
-                  <div className="text-[12.5px] text-ink-3">{t('fl.wiz.payloadHint')}</div>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {payloads.map((p) => {
-                      const Icon = KIND_ICON[p.kind]
-                      const sel = picked.includes(p.id)
-                      return (
-                        <button
-                          key={p.id}
-                          onClick={() => setPicked((cur) => (sel ? cur.filter((x) => x !== p.id) : [...cur, p.id]))}
-                          className="panel-hover flex items-start gap-2.5 border p-2.5 text-left"
-                          style={{ borderColor: sel ? 'var(--color-accent)' : 'var(--color-line)' }}
-                        >
-                          <Icon size={15} strokeWidth={1.5} className={sel ? 'mt-0.5 shrink-0 text-accent' : 'mt-0.5 shrink-0 text-ink-3'} />
-                          <span className="min-w-0">
-                            <span className="block truncate text-[13px] text-ink">{p.name}</span>
-                            <span className="mono mt-0.5 block truncate text-[11px] text-ink-3">{p.model}</span>
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center justify-between border-t border-line px-4 py-3">
-              <Button
-                variant="ghost"
-                onClick={() => (step === 0 ? onClose() : setStep(step - 1))}
-                className="mono px-2 text-[11.5px] normal-case tracking-[0.1em]"
-              >
-                {step === 0 ? t('c.cancel') : t('fl.wiz.back')}
-              </Button>
-              <div className="flex items-center gap-3">
-                {step === 2 && (
-                  <span className="mono text-[11px] text-ink-3">
-                    {picked.length} {t('fl.wiz.selected')}
-                  </span>
-                )}
-                {step < 2 ? (
-                  <Button
-                    variant="outline"
-                    disabled={!model}
-                    onClick={() => setStep(step + 1)}
-                    className="mono px-3.5 text-[11.5px] normal-case tracking-[0.12em] text-ink disabled:opacity-40"
-                  >
-                    {t('fl.wiz.next')}
-                  </Button>
-                ) : (
-                  <Button
-                    variant="signal"
-                    onClick={submit}
-                    disabled={busy}
-                    className="mono px-3.5 text-[11.5px] normal-case tracking-[0.12em] hover:hover:disabled:opacity-50"
-                  >
-                    {busy ? t('fl.wiz.connecting') : t('fl.wiz.connect')}
-                  </Button>
-                )}
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          {step === 0 && (
+            <div className="space-y-3">
+              <div className="text-[12.5px] leading-relaxed text-ink-3">{t('fl.wiz.guideIntro')}</div>
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                {models.map((m) => {
+                  const sel = model?.model === m.model
+                  return (
+                    <button
+                      key={m.model}
+                      onClick={() => setModel(m)}
+                      className="panel-hover border p-3 text-left"
+                      style={{ borderColor: sel ? 'var(--color-accent)' : 'var(--color-line)' }}
+                    >
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="text-[14px] font-medium text-ink">{m.model}</span>
+                        {sel && <Check size={13} className="shrink-0 text-accent" />}
+                      </div>
+                      <div className="microlabel mt-0.5">{m.vendor}</div>
+                      <div className="mono mt-2 text-[11.5px] text-ink-2">
+                        {m.massKg} kg · {m.ipRating} · {m.maxSpeed} m/s · {m.enduranceMin} min
+                      </div>
+                      <div className="mt-1.5 text-[12px] leading-snug text-ink-3">{m.blurb[li]}</div>
+                    </button>
+                  )
+                })}
               </div>
             </div>
-          </>
-        )}
+          )}
+
+          {step === 1 && model && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-line/60 pb-2.5">
+                <span className="microlabel">{t('fl.wiz.stepModel')}</span>
+                <span className="mono text-[12px] text-ink-2">
+                  {model.model} · {model.firmware}
+                </span>
+              </div>
+              <div>
+                <div className="microlabel mb-1">{t('fl.wiz.protocol')}</div>
+                <div className="mono text-[12px] text-ink-2">{model.protocol}</div>
+              </div>
+              <div>
+                <div className="microlabel mb-1">1 · {t('fl.wiz.apiKey')}</div>
+                <div className="text-[12.5px] leading-relaxed text-ink-2">{t('fl.wiz.keyHint')}</div>
+              </div>
+              <div>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <span className="microlabel">2 · {t('fl.wiz.launch')}</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      navigator.clipboard?.writeText(launchCmd).catch(() => {})
+                      setCopied(true)
+                      setTimeout(() => setCopied(false), 1600)
+                    }}
+                    className="mono h-auto gap-1 px-2 py-1 text-[10px] normal-case tracking-[0.1em]"
+                  >
+                    <Copy size={10} /> {copied ? t('fl.wiz.copied') : t('fl.wiz.copy')}
+                  </Button>
+                </div>
+                <pre className="mono overflow-x-auto border border-line bg-surface-2 p-3 text-[11.5px] leading-relaxed text-ink-2">
+                  {launchCmd}
+                </pre>
+              </div>
+              <div>
+                <div className="microlabel mb-1">3 · {t('fl.wiz.stepGuide')}</div>
+                <div className="text-[12.5px] leading-relaxed text-ink-2">{t('fl.wiz.autoAppear')}</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between border-t border-line px-4 py-3">
+          <Button
+            variant="ghost"
+            onClick={() => (step === 0 ? onClose() : setStep(0))}
+            className="mono px-2 text-[11.5px] normal-case tracking-[0.1em]"
+          >
+            {step === 0 ? t('c.cancel') : t('fl.wiz.back')}
+          </Button>
+          {step === 0 ? (
+            <Button
+              variant="outline"
+              disabled={!model}
+              onClick={() => setStep(1)}
+              className="mono px-3.5 text-[11.5px] normal-case tracking-[0.12em] text-ink disabled:opacity-40"
+            >
+              {t('fl.wiz.next')}
+            </Button>
+          ) : canAdmin ? (
+            <Button
+              variant="signal"
+              onClick={() => nav('/integrations')}
+              className="mono gap-1.5 px-3.5 text-[11.5px] normal-case tracking-[0.12em]"
+            >
+              {t('fl.wiz.openIntegrations')} <ArrowUpRight size={12} />
+            </Button>
+          ) : (
+            <Button variant="outline" onClick={onClose} className="mono px-3.5 text-[11.5px] normal-case tracking-[0.12em] text-ink">
+              {t('c.done')}
+            </Button>
+          )}
+        </div>
       </div>
     </Modal>
   )
@@ -454,7 +375,7 @@ export function Robots() {
         </div>
       </Panel>
 
-      {connect && <ProvisionWizard onClose={() => setConnect(false)} />}
+      {connect && <ConnectGuide onClose={() => setConnect(false)} />}
     </div>
   )
 }

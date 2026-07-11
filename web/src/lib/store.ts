@@ -222,20 +222,6 @@ export const api = {
     }).then((r) => r.json()),
   deleteRule: (id: string) => sfetch(`/rules/${id}`, { method: 'DELETE' }),
   getCatalog: () => sfetch('/catalog').then((r) => r.json()),
-  registerRobot: (body: unknown) =>
-    sfetch('/robots', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-    }).then((r) => r.json()),
-  installPayload: (robotId: string, payloadId: string) =>
-    sfetch(`/robots/${robotId}/payloads`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ payloadId }),
-    }).then((r) => r.json()),
-  removePayload: (robotId: string, payloadId: string) =>
-    sfetch(`/robots/${robotId}/payloads/${payloadId}`, { method: 'DELETE' }),
   listSites: () => apiFetch('/api/sites').then((r) => r.json() as Promise<{ sites: SiteSummary[] }>),
   // integrations admin panel
   integrations: () => sfetch('/integrations').then((r) => r.json()),
@@ -292,7 +278,6 @@ export const api = {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(command),
     }).then((r) => r.json()),
-  exportEvents: (lifecycle = 'dismissed') => sfetch(`/events/export?lifecycle=${lifecycle}`),
 }
 
 // ---------- websocket lifecycle (per-site rooms) ----------
@@ -419,7 +404,7 @@ function connect() {
       useApp.setState({ readings })
     } else if (msg.t === 'fleet') {
       useApp.setState({ robots: msg.robots })
-    } else if (msg.t === 'missions' || msg.t === 'missionResult') {
+    } else if (msg.t === 'missions') {
       useApp.setState((s) => ({ missions: msg.missions, schedules: msg.schedules ?? s.schedules }))
     } else if (msg.t === 'templates') {
       useApp.setState({ templates: msg.templates })

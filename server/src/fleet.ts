@@ -1,10 +1,6 @@
-// Shared fleet types + the cross-site provisioning catalogs.
-// Per-site data (yards, waypoints, seed fleets) lives in sites.ts;
-// runtime state lives in world.ts (one World instance per site).
-
-// sub-path deploys: URLs handed to the client get this prefix (e.g. /robots)
-const PUB = process.env.PUBLIC_BASE ?? ''
-const media = (f: string) => `${PUB}/media/${f}`
+// Shared fleet types + the integration catalog (the robot models Plantbot
+// has vendor adapters for). Per-site data (yards, waypoints, seeds) lives in
+// sites.ts; runtime state lives in world.ts (one World instance per site).
 
 export interface PayloadSpec {
   id: string
@@ -115,6 +111,9 @@ export const MODEL_CATEGORY: Record<string, EventCategory> = {
 }
 
 // ---------- channels (video/audio surfaces, one robot exposes several) ----------
+// NB: the role/codec/source unions are deliberately wider than what the demo
+// produces (h264 + file/hls only) — they are the forward surface real-robot
+// adapters publish into, not dead branches.
 
 export type ChannelRole = 'front' | 'optical' | 'ptz' | 'thermal' | 'ogi' | 'audio' | 'fixed'
 
@@ -202,7 +201,6 @@ export type Command =
   | { type: 'abort' }
   | { type: 'announce'; text: string; priority?: number }
   | { type: 'ptz'; channelId: string; pan?: number; tilt?: number; zoom?: number }
-  | { type: 'velocity'; vx: number; wz: number }
 
 export interface CommandRecord {
   id: string
@@ -292,6 +290,8 @@ export interface EventTypeDef {
   label: string
   severity: Severity
   detail?: string
+  /** business stream — custom types default to 'equipment' when omitted */
+  category?: EventCategory
   builtin: boolean
 }
 
@@ -366,76 +366,4 @@ export const ROBOT_CATALOG: RobotModelSpec[] = [
   },
 ]
 
-/** payload directory — instances are cloned onto robots at install time */
-export const PAYLOAD_CATALOG: PayloadSpec[] = [
-  {
-    id: 'ptz-4mp',
-    name: 'Front PTZ Camera',
-    kind: 'camera',
-    model: '4MP · 25× optical zoom',
-    file: media('switchgear.mp4'),
-    detail: 'H.264 1080p25 · gimbal-stabilized · IR-cut',
-  },
-  {
-    id: 'optical-4k',
-    name: 'Optical Zoom Camera',
-    kind: 'camera',
-    model: '4K · 30× hybrid zoom',
-    file: media('substation.mp4'),
-    detail: 'Person / PPE / behavior analytics on-board',
-  },
-  {
-    id: 'thermal-640',
-    name: 'Thermal Imager',
-    kind: 'thermal',
-    model: '640×512 radiometric · <40mK NETD',
-    file: media('thermal.mp4'),
-    detail: 'Radiometric video, ΔT alarm thresholds',
-  },
-  {
-    id: 'ogi-320',
-    name: 'OGI Gas Camera',
-    kind: 'ogi',
-    model: '320×240 cooled InSb · CH₄/VOC',
-    file: media('ogi.mp4'),
-    detail: 'Optical gas imaging, ppm·m quantification',
-  },
-  {
-    id: 'lidar-m360',
-    name: '3D LiDAR',
-    kind: 'lidar',
-    model: 'Mid-360 · 360°×59° FOV',
-    detail: '200k pts/s · SLAM + obstacle avoidance',
-  },
-  {
-    id: 'gas-4in1',
-    name: 'Gas Detector',
-    kind: 'gas',
-    model: 'CH₄ · CO · H₂S · O₂',
-    detail: 'Pump-sampled, 1 Hz, auto-calibrating',
-  },
-  {
-    id: 'acoustic-124',
-    name: 'Acoustic Imager',
-    kind: 'acoustic',
-    model: '124-mic array · 2–48 kHz',
-    detail: 'Partial discharge & gas-leak localization',
-  },
-  {
-    id: 'imu-6x',
-    name: 'IMU / Odometry',
-    kind: 'imu',
-    model: '6-axis · 200 Hz',
-    detail: 'Fused odometry, slip detection',
-  },
-]
-
 export const UNIT_COLORS = ['#ebebe8', '#b4b4ac', '#8a8a82', '#d6d6ce', '#c2c2ba']
-export const MODEL_CODE: Record<string, string> = {
-  'Jueying Lite3': 'L3',
-  'Jueying X30': 'X30',
-  'Lynx M20': 'M20',
-  'Husky A200': 'HSK',
-  'Go2 EDU': 'GO2',
-  'ANYmal C': 'ANY',
-}

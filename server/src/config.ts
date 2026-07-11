@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
-import type { Severity } from './fleet.js'
+import type { Severity, EventCategory } from './fleet.js'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 // PB_DATA_DIR redirects all durable state (config.json, uploaded maps) —
@@ -43,6 +43,7 @@ export interface CustomEventTypeRec {
   label: string
   severity: Severity
   detail?: string
+  category?: EventCategory
 }
 
 export interface PersistedMapRec {

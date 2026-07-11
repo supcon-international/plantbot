@@ -114,6 +114,7 @@ export interface EventTypeDef {
   label: string
   severity: Severity
   detail?: string
+  category?: EventCategory
   builtin: boolean
 }
 
@@ -177,7 +178,6 @@ export interface Telemetry {
 export type Severity = 'critical' | 'high' | 'info' | 'low'
 /** open vocabulary — built-in detection models plus site-registered custom event types */
 export type DetectionModel = string
-export const BUILTIN_MODELS = ['person', 'smoking', 'thermal', 'gauge', 'ppe', 'motion', 'acoustic', 'ogi'] as const
 
 export type EventCategory = 'security' | 'fire' | 'env' | 'equipment' | 'robot-fault'
 export type EventLifecycle = 'new' | 'acked' | 'resolved' | 'dismissed'
@@ -331,7 +331,6 @@ export type Command =
   | { type: 'abort' }
   | { type: 'announce'; text: string; priority?: number }
   | { type: 'ptz'; channelId: string; pan?: number; tilt?: number; zoom?: number }
-  | { type: 'velocity'; vx: number; wz: number }
 
 export interface CommandRecord {
   id: string
@@ -394,15 +393,6 @@ export const SEVERITY_COLOR: Record<Severity, string> = {
   high: 'var(--color-warn)',
   info: 'var(--color-ink-2)',
   low: 'var(--color-low)',
-}
-
-export const MODE_LABEL: Record<RobotMode, string> = {
-  idle: 'standby',
-  navigating: 'navigating',
-  executing: 'inspecting',
-  teleop: 'teleop',
-  charging: 'charging',
-  offline: 'offline',
 }
 
 export const ACTION_TYPES: ActionType[] = [

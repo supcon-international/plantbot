@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { ArrowLeft, ArrowUpRight, Anchor, Megaphone, Pause, Play, Plus, ShieldCheck, X } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, Anchor, Megaphone, Pause, Play, ShieldCheck } from 'lucide-react'
 import { useApp, useReadings, useHistory, api, useCan } from '../lib/store'
 import { useT } from '../lib/i18n'
 import { Panel, PanelHead, Stat, Spark, BatteryBar, ModeChip } from '../components/ui'
@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Toggle } from '@/components/ui/toggle'
 const RobotViewer = lazy(() => import('../three/RobotViewer').then((m) => ({ default: m.RobotViewer })))
 import { KIND_ICON, TwinPlaceholder } from './Robots'
-import type { CommandRecord, PayloadSpec, Reading } from '../lib/types'
+import type { CommandRecord, Reading } from '../lib/types'
 
 /** live payload-readings strip: metric picker + sparkline over the stable envelope */
 function ReadingsPanel({ robotId }: { robotId: string }) {
@@ -179,7 +179,6 @@ function JointRow({ name, c }: { name: string; c: number }) {
 }
 
 export function RobotDetail() {
-  const canAdmin = useCan('admin')
   const canOp = useCan('operator')
   const { id } = useParams()
   const robot = useApp((s) => s.robots.find((r) => r.id === id))
@@ -190,12 +189,6 @@ export function RobotDetail() {
   const history = useHistory(id)
   const t = useT()
   const [payloadSel, setPayloadSel] = useState<string | null>(null)
-  const [addOpen, setAddOpen] = useState(false)
-  const [catalog, setCatalog] = useState<PayloadSpec[]>([])
-  useEffect(() => {
-    if (!addOpen || catalog.length) return
-    api.getCatalog().then((c) => setCatalog(c.payloads ?? []))
-  }, [addOpen, catalog.length])
 
   const mission = tel?.missionId ? missions.find((m) => m.id === tel.missionId) : undefined
   const targetWp = tel?.targetWp ? waypoints.find((w) => w.id === tel.targetWp) : undefined
@@ -258,7 +251,6 @@ export function RobotDetail() {
               {robot.urdf ? (
                 <RobotViewer
                   urdf={robot.urdf}
-                  family={robot.family}
                   gait={tel?.gait}
                   speed={tel?.speed}
                   payloads={robot.payloads}
@@ -320,43 +312,11 @@ export function RobotDetail() {
             <PanelHead
               label={t('rd.payloads')}
               right={
-                <span className="flex items-center gap-2.5">
-                  <span className="mono text-[11px] text-ink-3">
-                    {robot.payloads.length} {t('rd.fitted')}
-                  </span>
-                  {canAdmin && (
-                  <Button variant="outline" size="sm" onClick={() => setAddOpen((v) => !v)} className="mono h-auto gap-1 px-1.5 py-0.5 text-[10px] normal-case tracking-[0.1em]">
-                    <Plus size={10} /> {t('rd.addPayload')}
-                  </Button>
-                  )}
+                <span className="mono text-[11px] text-ink-3">
+                  {robot.payloads.length} {t('rd.fitted')}
                 </span>
               }
             />
-            {addOpen && (
-              <div className="border-b border-line bg-surface-2/50 p-2.5">
-                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                  {catalog.map((p) => {
-                    const Icon = KIND_ICON[p.kind]
-                    return (
-                      <button
-                        key={p.id}
-                        onClick={async () => {
-                          await api.installPayload(robot.id, p.id)
-                          setAddOpen(false)
-                        }}
-                        className="flex items-center gap-2 border border-line px-2 py-1.5 text-left transition-colors hover:border-accent/50"
-                      >
-                        <Icon size={13} strokeWidth={1.5} className="shrink-0 text-ink-3" />
-                        <span className="min-w-0">
-                          <span className="block truncate text-[12.5px] text-ink">{p.name}</span>
-                          <span className="mono block truncate text-[10.5px] text-ink-3">{p.model}</span>
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
             {robot.payloads.map((p) => {
               const Icon = KIND_ICON[p.kind]
               const hot = payloadSel === p.id
@@ -405,39 +365,28 @@ export function RobotDetail() {
                   >
                     {tel?.payloadHealth[p.id] ?? 'ok'}
                   </span>
-                  {canAdmin && (
-                  <span
-                    role="button"
-                    aria-label={t('rd.removePayload')}
-                    title={t('rd.removePayload')}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      api.removePayload(robot.id, p.id)
-                      if (payloadSel === p.id) setPayloadSel(null)
-                    }}
-                    className="mt-1 shrink-0 text-ink-3/50 transition-colors hover:text-crit"
-                  >
-                    <X size={12} />
-                  </span>
-                  )}
                 </button>
               )
             })}
           </Panel>
 
           <ReadingsPanel robotId={robot.id} />
-          {canOp && robot.adapter !== 'external' && <CommandPanel robotId={robot.id} />}
+          {/* semantic command console — dispatchable integration units take
+              dock/pause/announce through the adapter order queue */}
+          {canOp && robot.integrationLevel !== 'state-only' && <CommandPanel robotId={robot.id} />}
 
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-            <Panel className="rise rise-2">
-              <PanelHead label={robot.family === 'ugv' ? t('rd.driveThermals') : t('rd.jointThermals')} />
-              <div className="py-1">
-                {(tel?.joints ?? []).map((j) => (
-                  <JointRow key={j.name} name={j.name} c={j.c} />
-                ))}
-                {!tel && <div className="px-3.5 py-3 text-[12px] text-ink-3">{t('rd.awaitingTel')}</div>}
-              </div>
-            </Panel>
+            {/* joint thermals only render when the vendor protocol reports them */}
+            {(tel?.joints.length ?? 0) > 0 && (
+              <Panel className="rise rise-2">
+                <PanelHead label={robot.family === 'ugv' ? t('rd.driveThermals') : t('rd.jointThermals')} />
+                <div className="py-1">
+                  {tel!.joints.map((j) => (
+                    <JointRow key={j.name} name={j.name} c={j.c} />
+                  ))}
+                </div>
+              </Panel>
+            )}
             <Panel className="rise rise-3">
               <PanelHead label={t('rd.identity')} />
               <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 p-3.5 xl:grid-cols-1 xl:gap-y-3">
