@@ -10,7 +10,7 @@
 |---|---|
 | **OPS** 总览 | 大字 KPI、**实时 3D 作业地图**（占据主区）、fleet strip、检测流（带快照）、任务进度与最近巡检结果——视频统一收在 LIVE 页 |
 | **LIVE** 视频墙 | 9 路巡检画面（Focus / Wall 布局），全部为本地零掉帧环路（原生 video）：机器人载荷视角 + 周界/罐区/桅杆固定机位,含预渲染的**热成像 inferno** 与 **OGI/MWIR** 通道。**省流模式（ECO）**：每路环路带 640p 低码率孪生（体积缩减 80–90%），Save-Data / 2G·3G 网络自动启用,顶栏可手动开关;事件快照同样压缩到 640w |
-| **TASKS** 任务 | Mission = 航点 + 动作序列（拍照/热扫/OGI/气体采样/声学/读表）。创建向导在地图上点选航点、每站配动作；**调度器按优先级/电量/距离自动派单**；路径由机器人端 Nav 栈计算（服务端 A* 代演），操作员只管目标点。步骤时间线 + 巡检结果记录（真实快照） |
+| **TASKS** 任务 | Mission = 航点 + 动作序列（拍照/热扫/OGI/气体采样/声学/读表）。创建向导在地图上点选航点、每站配动作；**调度器按优先级/电量/距离自动派单**（VDA5050 式整单交给 adapter）；路径由机器人端 Nav 栈计算，操作员只管目标点。步骤时间线 + 巡检结果记录（真实快照） |
 | **FLEET** 机器人 | 全部经三层集成架构接入的外部机器人（波士顿动力 Spot / 云深处 X30 四足 + 高新兴 GS Patrol F2 轮式）分组管理；接入向导只列有 adaptor 的三种型号；**传感器覆盖矩阵**（optical/thermal/OGI/gas/acoustic/LiDAR × 机型）；X30 带 URDF 数字孪生（trot 步态动画），Spot/GS·F2 用 silhouette；payload 3D 标注联动 |
 | **MAP** 地图 | 双模式：**OPS MAP**（SLAM OccupancyGrid 栅格底图 → 主题化 canvas 渲染 + waypoint/zone/实时位姿/规划路径矢量层，点击航点即可 teleop 派遣）/ **3D SCAN**（高斯 splat 场景 + 实时 marker） |
 | **EVENTS** 事件 | **三列看板**（Critical / High / Routine）+ 表格视图 + **规则定义**：检测模型 × 视频源 × 置信度阈值 × severity，可新建/启停/调阈值——规则实时约束事件生成器;规则模型下拉同时提供**自定义事件类型** |
@@ -27,8 +27,8 @@
 ```bash
 git clone https://github.com/supcon-international/plantbot.git && cd plantbot
 pnpm install
-pnpm run setup # 下载巡检视频素材、URDF 模型（DEEP Robotics/Unitree/ANYbotics/Clearpath）、高斯 splat 场景（全自动,约 200 MB）,并预渲染 640p 省流变体
-pnpm dev       # server :8787 + web :5173 + 三对厂商 sim/adapter（Spot/X30/GS F2 外部机器人上线）
+pnpm run setup # 下载巡检视频素材、X30 URDF（云深处官方,唯一有开源模型的接入机型）、高斯 splat 场景（全自动,约 160 MB）,并预渲染 640p 省流变体
+pnpm dev       # server :8787 + web :5173 + 五对厂商 sim/adapter（10 进程:SPOT·A / X30·HB / campus 三厂商协同）
 pnpm dev:core  # 只起 server + web
 ```
 
@@ -39,27 +39,28 @@ pnpm dev:core  # 只起 server + web
 ```
 web/     Vite 7 · React 19 · TS · Tailwind v4 · zustand · react-router 7
          three.js + React Three Fiber 9
-           - urdf-loader        → Lite3 / X30（云深处官方）、Husky（官方 mesh + 扁平化 URDF）
+           - urdf-loader        → X30 数字孪生（云深处官方模型;Spot/GS·F2 为 silhouette）
            - gaussian-splats-3d → 3DGS 场景（mkkellogg）
          OpsMap：occupancy PNG → canvas 三值主题化（占据=白色激光线）
                  + 真 3D 作业地图（R3F 白模体块 + 轨道相机 + 实时 marker/路径）
          视频：全部本地环路直出（Range 静态服务,零转码零掉帧）；
                  6 路巡检环路走原生 <video>（/media 静态直出，零掉帧）
 
-server/  Fastify 5 + ws + @fastify/static（/media，Range）
-           - /api/fleet /api/missions /api/rules /api/events WS /ws
-           - mission 引擎：状态机（navigating→executing→next）、自动调度、
-             teleop 抢占、低电返航充电、循环任务冷却复用
-           - planner.ts：64×36 栅格 A*（对角+禁切角+共线简化）≈ 机器人端 Nav2
+server/  Fastify 5 + ws + @fastify/static（/media，Range）——纯集成层,无运动仿真
+           - /api/sites/:id/*（会话+RBAC）与 /api/integration/v1（Bearer key）双面
+           - mission 引擎：模板→排程→run；调度器按优先级/电量/能力挑外部机器人,
+             整单作为 VDA5050 式订单交给 adapter,执行/暂停/中止都走订单闭环
            - 事件生成由启用中的规则驱动，快照从对应流抓真实帧
 
-integrations/  三层集成（simulator ⇄ adapter ⇄ platform），六个独立 Node 进程
+integrations/  三层集成（simulator ⇄ adapter ⇄ platform），10 个独立 Node 进程（5 对）
            - spot/      官方 bosdyn.api proto ×59；sim=gRPC server（lease/estop/power 闸），
-                        adapter=mini bosdyn-client（会话舞蹈 + NavigateToAnchor）→ plant-07
+                        adapter=mini bosdyn-client（会话舞蹈 + NavigateToAnchor）
+                        → SPOT_PROFILE 双实例：plant-07 + campus-east
            - deeprobotics/  robotserver_sdk 线协议（TCP EB90 帧 + PatrolDevice XML）；
-                        sim=X30「106 导航主机」，adapter=1002/1003/1004/1007 客户端 → plant-12
+                        sim=X30「106 导航主机」，adapter=1002/1003/1004/1007 客户端
+                        → DR_PROFILE 双实例：plant-12 + campus-east
            - gosuncn/   GoRobot 云 API（.action RPC + Token + WS 推送）；sim=伪厂商云 + F2 行为模型，
-                        adapter=登录保活/告警桥/px↔米标定 → campus-east
+                        adapter=登录保活/告警桥/px↔米标定 → campus-east（一对驱动两台 F2）
            - test/      25 项全行为 e2e：起真平台+真 sim+真 adapter 断言注册/遥测/派单/任务/
                         事件/读数/dock/故障/掉线恢复/线协议怪癖
 
@@ -73,8 +74,7 @@ ffmpeg   快照抓帧：事件/任务快照直接从本地素材随机时间点�
 
 | 资源 | 来源 | 许可 |
 |---|---|---|
-| Lite3 / X30 URDF+STL | [DeepRoboticsLab/deep_robotics_model](https://github.com/DeepRoboticsLab/deep_robotics_model)（云深处官方） | 官方公开模型 |
-| Husky A200 meshes | [husky/husky](https://github.com/husky/husky)（Clearpath 官方 ROS 包） | BSD |
+| X30 URDF+STL | [DeepRoboticsLab/deep_robotics_model](https://github.com/DeepRoboticsLab/deep_robotics_model)（云深处官方） | 官方公开模型 |
 | 3DGS 场景 · 工业仓库 | [superspl.at/scene/3eedaa2b](https://superspl.at/scene/3eedaa2b)（SKANOSFERA 扫描的格利维采仓库大厅，XGRIDS PortalCam 采集；SOG→ply→`scripts/level_splat.py` 调平烘焙,天花板剖切） | superspl.at 公开发布 |
 | 巡检视频素材 | [Mixkit](https://mixkit.co/license/#videoFree)（配电室推进/变电站巡视/厂区航拍/烟囱/抽油机） | Mixkit Free License |
 | Spot 机器人整备区实拍 | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Spot_construction_robot.webm) | CC |

@@ -50,7 +50,7 @@ Key 与场站一一绑定——同一套端点,不同 Key 自动落到各自场�
 curl -X POST $BASE/api/integration/v1/robots \
   -H "authorization: Bearer $KEY" -H 'content-type: application/json' -d '{
   "serial": "ACME-0007",            # 必填,幂等键
-  "model": "ANYmal C",              # 命中内置目录时自动带出 3D 孪生/参数
+  "model": "Jueying X30",           # 命中集成目录(Spot/Jueying X30/GS Patrol F2)时带出 3D 孪生/参数
   "level": "dispatchable",          # state-only | dispatchable
   "callsign": "ACME·07",
   "family": "quadruped",
@@ -166,7 +166,7 @@ curl -X POST $BASE/api/integration/v1/maps \
 ```python
 import requests, time, math
 B, K = 'https://your-host/robots/api/integration/v1', {'authorization': 'Bearer pbk_…'}
-requests.post(f'{B}/robots', headers=K, json={'serial':'PY-01','model':'Husky A200','level':'dispatchable','home':{'x':0,'z':0}})
+requests.post(f'{B}/robots', headers=K, json={'serial':'PY-01','model':'GS Patrol F2','level':'dispatchable','home':{'x':0,'z':0}})
 x = z = 0.0; target = None
 while True:
     for o in requests.get(f'{B}/robots/PY-01/orders', headers=K).json()['orders']:

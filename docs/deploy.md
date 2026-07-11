@@ -35,11 +35,16 @@ Restart=on-failure
 
 辅助：`plantbot-snap-gc.timer` 每小时清理 24h 前的事件快照 JPG（上游只写不删，防磁盘涨满）。
 
-### 集成层（三对 simulator/adapter，演示环境）
+### 集成层（simulator/adapter 五对，演示环境）
 
-外部机器人（SPOT·A / X30·EXT / GS·F2×2）来自 `integrations/` 的六个独立进程。演示环境 sim+adapter 都跑；
-接真机时只部署 adapter。每对一个 systemd unit（模式同 plantbot.service，`WorkingDirectory` 指 `integrations/`，
-`ExecStart` 指 `node node_modules/tsx/dist/cli.mjs <vendor>/{sim,adapter}/main.ts`）。关键环境变量：
+全部机器人来自 `integrations/`：3 套厂商代码 → 10 个运行进程（5 对）——plant-07 = SPOT·A、
+plant-12 = X30·HB、campus-east = SPOT·CE + X30·CE + GS·F2×2（gosuncn 一对驱动两台）。
+演示环境 sim+adapter 都跑；接真机时只部署 adapter。每对一个 systemd unit（模式同
+plantbot.service，`WorkingDirectory` 指 `integrations/`，`ExecStart` 指
+`node node_modules/tsx/dist/cli.mjs <vendor>/{sim,adapter}/main.ts`）。多实例经 profile 选身份：
+spot 传 `SPOT_PROFILE=plant07|campus`（sim 另配 `SPOT_SERIAL/SPOT_NICK/SPOT_SIM_HOME_*/SPOT_SIM_DOCK_*`），
+deeprobotics 传 `DR_PROFILE=plant12|campus`（sim 另配 `DR_SIM_HOME_*`，须与 profile 的 dock 同点），
+端口与坐标以 `integrations/scripts/dev-all.mjs` 为准。关键环境变量：
 
 ```ini
 # 平台侧（plantbot.service drop-in）——播种适配器秘钥，与各 adapter 的 PLANTBOT_KEY 一致：

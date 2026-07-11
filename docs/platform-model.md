@@ -20,7 +20,7 @@
 5. **坐标只有一个出口。** 对外一律 site 世界系(x/z 米,y 向上);其余坐标系(占据栅格像素、WGS84、
    厂商激光图)通过显式 Transform 资源换算,换算在服务端。绝不把「height − y 自己翻」写进文档。
 6. **为误报洪水设计。** 单条巡逻计划 3746 条告警是行业常态。事件必须有:分诊生命周期、复核流水线
-   (含 LLM 二次确认)、可信度标注、证据留存(训练回流)。
+   (LLM 二次确认已按产品决定移除,见 §3.2)、可信度标注、证据留存(训练回流)。
 7. **南北向分离。** 南向(机器人→平台)走 `/api/integration/v1`(Bearer key,VDA 5050 语义);
    北向(UI/第三方)走 `/api/sites/:siteId/*`(会话 + RBAC)。两边共享同一套领域对象。
 
@@ -38,7 +38,7 @@ Site (World)
 │   │   └─ Reading  {metric, value, unit, ts}      ←— integration: 批量上报
 │   ├─ Telemetry    位姿/电量/模式 (稳定信封)
 │   └─ Command 队列 goto/dock/announce/ptz…        —→ integration: 拉单/回执
-├─ Detector[]  rule | onboard-cv | cloud-cv | threshold (+ LLM verify 开关)
+├─ Detector[]  rule | onboard-cv | cloud-cv | threshold (LLM verify 已移除,见 §3.2)
 │   └─ 绑定 EventType + Zone/Waypoint + Robot?
 ├─ EventType[]      内建 + 自定义词表
 ├─ Event 流         信封 + evidence[] + verification + lifecycle

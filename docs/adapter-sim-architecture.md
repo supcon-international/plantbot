@@ -42,7 +42,8 @@ sim 的唯一职责是把官方协议的 server 面演到以假乱真（包括�
 spot/deeprobotics 的 sim+adapter 用 `SPOT_PROFILE`/`DR_PROFILE` 选身份(serial/callsign)+通道命名+场站 key,
 同一份代码起两个实例。
 
-- 每个 sim / adapter 都可**单独启动**：`pnpm --filter integrations sim:spot` 等六条脚本;
+- 每个 sim / adapter 都可**单独启动**：`pnpm --filter integrations sim:spot` 等六条脚本
+  （3 厂商 × sim/adapter;spot/deeprobotics 各以两组 profile 环境变量跑双实例 → 10 进程）;
   `pnpm dev` 用 `integrations/scripts/dev-all.mjs` 一起拉起（崩溃自动重生,前缀日志）。
 - **三种协议形态刻意异构**——这正是 adapter 层存在的理由:
   - Spot：**机直连 gRPC 会话模型**（auth JWT → time-sync → lease keep-alive → estop check-in → power → command）;
@@ -54,7 +55,7 @@ spot/deeprobotics 的 sim+adapter 用 `SPOT_PROFILE`/`DR_PROFILE` 选身份(seri
 ### 秘钥交接（adapter onboarding）
 
 生产：管理员在 Integrations 面板签发场站 key，或 `PB_SEED_KEYS="plant-07=pbk_…"` 由 systemd 注入。
-开发：根 `pnpm dev` 给 server 挂 `PB_DEV_KEYS=1`，播种确定性 `pbk_dev_<site>`，六个进程零配置互认。
+开发：根 `pnpm dev` 给 server 挂 `PB_DEV_KEYS=1`，播种确定性 `pbk_dev_<site>`，十个进程零配置互认。
 （对照反面：GoRobot 把 `Basic admin:admin` 写死在文档里——key 必须可轮换、不进 git。）
 
 ## 3. 厂商映射表（vendor ⇄ 平台六域）
@@ -124,8 +125,8 @@ deviceId/robotSn/deviceCode 并存；激光地图 y 轴原点左下角；WS Robo
    帧源出快照（InOrbit 式平台侧抓帧），事件证据不再依赖 adapter 自己会转码。
 6. **ptz 命令止于日志** → 外部机器人 ptz 命令转发为 `ptz` 订单（GoRobot 映射云台 XML，其余厂商回
    `failed: unsupported`——能力矩阵由 adapter 声明真话）。
-7. **gosim 退役** → 平台进程里不再内嵌任何厂商行为模型；campus 的 GS F2 与新增的 Spot/X30 全部走
-   外部进程。平台自己的种子机队仍由 World 引擎驱动（那是「平台原生机器人」的仿真，不是集成层）。
+7. **gosim 退役 → 纯集成层** → 平台进程里不再内嵌任何厂商行为模型；随后原生种子机队也整体退役
+   （World 不再有运动仿真与 A* 规划——路径规划回归机器人端 Nav 栈），机器人只有一种来路：外部 adapter。
 8. **外部机器人的常态活水** → 排程可 `assign: {kind:'robot', robotId}` 钉死外部单元
    （plant-07「Spot switchgear anchors」/ plant-12「X30 berth sweep」种子）；机器人未注册时任务留队，
    注册后自动派发——e2e 期间它真的点火并抢占了测试场地，证明活水成立（测试改为显式停排程取得可控场地）。
@@ -151,6 +152,7 @@ deviceId/robotSn/deviceCode 并存；激光地图 y 轴原点左下角；WS Robo
 
 ## 6. 生产部署
 
-六个进程用 systemd 各一个 unit（`plantbot-sim-*.service` 仅演示环境需要；接真机时只部署 adapter），
+十个进程（5 对）用 systemd 各一个 unit（`plantbot-sim-*.service` 仅演示环境需要；接真机时只部署 adapter），
 环境变量：`PLANTBOT_BASE=http://127.0.0.1:8787`、`PLANTBOT_KEY=<PB_SEED_KEYS 对应值>`、
-`STREAM_BASE=/robots/media`（子路径部署时流地址前缀）。详见 [deploy.md](deploy.md)。
+`STREAM_BASE=/robots/media`（子路径部署时流地址前缀）、多实例的 `SPOT_PROFILE`/`DR_PROFILE`。
+详见 [deploy.md](deploy.md)。
