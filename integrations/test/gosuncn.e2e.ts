@@ -4,7 +4,7 @@
 
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { bootPlatform, spawnProc, waitFor, api, integration, fleetRobot, sampleTelemetry, type Stack } from './harness.js'
+import { bootPlatform, spawnProc, waitFor, api, integration, fleetRobot, sampleTelemetry, disablePinnedSchedules } from './harness.js'
 import type { ChildProcess } from 'node:child_process'
 
 const P = 18801
@@ -24,6 +24,7 @@ before(async () => {
   stack = await bootPlatform(P)
   sim = spawnProc('gosuncn/sim/main.ts', simEnv(), 'gsim')
   adp = spawnProc('gosuncn/adapter/main.ts', { PLANTBOT_BASE: stack.base, GOSUNCN_BASE: `http://127.0.0.1:${SIM}`, PLANTBOT_KEY: KEY }, 'gadp')
+  await disablePinnedSchedules(stack, SITE, RID1) // 排程活水在别处验证，这里要可控场地
   await waitFor(() => fleetRobot(stack, SITE, SN1), 40_000, 'GS·F2-01 registered')
 })
 

@@ -88,12 +88,19 @@ export async function fleetRobot(stack: { base: string; cookie: string }, siteId
   return body?.robots?.find((r: any) => r.serial === serial)
 }
 
-/** 停掉钉死给某外部机器人的排程 —— 让测试场地不被平台自身的活水打扰 */
+/** 停掉钉死给某外部机器人的排程 —— 让测试场地不被平台自身的活水打扰。
+ *  已生火的 run 也一并中止：排程在 disable 前可能已经出过一单（stagger 最短 9s），
+ *  留着会在任意后续断言点残留 pending 订单。 */
 export async function disablePinnedSchedules(stack: { base: string; cookie: string }, siteId: string, robotId: string) {
   const { body } = await api(stack, 'GET', `/api/sites/${siteId}/schedules`)
   for (const s of body?.schedules ?? []) {
     if (s.assign?.kind === 'robot' && s.assign.robotId === robotId)
       await api(stack, 'PATCH', `/api/sites/${siteId}/schedules/${s.id}`, { enabled: false })
+  }
+  const ms = await api(stack, 'GET', `/api/sites/${siteId}/missions`)
+  for (const m of ms.body?.missions ?? []) {
+    if (m.requestedRobot === robotId && (m.status === 'queued' || m.status === 'active'))
+      await api(stack, 'POST', `/api/sites/${siteId}/missions/${m.id}/abort`, {})
   }
 }
 

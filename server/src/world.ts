@@ -805,9 +805,11 @@ export class World {
 
   // ---------- events ----------
 
-  robotPosition(id: string) {
+  /** last known position — undefined when the robot has never registered
+   *  (e.g. seed rules pin an ext-* id whose adapter hasn't come up yet) */
+  robotPosition(id: string): { x: number; z: number } | undefined {
     const s = this.nav.get(id)
-    return s ? { x: s.x, z: s.z } : { x: 0, z: 0 }
+    return s ? { x: s.x, z: s.z } : undefined
   }
 
   private pickRule(): DetectionRule | undefined {
@@ -833,12 +835,12 @@ export class World {
     const side = Math.random() > 0.5 ? 1 : -1
     const bx = this.site.bounds.x
     const bz = this.site.bounds.z
-    const pos = r.robotId
-      ? this.robotPosition(r.robotId)
-      : {
-          x: bx[0] + 3 + Math.random() * (bx[1] - bx[0] - 6),
-          z: side * ((bz[1] - 1.2) * (0.45 + Math.random() * 0.45)),
-        }
+    // robot-bound rules fall back to an in-bounds random spot while the robot
+    // is unknown (adapter not up yet) — never pile seed events onto (0,0)
+    const pos = (r.robotId ? this.robotPosition(r.robotId) : undefined) ?? {
+      x: bx[0] + 3 + Math.random() * (bx[1] - bx[0] - 6),
+      z: side * ((bz[1] - 1.2) * (0.45 + Math.random() * 0.45)),
+    }
     const confidence = +(r.threshold + Math.random() * (1 - r.threshold) * 0.9).toFixed(2)
     const typeDef = this.eventTypes.find((t) => t.id === r.model)
 
@@ -885,7 +887,7 @@ export class World {
     if (!sims.length) return
     this.faultClock = now
     const r = sims[Math.floor(Math.random() * sims.length)]
-    const pos = this.robotPosition(r.id)
+    const pos = this.robotPosition(r.id) ?? { x: 0, z: 0 }
     const kinds = [
       { label: 'Joint overtemp', detail: () => `Hip actuator ${(78 + Math.random() * 9).toFixed(0)} °C — derating gait` },
       { label: 'Localization jitter', detail: () => `Scan-match residual ${(0.4 + Math.random() * 0.5).toFixed(2)} m — re-anchoring on lidar keyframe` },
@@ -935,7 +937,7 @@ export class World {
   }): DetectionEvent | null {
     const typeDef = this.eventTypes.find((t) => t.id === input.type)
     if (!typeDef) return null
-    const pos = input.robotId ? this.robotPosition(input.robotId) : { x: input.x ?? 0, z: input.z ?? 0 }
+    const pos = (input.robotId ? this.robotPosition(input.robotId) : undefined) ?? { x: input.x ?? 0, z: input.z ?? 0 }
     const evidence = input.evidence ?? []
     if (input.snapshotUrl && !evidence.some((e) => e.url === input.snapshotUrl))
       evidence.unshift({ kind: 'image', url: input.snapshotUrl })

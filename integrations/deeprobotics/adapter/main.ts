@@ -20,12 +20,14 @@ const log = makeLog('deepro-adp')
 const DR_HOST = process.env.DR_HOST ?? '127.0.0.1'
 const DR_PORT = Number(process.env.DR_PORT ?? 30000)
 const STREAM_BASE = (process.env.STREAM_BASE ?? '/media').replace(/\/$/, '')
-// One X30 adapter per site — DR_PROFILE selects identity + channels + key.
+// One X30 adapter per site — DR_PROFILE selects identity + channels + key + dock.
+// dock（充电桩，世界系）由集成方标定，必须与该实例 sim 的 DR_SIM_HOME_* 同点。
 const DR_PROFILES = {
   plant12: {
     serial: 'X30-JY-2024-0007',
     callsign: 'X30·HB',
     key: 'pbk_dev_plant12',
+    dock: { x: -11, z: -6 },
     streams: [
       { id: 'x30hb-optical', name: 'Front optical', kind: 'camera', file: 'substation.mp4' },
       { id: 'x30hb-therm', name: 'Thermal', kind: 'thermal', file: 'thermal.mp4' },
@@ -35,6 +37,7 @@ const DR_PROFILES = {
     serial: 'X30-JY-2024-0031',
     callsign: 'X30·CE',
     key: 'pbk_dev_campuseast',
+    dock: { x: 0, z: -9 },
     streams: [
       { id: 'x30ce-optical', name: 'Front optical', kind: 'camera', file: 'night_walkway.mp4' },
       { id: 'x30ce-therm', name: 'Thermal', kind: 'thermal', file: 'thermal.mp4' },
@@ -42,9 +45,8 @@ const DR_PROFILES = {
   },
 } as const
 const DR_PROFILE = DR_PROFILES[(process.env.DR_PROFILE as keyof typeof DR_PROFILES) ?? 'plant12'] ?? DR_PROFILES.plant12
-const SERIAL = process.env.DR_SERIAL ?? DR_PROFILE.serial
-// 充电桩坐标（世界系）——真实部署中由集成方标定
-const DOCK = { x: Number(process.env.DR_DOCK_X ?? -11), z: Number(process.env.DR_DOCK_Z ?? -6) }
+const SERIAL = DR_PROFILE.serial
+const DOCK = DR_PROFILE.dock
 
 const plantbot = new PlantbotClient({ key: process.env.PLANTBOT_KEY ?? DR_PROFILE.key, log })
 
@@ -185,7 +187,6 @@ class RobotServerClient {
 
 const rs = new RobotServerClient()
 let waypoints: { id: string; x: number; z: number }[] = []
-let lastStatus: RealtimeStatus | null = null
 let lastLocation = 0
 let sdkTaskActive = false // 我们下发的任务在跑（区别于机器人本体排程任务）
 
@@ -300,7 +301,6 @@ async function main() {
   setInterval(async () => {
     const s = await rs.realtime()
     if (!s) return // 连接断开 → 心跳停 → 平台 20s 判 OFFLINE
-    lastStatus = s
     const pos = toWorld(s)
     const mode =
       s.ChargeState === 1 ? 'charging'

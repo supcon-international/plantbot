@@ -21,15 +21,18 @@ const PORT = Number(process.env.DR_SIM_PORT ?? 30000)
 /** 空闲多久后自跑本地巡检环（机器人本体排程的模拟）；0 = 关闭 */
 const LOCAL_PATROL_IDLE_MS = Number(process.env.DR_SIM_LOCAL_PATROL_MS ?? 150_000)
 
-// 地图坐标系（米，y 北向）；本地巡检环（海港码头一圈）
-const HOME = { x: -11, y: 6 } // 充电桩
+// 地图坐标系（米，y 北向 ≡ 世界 y=-z）。充电桩/初始位姿随实例场站参数化：
+// 默认 = plant-12 泊位；campus 实例经 DR_SIM_HOME_* 重定，且必须与 adapter
+// profile 的 dock（世界系）同点，否则 dock 后永不进入 charging。
+const HOME = { x: Number(process.env.DR_SIM_HOME_X ?? -11), y: Number(process.env.DR_SIM_HOME_Y ?? 6) }
+// 本地巡检环（本体排程模拟）：相对充电桩的偏移，随场站漂移
 const LOCAL_ROUTE = [
-  { x: -8, y: 4 },
-  { x: -3, y: -2 },
-  { x: 3, y: -5 },
-  { x: 8, y: -2 },
-  { x: 3, y: 3 },
-]
+  { x: 3, y: -2 },
+  { x: 8, y: -8 },
+  { x: 14, y: -11 },
+  { x: 19, y: -8 },
+  { x: 14, y: -3 },
+].map((o) => ({ x: HOME.x + o.x, y: HOME.y + o.y }))
 
 interface NavRun {
   points: NavPoint[]

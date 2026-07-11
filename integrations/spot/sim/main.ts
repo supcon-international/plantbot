@@ -14,8 +14,11 @@ const log = makeLog('spot-sim')
 const PORT = Number(process.env.SPOT_SIM_PORT ?? 9103)
 const USER = process.env.SPOT_SIM_USER ?? 'admin'
 const PASS = process.env.SPOT_SIM_PASS ?? 'spotdev2026'
-// 充电桩（seed 帧）＝ plant-07 的 WP-09 (-11.5, -6.9) 世界系 → seed (x, y=-z)
-const DOCK = { x: -11.5, y: 6.9 }
+// 充电桩与初始位姿（seed 帧 x 东 y 北 ≡ 世界系 y=-z），随实例场站参数化：
+// 默认 = plant-07 的 WP-09 (-11.5,-6.9)世界；campus 实例经 SPOT_SIM_* 传 DOCK-C，
+// 否则 dock 命令把机器人送到场站桩位后充电判定仍留在 plant 坐标（永不 charging）。
+const DOCK = { x: Number(process.env.SPOT_SIM_DOCK_X ?? -11.5), y: Number(process.env.SPOT_SIM_DOCK_Y ?? 6.9) }
+const HOME = { x: Number(process.env.SPOT_SIM_HOME_X ?? 4), y: Number(process.env.SPOT_SIM_HOME_Y ?? -2) }
 
 // 1×1 灰 JPEG —— GetImage 的最小合法帧（协议保真；证据图走平台快照服务）
 const TINY_JPEG = Buffer.from(
@@ -25,7 +28,7 @@ const TINY_JPEG = Buffer.from(
 
 // ---------- 机体模型 ----------
 const st = {
-  x: 4, y: -2, yaw: 0, speed: 0,
+  x: HOME.x, y: HOME.y, yaw: 0, speed: 0,
   battery: 88, charging: false,
   motor: 1 as 1 | 2 | 3 | 4, // MOTOR_POWER_STATE_ OFF=1 ON=2 POWERING_ON=3 POWERING_OFF=4
   standing: false,
@@ -37,8 +40,7 @@ const st = {
 // ---------- 会话状态 ----------
 let tokenOk = new Set<string>()
 const clockId = 'spot-sim-clock'
-const timesyncRounds = new Map<string, number>() // client_name 无从取 → 用连接无关全局轮数（单客户端场景）
-let tsRounds = 0
+let tsRounds = 0 // client_name 无从取 → 连接无关全局轮数（单客户端场景）
 
 let leaseSeq = 0
 let lease: { epoch: string; sequence: number[]; owner: string; retainedAt: number } | null = null

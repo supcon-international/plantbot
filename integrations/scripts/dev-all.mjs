@@ -26,15 +26,15 @@ const procs = [
   // plant-07 Spot
   { name: 'spot07·sim', entry: 'spot/sim/main.ts', color: '33', env: { SPOT_SIM_PORT: '9103', SPOT_SERIAL: 'BD-91250107', SPOT_NICK: 'plant07-spot' } },
   { name: 'spot07·adp', entry: 'spot/adapter/main.ts', color: '93', env: { SPOT_PORT: '9103', SPOT_PROFILE: 'plant07', PLANTBOT_KEY: P07 } },
-  // plant-12 X30
+  // plant-12 X30（dock 桩位在 adapter 的 DR_PROFILE 里，sim 默认即 plant-12 泊位）
   { name: 'x30p12·sim', entry: 'deeprobotics/sim/main.ts', color: '36', env: { DR_SIM_PORT: '30000' } },
-  { name: 'x30p12·adp', entry: 'deeprobotics/adapter/main.ts', color: '96', env: { DR_PORT: '30000', DR_PROFILE: 'plant12', PLANTBOT_KEY: P12, DR_DOCK_X: '-11', DR_DOCK_Z: '-6' } },
-  // campus Spot
-  { name: 'spotCE·sim', entry: 'spot/sim/main.ts', color: '33', env: { SPOT_SIM_PORT: '9113', SPOT_SERIAL: 'BD-91250203', SPOT_NICK: 'campus-spot' } },
+  { name: 'x30p12·adp', entry: 'deeprobotics/adapter/main.ts', color: '96', env: { DR_PORT: '30000', DR_PROFILE: 'plant12', PLANTBOT_KEY: P12 } },
+  // campus Spot — sim 充电桩重定到 DOCK-C（世界 (-18.4,0.3) → seed y=-z），初始位姿在主步道
+  { name: 'spotCE·sim', entry: 'spot/sim/main.ts', color: '33', env: { SPOT_SIM_PORT: '9113', SPOT_SERIAL: 'BD-91250203', SPOT_NICK: 'campus-spot', SPOT_SIM_HOME_X: '2', SPOT_SIM_HOME_Y: '-5', SPOT_SIM_DOCK_X: '-18.4', SPOT_SIM_DOCK_Y: '-0.3' } },
   { name: 'spotCE·adp', entry: 'spot/adapter/main.ts', color: '93', env: { SPOT_PORT: '9113', SPOT_PROFILE: 'campus', PLANTBOT_KEY: CE } },
-  // campus X30
-  { name: 'x30CE·sim', entry: 'deeprobotics/sim/main.ts', color: '36', env: { DR_SIM_PORT: '30010' } },
-  { name: 'x30CE·adp', entry: 'deeprobotics/adapter/main.ts', color: '96', env: { DR_PORT: '30010', DR_PROFILE: 'campus', PLANTBOT_KEY: CE, DR_DOCK_X: '0', DR_DOCK_Z: '-9' } },
+  // campus X30 — sim 充电桩 = adapter campus profile 的 dock（世界 (0,-9) → 地图 y=-z）
+  { name: 'x30CE·sim', entry: 'deeprobotics/sim/main.ts', color: '36', env: { DR_SIM_PORT: '30010', DR_SIM_HOME_X: '0', DR_SIM_HOME_Y: '9' } },
+  { name: 'x30CE·adp', entry: 'deeprobotics/adapter/main.ts', color: '96', env: { DR_PORT: '30010', DR_PROFILE: 'campus', PLANTBOT_KEY: CE } },
 ]
 
 let stopping = false
