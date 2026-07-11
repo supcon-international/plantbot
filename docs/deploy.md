@@ -100,7 +100,7 @@ Environment=STREAM_BASE=/robots/media      # 子路径部署时注册流地址�
 真实秘钥值同样记录在 `/home/ubuntu/plantbot-credentials.txt`，不入库。sim 侧无秘密（本地回环监听）。
 掉线语义：adapter 停止 = 机器人 20s 后显示 OFFLINE（注册与场站数据都在 SQLite,重启平台仍在场）。
 
-清库重播种的正确顺序：**先 stop 平台再删 `config.json`**（运行中的平台有 2s 延迟落盘,先删后重启会被写回旧状态）,然后 start 平台 → start 集成层（adapter 启动时注册,平台必须已就绪）。
+清库重播种的正确顺序：**先 stop 平台再删 `plantbot.db`（连同 `-wal`/`-shm`）**,然后 start 平台（PB_DEMO 实例会重新导入演示种子）→ start 集成层（adapter 启动时注册,平台必须已就绪）。SQLite 是同步写穿,不再有 config.json 时代的 2s 延迟落盘问题,但删库仍必须在平台停止后进行。
 
 ## 更新流程（在服务器上）
 
