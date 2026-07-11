@@ -1,20 +1,15 @@
 node_modules/
 dist/
 *.log
+*.tsbuildinfo
 .DS_Store
 
-# fetched by `pnpm setup`
+# fetched by `pnpm run setup`
 server/media/*.mp4
 server/media/*.ply
 server/media/*.splat
-server/data/snapshots/
-server/go2rtc.yaml
-web/public/assets/robots/lite3/
+server/media/hala/
 web/public/assets/robots/x30/
-web/public/assets/robots/husky/meshes/
-web/public/assets/robots/go2/
-web/public/assets/robots/anymal/
 web/public/assets/scenes/
 demos/
-server/media/hala/
 server/data/

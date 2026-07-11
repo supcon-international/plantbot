@@ -329,7 +329,7 @@ export function Integrations() {
 {`# register a robot (factsheet)   levels: state-only | dispatchable
 curl -X POST ${curlBase}/robots -H 'authorization: Bearer ${demoKey}' \\
   -H 'content-type: application/json' \\
-  -d '{"serial":"ACME-0007","model":"ANYmal C","level":"dispatchable","home":{"x":-6,"z":-4}}'
+  -d '{"serial":"ACME-0007","model":"Spot","level":"dispatchable","home":{"x":-6,"z":-4}}'
 
 # push state @1Hz (doubles as heartbeat)
 curl -X POST ${curlBase}/robots/ACME-0007/state -H 'authorization: Bearer ${demoKey}' \\

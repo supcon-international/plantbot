@@ -106,25 +106,3 @@ export function VideoThumb({ file, className = '' }: { file?: string; className?
   if (!file) return <div className={`skeleton ${className}`} />
   return <video src={`${actual}#t=0.6`} preload="metadata" muted playsInline className={className} onError={onError} />
 }
-
-export function SnapshotImg({
-  src,
-  refreshMs = 0,
-  className = '',
-  alt = '',
-}: {
-  src: string
-  refreshMs?: number
-  className?: string
-  alt?: string
-}) {
-  const ref = useRef<HTMLImageElement>(null)
-  useEffect(() => {
-    if (!refreshMs) return
-    const id = setInterval(() => {
-      if (ref.current) ref.current.src = `${src}&t=${Date.now()}`
-    }, refreshMs)
-    return () => clearInterval(id)
-  }, [src, refreshMs])
-  return <img ref={ref} src={src} alt={alt} className={className} loading="lazy" />
-}

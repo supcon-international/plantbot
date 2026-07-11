@@ -2,14 +2,14 @@
 /**
  * One-shot asset bootstrap. Downloads every external resource the app needs:
  *  - Mixkit stock footage (free license) + Wikimedia Spot clip → server/media/
- *  - URDF twins: DeepRobotics Lite3/X30, Unitree Go2,
- *    ANYbotics ANYmal C, Clearpath Husky               → web/public/assets/robots/
+ *  - URDF twin: DeepRobotics X30 (the only integrated model with an open
+ *    URDF — Spot / GS F2 render as silhouettes)        → web/public/assets/robots/
  *  - SKANOSFERA warehouse 3DGS scan (superspl.at), merged from SOG
  *    chunks and leveled by scripts/level_splat.py      → web/public/assets/scenes/
  * Everything is skipped if already present.
  * Host requirements: node ≥ 20, ffmpeg on PATH, python3 with numpy.
  */
-import { mkdirSync, existsSync, readFileSync, writeFileSync, chmodSync, statSync } from 'node:fs'
+import { mkdirSync, existsSync, writeFileSync, statSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execSync } from 'node:child_process'
@@ -68,13 +68,11 @@ const FOOTAGE = {
   'smokestack.mp4': 'https://assets.mixkit.co/videos/14051/14051-720.mp4',
   'pumpjack.mp4': 'https://assets.mixkit.co/videos/48884/48884-360.mp4', // OGI channel source
   'perimeter.mp4': 'https://assets.mixkit.co/videos/36318/36318-720.mp4', // night container yard — perimeter cam
-  'corridor.mp4': 'https://assets.mixkit.co/videos/23378/23378-720.mp4', // machine corridor walk-through
   'tanknight.mp4': 'https://assets.mixkit.co/videos/4360/4360-720.mp4', // petrochemical plant at night
   // ---- Campus East security patrol footage ----
   'campus_quad.mp4': 'https://assets.mixkit.co/videos/4560/4560-720.mp4', // students w/ backpacks crossing the quad
   'campus_gate.mp4': 'https://assets.mixkit.co/videos/4503/4503-720.mp4', // students exiting a teaching building
   'campus_walk.mp4': 'https://assets.mixkit.co/videos/6252/6252-720.mp4', // main walkway pedestrians
-  'library_aisle.mp4': 'https://assets.mixkit.co/videos/21589/21589-720.mp4', // library corridor walkthrough
   'theft_cctv.mp4': 'https://assets.mixkit.co/videos/31372/31372-720.mp4', // CCTV: pair stuffing backpacks — bag-event evidence
   'intruder.mp4': 'https://assets.mixkit.co/videos/12830/12830-720.mp4', // intruder looks up at the camera
   'parking_night.mp4': 'https://assets.mixkit.co/videos/40735/40735-720.mp4', // parking structure at night
@@ -82,35 +80,11 @@ const FOOTAGE = {
   'stadium_field.mp4': 'https://assets.mixkit.co/videos/14190/14190-720.mp4', // low flight over the field — mast cam
 }
 
-// ---------- robots (DeepRobotics official models + Clearpath Husky) ----------
+// ---------- robot URDF twin (DeepRobotics X30 — official model repo) ----------
 const DR = 'https://cdn.jsdelivr.net/gh/DeepRoboticsLab/deep_robotics_model@main'
-const ROBOT_FILES = {}
-for (const [dir, name] of [
-  ['lite3', 'Lite3'],
-  ['x30', 'X30'],
-]) {
-  ROBOT_FILES[`${dir}/${name}.urdf`] = `${DR}/${name}/urdf/${name}.urdf`
-  for (const m of ['torso', 'hip', 'thigh', 'shank'])
-    ROBOT_FILES[`${dir}/meshes/${m}.STL`] = `${DR}/${name}/urdf/meshes/${m}.STL`
-}
-// Husky meshes from the official repo; the flattened URDF itself lives in-repo
-const HUSKY = 'https://raw.githubusercontent.com/husky/husky/humble-devel/husky_description/meshes'
-for (const m of ['base_link', 'top_chassis', 'wheel', 'top_plate', 'user_rail'])
-  ROBOT_FILES[`husky/meshes/${m}.stl`] = `${HUSKY}/${m}.stl`
-
-// Unitree Go2 (collada, self-contained materials)
-const GO2 = 'https://cdn.jsdelivr.net/gh/unitreerobotics/unitree_ros@master/robots/go2_description'
-ROBOT_FILES['go2/Go2.urdf'] = { url: `${GO2}/urdf/go2_description.urdf`, relativize: 'go2_description' }
-for (const m of ['base', 'calf', 'calf_mirror', 'foot', 'hip', 'thigh', 'thigh_mirror'])
-  ROBOT_FILES[`go2/dae/${m}.dae`] = `${GO2}/dae/${m}.dae`
-
-// ANYbotics ANYmal C (collada + jpg textures)
-const ANY = 'https://cdn.jsdelivr.net/gh/ANYbotics/anymal_c_simple_description@master'
-ROBOT_FILES['anymal/Anymal.urdf'] = { url: `${ANY}/urdf/anymal.urdf`, relativize: 'anymal_c_simple_description' }
-for (const m of ['base', 'battery', 'bottom_shell', 'depth_camera', 'drive', 'face', 'foot', 'handle', 'hatch', 'hip_l', 'hip_r', 'lidar', 'lidar_cage', 'remote', 'shank_l', 'shank_r', 'thigh', 'top_shell', 'wide_angle_camera'])
-  ROBOT_FILES[`anymal/meshes/${m}.dae`] = `${ANY}/meshes/${m}.dae`
-for (const j of ['base', 'battery', 'bottom_shell', 'depth_camera', 'drive', 'face', 'foot', 'handle', 'hatch', 'hip', 'lidar', 'lidar_cage', 'remote', 'shank', 'thigh', 'top_shell', 'wide_angle_camera'])
-  ROBOT_FILES[`anymal/meshes/${j}.jpg`] = `${ANY}/meshes/${j}.jpg`
+const ROBOT_FILES = { 'x30/X30.urdf': `${DR}/X30/urdf/X30.urdf` }
+for (const m of ['torso', 'hip', 'thigh', 'shank'])
+  ROBOT_FILES[`x30/meshes/${m}.STL`] = `${DR}/X30/urdf/meshes/${m}.STL`
 
 // ---------- gaussian splat scene ----------
 async function splatScene() {
@@ -211,15 +185,9 @@ const { readdirSync } = await import('node:fs')
 for (const name of readdirSync(join(ROOT, 'server', 'media')).filter((f) => f.endsWith('.mp4') && !f.endsWith('.low.mp4')))
   await lowVariant(name)
 
-console.log('[3/4] DeepRobotics URDF models (DeepRoboticsLab/deep_robotics_model)')
-for (const [rel, spec] of Object.entries(ROBOT_FILES)) {
-  const dest = join(ROOT, 'web', 'public', 'assets', 'robots', rel)
-  const url = typeof spec === 'string' ? spec : spec.url
-  await download(url, dest, rel)
-  // vendor URDFs reference package:// — rewrite to relative so the web loader resolves
-  if (typeof spec === 'object' && spec.relativize && existsSync(dest)) {
-    writeFileSync(dest, readFileSync(dest, 'utf8').replaceAll(`package://${spec.relativize}/`, './'))
-  }
+console.log('[3/4] DeepRobotics X30 URDF (DeepRoboticsLab/deep_robotics_model)')
+for (const [rel, url] of Object.entries(ROBOT_FILES)) {
+  await download(url, join(ROOT, 'web', 'public', 'assets', 'robots', rel), rel)
 }
 
 console.log('[4/4] gaussian splat scene (huggingface cakewalk/splat-data)')

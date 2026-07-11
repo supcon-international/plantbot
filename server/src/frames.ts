@@ -13,11 +13,6 @@ const FFMPEG = process.env.FFMPEG_BIN ?? 'ffmpeg'
 
 /** stream id → local footage backing that channel */
 const SOURCE: Record<string, string> = {
-  'lite3-front': 'switchgear.mp4',
-  'lite3-thermal': 'thermal.mp4',
-  'x30-optical': 'substation.mp4',
-  'agx-ogi': 'ogi.mp4',
-  'go2-front': 'corridor.mp4',
   'perimeter-cam': 'perimeter.mp4',
   'workshop-cam': 'staging.mp4',
   'mast-cam': 'plant_aerial.mp4',

@@ -8,41 +8,26 @@ import { useUrdfRobot, useLocomotion } from './UrdfRobot'
 import { BASE } from '../lib/base'
 import type { PayloadSpec } from '../lib/types'
 
-/** payload annotation anchors relative to root (post Z-up→Y-up rotation) */
-const ANCHORS: Record<string, Record<string, [number, number, number]>> = {
-  lite3: {
-    ptz: [0.29, 0.02, 0],
-    thermal: [0.16, 0.11, 0.11],
-    lidar: [-0.02, 0.15, 0],
-    imu: [-0.22, 0.05, -0.09],
-  },
+/** payload annotation anchors relative to root (post Z-up→Y-up rotation),
+ *  keyed by payload KIND — integration payload ids are stream keys
+ *  (e.g. 'x30hb-optical'), so kind is the stable join */
+const ANCHORS: Record<string, Partial<Record<PayloadSpec['kind'], [number, number, number]>>> = {
   x30: {
-    optical: [0.46, 0.08, 0],
+    camera: [0.46, 0.08, 0],
+    thermal: [0.4, 0.18, 0],
+    ogi: [0.32, 0.24, 0],
     gas: [-0.02, 0.3, 0.13],
     acoustic: [0.18, 0.32, -0.13],
     lidar: [-0.38, 0.26, 0],
   },
-  husky: {
-    ogi: [0.32, 0.33, 0],
-    gas: [-0.14, 0.3, 0.15],
-    acoustic: [0.04, 0.3, -0.17],
-    lidar: [-0.3, 0.38, 0],
-  },
 }
 
-const URDF_FILE: Record<string, string> = {
-  lite3: 'Lite3.urdf',
-  x30: 'X30.urdf',
-  husky: 'husky.urdf',
-  go2: 'Go2.urdf',
-  anymal: 'Anymal.urdf',
-}
-
-const VIEW_LIFT: Record<string, number> = { lite3: 0.3, x30: 0.47, husky: 0.132, go2: 0.34, anymal: 0.5 }
+// the only vendored URDF twin — Spot / GS F2 render as silhouettes
+const URDF_FILE: Record<string, string> = { x30: 'X30.urdf' }
+const VIEW_LIFT: Record<string, number> = { x30: 0.47 }
 
 function RobotScene({
   urdf,
-  family,
   gait,
   speed,
   payloads,
@@ -50,7 +35,6 @@ function RobotScene({
   onPick,
 }: {
   urdf: string
-  family: 'quadruped' | 'ugv'
   gait?: string
   speed?: number
   payloads: PayloadSpec[]
@@ -60,7 +44,7 @@ function RobotScene({
   const dark = useTheme((s) => s.theme) === 'dark'
   const url = `${BASE}/assets/robots/${urdf}/${URDF_FILE[urdf] ?? `${urdf}.urdf`}`
   const { robot, robotRef } = useUrdfRobot(url)
-  useLocomotion(robotRef, { family, gait, speed, urdf })
+  useLocomotion(robotRef, { gait, speed })
   const anchors = ANCHORS[urdf] ?? {}
 
   const lift = VIEW_LIFT[urdf] ?? 0.3
@@ -71,9 +55,9 @@ function RobotScene({
         <group position={[0, lift, 0]}>
           <primitive object={robot} />
           {payloads
-            .filter((p) => anchors[p.id])
+            .filter((p) => anchors[p.kind])
             .map((p) => {
-              const [x, y, z] = anchors[p.id]
+              const [x, y, z] = anchors[p.kind]!
               const hot = highlight === p.id
               return (
                 <group key={p.id} position={[x, y, z]}>
@@ -137,7 +121,6 @@ function RobotScene({
 
 export function RobotViewer({
   urdf,
-  family = 'quadruped',
   gait,
   speed,
   payloads,
@@ -146,7 +129,6 @@ export function RobotViewer({
   autoRotate = true,
 }: {
   urdf: string
-  family?: 'quadruped' | 'ugv'
   gait?: string
   speed?: number
   payloads: PayloadSpec[]
@@ -170,7 +152,7 @@ export function RobotViewer({
       <directionalLight position={[-4, 2, -3]} intensity={0.65} color="#94a1ae" />
       <directionalLight position={[0, -2, 0]} intensity={0.25} color="#6b7683" />
       <Suspense fallback={null}>
-        <RobotScene urdf={urdf} family={family} gait={gait} speed={speed} payloads={payloads} highlight={highlight} onPick={onPick} />
+        <RobotScene urdf={urdf} gait={gait} speed={speed} payloads={payloads} highlight={highlight} onPick={onPick} />
       </Suspense>
       <OrbitControls
         makeDefault
