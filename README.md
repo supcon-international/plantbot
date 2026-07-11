@@ -11,7 +11,7 @@
 | **OPS** 总览 | 大字 KPI、**实时 3D 作业地图**（占据主区）、fleet strip、检测流（带快照）、任务进度与最近巡检结果——视频统一收在 LIVE 页 |
 | **LIVE** 视频墙 | 9 路巡检画面（Focus / Wall 布局），全部为本地零掉帧环路（原生 video）：机器人载荷视角 + 周界/罐区/桅杆固定机位,含预渲染的**热成像 inferno** 与 **OGI/MWIR** 通道。**省流模式（ECO）**：每路环路带 640p 低码率孪生（体积缩减 80–90%），Save-Data / 2G·3G 网络自动启用,顶栏可手动开关;事件快照同样压缩到 640w |
 | **TASKS** 任务 | Mission = 航点 + 动作序列（拍照/热扫/OGI/气体采样/声学/读表）。创建向导在地图上点选航点、每站配动作；**调度器按优先级/电量/距离自动派单**（VDA5050 式整单交给 adapter）；路径由机器人端 Nav 栈计算，操作员只管目标点。步骤时间线 + 巡检结果记录（真实快照） |
-| **FLEET** 机器人 | 全部经三层集成架构接入的外部机器人（波士顿动力 Spot / 云深处 X30 四足 + 高新兴 GS Patrol F2 轮式）分组管理；接入向导只列有 adaptor 的三种型号；**传感器覆盖矩阵**（optical/thermal/OGI/gas/acoustic/LiDAR × 机型）；X30 带 URDF 数字孪生（trot 步态动画），Spot/GS·F2 用 silhouette；payload 3D 标注联动 |
+| **FLEET** 机器人 | 全部经三层集成架构接入的外部机器人（波士顿动力 Spot / 云深处 X30 四足 + 高新兴 GS Patrol F2 轮式）分组管理；接入向导只列有 adaptor 的三种型号；**传感器覆盖矩阵**（optical/thermal/OGI/gas/acoustic/LiDAR × 机型）；X30 与 Spot 带官方 URDF 数字孪生（walk/trot 步态动画），GS·F2 用 silhouette；payload 3D 标注联动 |
 | **MAP** 地图 | 双模式：**OPS MAP**（SLAM OccupancyGrid 栅格底图 → 主题化 canvas 渲染 + waypoint/zone/实时位姿/规划路径矢量层，点击航点即可 teleop 派遣）/ **3D SCAN**（高斯 splat 场景 + 实时 marker） |
 | **EVENTS** 事件 | **三列看板**（Critical / High / Routine）+ 表格视图 + **规则定义**：检测模型 × 视频源 × 置信度阈值 × severity，可新建/启停/调阈值——规则实时约束事件生成器;规则模型下拉同时提供**自定义事件类型** |
 | **多场站** | 顶栏一键切换场站（Plant 07 工业园区 / Plant 12 海港储运站 / **Campus East 校园安防**）。每站独立 World 实例：任务调度、A* 规划网格、规则、事件流、WebSocket 房间全部隔离；**机器人全部经 adaptor 接入,平台无原生机队** |
@@ -27,7 +27,7 @@
 ```bash
 git clone https://github.com/supcon-international/plantbot.git && cd plantbot
 pnpm install
-pnpm run setup # 下载巡检视频素材、X30 URDF（云深处官方,唯一有开源模型的接入机型）、高斯 splat 场景（全自动,约 160 MB）,并预渲染 640p 省流变体
+pnpm run setup # 下载巡检视频素材、URDF 孪生网格（云深处 X30 官方模型 + 波士顿动力 Spot 官方 spot_description）、高斯 splat 场景（全自动,约 180 MB）,并预渲染 640p 省流变体
 pnpm dev       # server :8787 + web :5173 + 五对厂商 sim/adapter（10 进程:SPOT·A / X30·HB / campus 三厂商协同）
 pnpm dev:core  # 只起 server + web
 ```
@@ -39,7 +39,7 @@ pnpm dev:core  # 只起 server + web
 ```
 web/     Vite 7 · React 19 · TS · Tailwind v4 · zustand · react-router 7
          three.js + React Three Fiber 9
-           - urdf-loader        → X30 数字孪生（云深处官方模型;Spot/GS·F2 为 silhouette）
+           - urdf-loader        → X30 + Spot 数字孪生（官方模型;GS·F2 为 silhouette）
            - gaussian-splats-3d → 3DGS 场景（mkkellogg）
          OpsMap：occupancy PNG → canvas 三值主题化（占据=白色激光线）
                  + 真 3D 作业地图（R3F 白模体块 + 轨道相机 + 实时 marker/路径）
@@ -75,6 +75,7 @@ ffmpeg   快照抓帧：事件/任务快照直接从本地素材随机时间点�
 | 资源 | 来源 | 许可 |
 |---|---|---|
 | X30 URDF+STL | [DeepRoboticsLab/deep_robotics_model](https://github.com/DeepRoboticsLab/deep_robotics_model)（云深处官方） | 官方公开模型 |
+| Spot 视觉网格 | [rai-opensource/spot_description](https://github.com/bdaiinstitute/spot_description)（RAI Institute · ROS 2 驱动官方描述包；repo 内含手工压平的 spot.urdf） | MIT |
 | 3DGS 场景 · 工业仓库 | [superspl.at/scene/3eedaa2b](https://superspl.at/scene/3eedaa2b)（SKANOSFERA 扫描的格利维采仓库大厅，XGRIDS PortalCam 采集；SOG→ply→`scripts/level_splat.py` 调平烘焙,天花板剖切） | superspl.at 公开发布 |
 | 巡检视频素材 | [Mixkit](https://mixkit.co/license/#videoFree)（配电室推进/变电站巡视/厂区航拍/烟囱/抽油机） | Mixkit Free License |
 | Spot 机器人整备区实拍 | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Spot_construction_robot.webm) | CC |

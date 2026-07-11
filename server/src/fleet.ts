@@ -320,7 +320,7 @@ export const ROBOT_CATALOG: RobotModelSpec[] = [
     model: 'Spot',
     vendor: 'Boston Dynamics',
     family: 'quadruped',
-    urdf: '', // silhouette twin — no open URDF vendored
+    urdf: 'spot', // RAI spot_description visual meshes + in-repo flattened URDF
     massKg: 32.5,
     ipRating: 'IP54',
     maxSpeed: 1.6,

@@ -5,10 +5,10 @@ import { useUrdfRobot } from './UrdfRobot'
 import { RafResizeObserver } from './rafResizeObserver'
 import { BASE } from '../lib/base'
 
-// the only vendored URDF twin — silhouette models never reach this component
-const URDF_FILE: Record<string, string> = { x30: 'X30.urdf' }
-const LIFT: Record<string, number> = { x30: 0.47 }
-const CAM_DIST: Record<string, number> = { x30: 1.8 }
+// vendored URDF twins — silhouette models never reach this component
+const URDF_FILE: Record<string, string> = { x30: 'X30.urdf', spot: 'spot.urdf' }
+const LIFT: Record<string, number> = { x30: 0.47, spot: 0.52 }
+const CAM_DIST: Record<string, number> = { x30: 1.8, spot: 1.55 }
 
 function Turntable({ urdf, onReady }: { urdf: string; onReady?: () => void }) {
   const url = `${BASE}/assets/robots/${urdf}/${URDF_FILE[urdf] ?? `${urdf}.urdf`}`

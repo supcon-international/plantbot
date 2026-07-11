@@ -10,6 +10,7 @@ server/media/*.ply
 server/media/*.splat
 server/media/hala/
 web/public/assets/robots/x30/
+web/public/assets/robots/spot/meshes/
 web/public/assets/scenes/
 demos/
 server/data/

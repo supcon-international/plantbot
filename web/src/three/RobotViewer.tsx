@@ -20,11 +20,16 @@ const ANCHORS: Record<string, Partial<Record<PayloadSpec['kind'], [number, numbe
     acoustic: [0.18, 0.32, -0.13],
     lidar: [-0.38, 0.26, 0],
   },
+  spot: {
+    camera: [0.52, 0.02, 0], // front fisheye pair lives in the nose
+    thermal: [0.42, 0.13, 0], // Spot CAM sits on the front deck
+    lidar: [-0.2, 0.16, 0],
+  },
 }
 
-// the only vendored URDF twin — Spot / GS F2 render as silhouettes
-const URDF_FILE: Record<string, string> = { x30: 'X30.urdf' }
-const VIEW_LIFT: Record<string, number> = { x30: 0.47 }
+// vendored URDF twins (X30 + Spot) — GS F2 renders as a silhouette
+const URDF_FILE: Record<string, string> = { x30: 'X30.urdf', spot: 'spot.urdf' }
+const VIEW_LIFT: Record<string, number> = { x30: 0.47, spot: 0.52 }
 
 function RobotScene({
   urdf,
@@ -44,7 +49,7 @@ function RobotScene({
   const dark = useTheme((s) => s.theme) === 'dark'
   const url = `${BASE}/assets/robots/${urdf}/${URDF_FILE[urdf] ?? `${urdf}.urdf`}`
   const { robot, robotRef } = useUrdfRobot(url)
-  useLocomotion(robotRef, { gait, speed })
+  useLocomotion(robotRef, { gait, speed, urdf })
   const anchors = ANCHORS[urdf] ?? {}
 
   const lift = VIEW_LIFT[urdf] ?? 0.3

@@ -2,8 +2,10 @@
 /**
  * One-shot asset bootstrap. Downloads every external resource the app needs:
  *  - Mixkit stock footage (free license) + Wikimedia Spot clip → server/media/
- *  - URDF twin: DeepRobotics X30 (the only integrated model with an open
- *    URDF — Spot / GS F2 render as silhouettes)        → web/public/assets/robots/
+ *  - URDF twins: DeepRobotics X30 (official model repo) and Boston Dynamics
+ *    Spot (RAI Institute spot_description visual meshes, MIT; the flattened
+ *    spot.urdf lives in-repo) — GS F2 renders as a silhouette
+ *                                                      → web/public/assets/robots/
  *  - SKANOSFERA warehouse 3DGS scan (superspl.at), merged from SOG
  *    chunks and leveled by scripts/level_splat.py      → web/public/assets/scenes/
  * Everything is skipped if already present.
@@ -80,11 +82,25 @@ const FOOTAGE = {
   'stadium_field.mp4': 'https://assets.mixkit.co/videos/14190/14190-720.mp4', // low flight over the field — mast cam
 }
 
-// ---------- robot URDF twin (DeepRobotics X30 — official model repo) ----------
+// ---------- robot URDF twins ----------
+// DeepRobotics X30 — official model repo (URDF + STL)
 const DR = 'https://cdn.jsdelivr.net/gh/DeepRoboticsLab/deep_robotics_model@main'
 const ROBOT_FILES = { 'x30/X30.urdf': `${DR}/X30/urdf/X30.urdf` }
 for (const m of ['torso', 'hip', 'thigh', 'shank'])
   ROBOT_FILES[`x30/meshes/${m}.STL`] = `${DR}/X30/urdf/meshes/${m}.STL`
+
+// Boston Dynamics Spot — visual OBJs from RAI Institute's spot_description
+// (MIT; the ROS 2 driver's description package). The flattened spot.urdf that
+// references them is hand-written in-repo (web/public/assets/robots/spot/).
+const SPOT = 'https://cdn.jsdelivr.net/gh/rai-opensource/spot_description@main/spot_description/meshes/base/visual'
+for (const m of [
+  'body',
+  'front_left_hip', 'front_left_upper_leg', 'front_left_lower_leg',
+  'front_right_hip', 'front_right_upper_leg', 'front_right_lower_leg',
+  'rear_left_hip', 'rear_left_upper_leg', 'rear_left_lower_leg',
+  'rear_right_hip', 'rear_right_upper_leg', 'rear_right_lower_leg',
+])
+  ROBOT_FILES[`spot/meshes/${m}.obj`] = `${SPOT}/${m}.obj`
 
 // ---------- gaussian splat scene ----------
 async function splatScene() {
@@ -185,7 +201,7 @@ const { readdirSync } = await import('node:fs')
 for (const name of readdirSync(join(ROOT, 'server', 'media')).filter((f) => f.endsWith('.mp4') && !f.endsWith('.low.mp4')))
   await lowVariant(name)
 
-console.log('[3/4] DeepRobotics X30 URDF (DeepRoboticsLab/deep_robotics_model)')
+console.log('[3/4] URDF twins — X30 (DeepRoboticsLab) + Spot (RAI spot_description)')
 for (const [rel, url] of Object.entries(ROBOT_FILES)) {
   await download(url, join(ROOT, 'web', 'public', 'assets', 'robots', rel), rel)
 }
