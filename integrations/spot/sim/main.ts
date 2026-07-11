@@ -167,10 +167,10 @@ const robotIdImpl = {
     cb(null, {
       header: okHeader(call.request.header),
       robot_id: {
-        serial_number: 'BD-91250107',
+        serial_number: process.env.SPOT_SERIAL ?? 'BD-91250107',
         species: 'spot',
         version: 'V3',
-        nickname: 'plant07-spot',
+        nickname: process.env.SPOT_NICK ?? 'plant07-spot',
         computer_serial_number: '02-91250107',
         software_release: { version: { major_version: 4, minor_version: 1, patch_level: 0 }, name: 'spot-sim' },
       },

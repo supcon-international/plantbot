@@ -108,8 +108,12 @@ test('本体故障：定位丢失 → robot-fault 事件', { timeout: 90_000 }, 
 })
 
 test('线协议：seq 回填 / 执行中 41793 拒单 / 1004 取消触发 1003 终态', { timeout: 60_000 }, async () => {
-  // 直连 sim 的原始 TCP —— 模拟「另一个官方 SDK 客户端」
-  const sock = net.connect({ host: '127.0.0.1', port: SIM })
+  // 用一台专属 sim，与 adapter 共用的那台隔离 —— 否则 adapter 的 ensureIdle
+  // 会 1004 取消本测试直连下发的任务（共享单一导航栈）。这也更贴近真实:
+  // 官方 SDK 客户端本就直连自己的机器人。
+  const wireSim = spawnProc('deeprobotics/sim/main.ts', { DR_SIM_PORT: '30099', DR_SIM_LOCAL_PATROL_MS: '0' }, 'drwire')
+  await new Promise((r) => setTimeout(r, 2500))
+  const sock = net.connect({ host: '127.0.0.1', port: 30099 })
   await new Promise((res, rej) => (sock.once('connect', res), sock.once('error', rej)))
   const parser = new FrameParser()
   const frames: { seq: number; type: number; body: string }[] = []
@@ -117,12 +121,12 @@ test('线协议：seq 回填 / 执行中 41793 拒单 / 1004 取消触发 1003 �
   const send = (seq: number, xml: string) => sock.write(encodeFrame(seq, xml))
   const expect = (pred: (f: { seq: number; type: number; body: string }) => boolean, label: string) =>
     waitFor(async () => frames.find(pred), 20_000, label, 100)
+  const cleanup = () => {
+    sock.destroy()
+    wireSim.kill('SIGTERM')
+  }
 
-  // 静场：平台的钉死排程可能正驱动机器人 —— 先 1004 清掉在途任务
-  send(40, buildCancelReq())
-  await expect((f) => f.seq === 40 && f.type === TYPE.CANCEL, 'quiesce cancel ack')
-  await new Promise((r2) => setTimeout(r2, 600))
-
+  try {
   // 1002：响应必须回填请求 seq
   send(41, buildRealtimeReq())
   const rt = await expect((f) => f.seq === 41 && f.type === TYPE.REALTIME, '1002 echo seq')
@@ -156,7 +160,9 @@ test('线协议：seq 回填 / 执行中 41793 拒单 / 1004 取消触发 1003 �
   const term = parseNavTaskResp(terminal.body)
   assert.equal(term.errorCode, 2)
   assert.equal(term.errorStatus, 8962)
-  sock.destroy()
+  } finally {
+    cleanup()
+  }
 })
 
 test('掉线→恢复：sim 重启 → OFFLINE → 自动重连回归', { timeout: 120_000 }, async () => {

@@ -22,30 +22,22 @@ const SOURCE: Record<string, string> = {
   'workshop-cam': 'staging.mp4',
   'mast-cam': 'plant_aerial.mp4',
   'tank-cam': 'tanknight.mp4',
-  // external vendor units (adapter-registered streams)
-  'spotext-cam': 'switchgear.mp4',
-  'x30ext-front': 'substation.mp4',
-  'x30ext-thermal': 'thermal.mp4',
-  // Plant 12 · Harbor Terminal
-  'x30b-optical': 'substation.mp4',
-  'x30b-thermal': 'thermal.mp4',
-  'go2b-front': 'corridor.mp4',
+  // external vendor units — adapter-registered streams (the only robots now)
+  'spot07-front': 'switchgear.mp4', // plant-07 Spot
+  'spot07-therm': 'thermal.mp4',
+  'x30hb-optical': 'substation.mp4', // plant-12 X30
+  'x30hb-therm': 'thermal.mp4',
+  'spotce-front': 'campus_gate.mp4', // campus Spot
+  'spotce-therm': 'night_walkway.mp4',
+  'x30ce-optical': 'night_walkway.mp4', // campus X30
+  'x30ce-therm': 'thermal.mp4',
+  // Plant 12 · Harbor Terminal fixed cameras
   'berth-cam': 'perimeter.mp4',
   'tankrow-cam': 'tanknight.mp4',
-  // Campus East · security patrol
+  // Campus East · Gosuncn GS·F2 (GoRobot adapter) + fixed cameras
   'gs1-front': 'campus_quad.mp4',
   'gs1-rear': 'theft_cctv.mp4',
   'gs2-front': 'campus_walk.mp4',
-  'go2c1-front': 'campus_walk.mp4',
-  'go2c2-front': 'library_aisle.mp4',
-  'lite3c-front': 'library_aisle.mp4',
-  'x30c1-optical': 'night_walkway.mp4',
-  'x30c1-thermal': 'thermal.mp4',
-  'x30c2-optical': 'campus_gate.mp4',
-  'hskc1-front': 'parking_night.mp4',
-  'hskc2-front': 'campus_quad.mp4',
-  'anyc-front': 'corridor.mp4',
-  'anyc-gas': 'ogi.mp4',
   'gate-cam': 'campus_gate.mp4',
   'perimeter-cam-c': 'intruder.mp4',
   'stadium-cam': 'stadium_field.mp4',

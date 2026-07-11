@@ -11,11 +11,11 @@
 | **OPS** 总览 | 大字 KPI、**实时 3D 作业地图**（占据主区）、fleet strip、检测流（带快照）、任务进度与最近巡检结果——视频统一收在 LIVE 页 |
 | **LIVE** 视频墙 | 9 路巡检画面（Focus / Wall 布局），全部为本地零掉帧环路（原生 video）：机器人载荷视角 + 周界/罐区/桅杆固定机位,含预渲染的**热成像 inferno** 与 **OGI/MWIR** 通道。**省流模式（ECO）**：每路环路带 640p 低码率孪生（体积缩减 80–90%），Save-Data / 2G·3G 网络自动启用,顶栏可手动开关;事件快照同样压缩到 640w |
 | **TASKS** 任务 | Mission = 航点 + 动作序列（拍照/热扫/OGI/气体采样/声学/读表）。创建向导在地图上点选航点、每站配动作；**调度器按优先级/电量/距离自动派单**；路径由机器人端 Nav 栈计算（服务端 A* 代演），操作员只管目标点。步骤时间线 + 巡检结果记录（真实快照） |
-| **FLEET** 机器人 | 四足（云深处 Lite3 / X30）+ 轮式 UGV（Clearpath Husky A200）分组管理；**传感器覆盖矩阵**（optical/thermal/OGI/gas/acoustic/LiDAR × 机型）；URDF 数字孪生（四足 trot 步态 / 轮式差速轮转动画）、payload 3D 标注联动 |
+| **FLEET** 机器人 | 全部经三层集成架构接入的外部机器人（波士顿动力 Spot / 云深处 X30 四足 + 高新兴 GS Patrol F2 轮式）分组管理；接入向导只列有 adaptor 的三种型号；**传感器覆盖矩阵**（optical/thermal/OGI/gas/acoustic/LiDAR × 机型）；X30 带 URDF 数字孪生（trot 步态动画），Spot/GS·F2 用 silhouette；payload 3D 标注联动 |
 | **MAP** 地图 | 双模式：**OPS MAP**（SLAM OccupancyGrid 栅格底图 → 主题化 canvas 渲染 + waypoint/zone/实时位姿/规划路径矢量层，点击航点即可 teleop 派遣）/ **3D SCAN**（高斯 splat 场景 + 实时 marker） |
 | **EVENTS** 事件 | **三列看板**（Critical / High / Routine）+ 表格视图 + **规则定义**：检测模型 × 视频源 × 置信度阈值 × severity，可新建/启停/调阈值——规则实时约束事件生成器;规则模型下拉同时提供**自定义事件类型** |
-| **多场站** | 顶栏一键切换场站（Plant 07 工业园区 / Plant 12 海港储运站 / **Campus East 校园安防**）。每站独立 World 实例：机队、任务调度、A* 规划网格、规则、事件流、WebSocket 房间全部隔离 |
-| **Campus East 安防场景** | 10 台 · 6 型号协同（Go2×2 / Lite3 / X30×2 / Husky×2 / ANYmal + **高新兴 GS Patrol F2 ×2 经三层集成架构外部接入**）。Checkpoint 停顿巡逻（大门→图书馆→食堂→宿舍）、周界夜巡（热成像）、停车场与消防通道、实验楼气体轮巡全部由排程驱动;机器人直报**可疑背包**事件;安防词表：跌倒 / 尾随 / 人员聚集 / 电动车占道,16 路真实巡逻画面 |
+| **多场站** | 顶栏一键切换场站（Plant 07 工业园区 / Plant 12 海港储运站 / **Campus East 校园安防**）。每站独立 World 实例：任务调度、A* 规划网格、规则、事件流、WebSocket 房间全部隔离；**机器人全部经 adaptor 接入,平台无原生机队** |
+| **Campus East 安防场景** | **三厂商三 adaptor 一屏协同**：波士顿动力 Spot（gRPC）+ 云深处 X30（robotserver TCP）+ 高新兴 GS Patrol F2 ×2（GoRobot 云），全部经三层集成架构接入,平台无原生机队。Checkpoint 停顿巡逻（大门→图书馆→食堂→宿舍）、周界夜巡（热成像）由排程钉给各外部机器人驱动;GS·F2 直报**可疑背包**事件;安防词表：跌倒 / 尾随 / 人员聚集 / 电动车占道,真实巡逻画面 |
 | **用户与角色** | 匿名即可浏览（公开演示保留）;登录升权。三档角色 × 场站授权矩阵（Orbit/InOrbit 式）：`viewer` 只读 / `operator` 建任务·派遣·ACK / `admin` 规则·开通·集成配置。演示账户 `admin / operator / viewer`,密码 `plantbot`（生产用 `PB_*_PASSWORD` 环境变量轮换） |
 | **集成开放 API** | 语义对齐 **VDA 5050**（factsheet/state/order），接入级别学 **Open-RMF**（`state-only` / `dispatchable`），地图上传走 **ROS map_server** 约定（PNG+resolution+origin,上传即在 3D 地图渲染底图）;自定义事件类型注册 + ingest + 证据抓帧服务。场站级 API Key,admin 面板管理。详见 [docs/integration.md](docs/integration.md) |
 | **三层集成架构** | **simulator ⇄ adapter ⇄ platform**（Open-RMF fleet-adapter 式）:`integrations/` 里三家厂商各一对独立进程,**忠实还原官方协议**——Boston Dynamics Spot（59 个官方 proto,gRPC 会话舞蹈 auth→timesync→lease→estop→power 全套闸）/ 云深处 X30（robotserver_sdk 裸 TCP `EB90` 帧+XML,1003 终态语义）/ 高新兴 GS F2（GoRobot 云 `.action` RPC + WS 增量推送 + md5 登录 + 10s 流地址）。adapter 对「真机 or sim」零感知,接真机即插;25 项全行为 e2e（`cd integrations && pnpm test`）。设计见 [docs/adapter-sim-architecture.md](docs/adapter-sim-architecture.md) |

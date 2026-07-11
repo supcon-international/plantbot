@@ -312,21 +312,24 @@ export interface RobotModelSpec {
   blurb: [string, string] // en / zh
 }
 
+// Onboarding catalog = the models Plantbot can actually INTEGRATE. Each has a
+// real vendor adapter under integrations/ (Spot·gRPC / X30·robserver TCP /
+// GS F2·GoRobot cloud); nothing here is a platform-native sim any more.
 export const ROBOT_CATALOG: RobotModelSpec[] = [
   {
-    model: 'Jueying Lite3',
-    vendor: 'DEEP Robotics 云深处科技',
+    model: 'Spot',
+    vendor: 'Boston Dynamics',
     family: 'quadruped',
-    urdf: 'lite3',
-    massKg: 12,
+    urdf: '', // silhouette twin — no open URDF vendored
+    massKg: 32.5,
     ipRating: 'IP54',
-    maxSpeed: 2.5,
+    maxSpeed: 1.6,
     enduranceMin: 90,
-    protocol: 'ROS2 / DDS · 5G-U',
-    firmware: 'v2.4.1-rc3',
+    protocol: 'bosdyn.api gRPC (auth · timesync · lease · e-stop · power)',
+    firmware: '4.1.0',
     blurb: [
-      'Agile indoor/yard patrol quadruped',
-      '轻型敏捷四足,适合室内与场区巡逻',
+      'Boston Dynamics quadruped · full gRPC session gauntlet',
+      '波士顿动力四足 · gRPC 会话舞蹈(认证/时间同步/租约/急停/上电)',
     ],
   },
   {
@@ -338,91 +341,27 @@ export const ROBOT_CATALOG: RobotModelSpec[] = [
     ipRating: 'IP67',
     maxSpeed: 4.0,
     enduranceMin: 150,
-    protocol: 'ROS2 / DDS · Wi-Fi 6 mesh',
+    protocol: 'robotserver_sdk (TCP EB90 帧 + PatrolDevice XML)',
     firmware: 'v3.1.0',
     blurb: [
-      'Industrial all-weather inspection flagship',
+      'Industrial all-weather inspection flagship, IP67',
       '全天候工业巡检旗舰,防护等级 IP67',
-    ],
-  },
-  {
-    model: 'Lynx M20',
-    vendor: 'DEEP Robotics 云深处科技',
-    family: 'quadruped',
-    urdf: '',
-    massKg: 33,
-    ipRating: 'IP66',
-    maxSpeed: 5.0,
-    enduranceMin: 180,
-    protocol: 'ROS2 / DDS · 5G-U',
-    firmware: 'v1.2.0',
-    blurb: [
-      'Wheel-legged hybrid for rough terrain · 3D twin pending',
-      '轮足复合构型,复杂地形通行 · 3D 模型待接入',
-    ],
-  },
-  {
-    model: 'Go2 EDU',
-    vendor: 'Unitree 宇树科技',
-    family: 'quadruped',
-    urdf: 'go2',
-    massKg: 15,
-    ipRating: 'IP55',
-    maxSpeed: 3.7,
-    enduranceMin: 120,
-    protocol: 'ROS2 / DDS · Wi-Fi 6',
-    firmware: 'v1.1.5',
-    blurb: [
-      'Agile quadruped for corridor and rack inspection',
-      '敏捷四足,适合廊道与机柜巡检',
-    ],
-  },
-  {
-    model: 'ANYmal C',
-    vendor: 'ANYbotics',
-    family: 'quadruped',
-    urdf: 'anymal',
-    massKg: 50,
-    ipRating: 'IP67',
-    maxSpeed: 1.3,
-    enduranceMin: 120,
-    protocol: 'ROS2 / DDS · LTE',
-    firmware: 'v23.04',
-    blurb: [
-      'Autonomous industrial inspection benchmark, Ex-proof option',
-      '工业巡检标杆机型,可选防爆版本',
-    ],
-  },
-  {
-    model: 'Husky A200',
-    vendor: 'Clearpath Robotics',
-    family: 'ugv',
-    urdf: 'husky',
-    massKg: 50,
-    ipRating: 'IP44',
-    maxSpeed: 1.0,
-    enduranceMin: 180,
-    protocol: 'ROS2 / DDS · Ethernet',
-    firmware: 'v2.1.4',
-    blurb: [
-      'Proven payload mule for heavy sensor stacks',
-      '成熟轮式平台,适合重型传感器载荷',
     ],
   },
   {
     model: 'GS Patrol F2',
     vendor: 'Gosuncn Robotics 高新兴',
     family: 'ugv',
-    urdf: '', // third-party unit — connects via the integration API, silhouette twin
+    urdf: '', // silhouette twin — connects via the GoRobot cloud adapter
     massKg: 150,
     ipRating: 'IP55',
     maxSpeed: 1.6,
     enduranceMin: 480,
-    protocol: 'Integration API v1 (vendor adapter)',
+    protocol: 'GRobot cloud (.action RPC + WebSocket push)',
     firmware: 'GRobot 5.x',
     blurb: [
       'Security service-patrol UGV — PTZ mast, loudspeaker, ambient sensing',
-      '安保服务巡逻机器人——云台桅杆、喊话器、环境感知,经集成 API 接入',
+      '安保服务巡逻机器人——云台桅杆、喊话器、环境感知',
     ],
   },
 ]

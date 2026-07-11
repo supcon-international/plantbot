@@ -15,11 +15,35 @@ const log = makeLog('spot-adp')
 const HOST = `${process.env.SPOT_HOST ?? '127.0.0.1'}:${process.env.SPOT_PORT ?? 9103}`
 const USER = process.env.SPOT_USER ?? 'admin'
 const PASS = process.env.SPOT_PASS ?? 'spotdev2026'
-const SERIAL = 'BD-91250107'
 const STREAM_BASE = (process.env.STREAM_BASE ?? '/media').replace(/\/$/, '')
 const ESTOP_TIMEOUT_S = 9
 
-const plantbot = new PlantbotClient({ key: process.env.PLANTBOT_KEY ?? 'pbk_dev_plant07', log })
+// One Spot adapter per site — SPOT_PROFILE selects the identity + channel set +
+// platform key, so the same code drives plant-07's Spot and campus's Spot.
+const PROFILES = {
+  plant07: {
+    serial: 'BD-91250107',
+    callsign: 'SPOT·A',
+    key: 'pbk_dev_plant07',
+    streams: [
+      { id: 'spot07-front', name: 'Fisheye front', kind: 'camera', file: 'switchgear.mp4' },
+      { id: 'spot07-therm', name: 'Spot CAM IR', kind: 'thermal', file: 'thermal.mp4' },
+    ],
+  },
+  campus: {
+    serial: 'BD-91250203',
+    callsign: 'SPOT·CE',
+    key: 'pbk_dev_campuseast',
+    streams: [
+      { id: 'spotce-front', name: 'Fisheye front', kind: 'camera', file: 'campus_gate.mp4' },
+      { id: 'spotce-therm', name: 'Spot CAM IR', kind: 'thermal', file: 'night_walkway.mp4' },
+    ],
+  },
+} as const
+const PROFILE = PROFILES[(process.env.SPOT_PROFILE as keyof typeof PROFILES) ?? 'plant07'] ?? PROFILES.plant07
+const SERIAL = PROFILE.serial
+
+const plantbot = new PlantbotClient({ key: process.env.PLANTBOT_KEY ?? PROFILE.key, log })
 
 // seed 帧（x 东 y 北）↔ 世界系（x 东 z 南）
 const toWorld = (p: { x?: number; y?: number }) => ({ x: p.x ?? 0, z: -(p.y ?? 0) })
@@ -418,15 +442,15 @@ async function main() {
     serial: SERIAL,
     model: 'Spot',
     vendor: 'Boston Dynamics',
-    callsign: 'SPOT·A',
+    callsign: PROFILE.callsign,
     family: 'quadruped',
     level: 'dispatchable',
     protocol: 'bosdyn.api gRPC (auth+timesync+lease+estop+power)',
     home: pose ? { x: +pose.x.toFixed(1), z: +pose.z.toFixed(1) } : undefined,
-    streams: [{ id: 'spotext-cam', name: 'Fisheye front', kind: 'camera', url: `${STREAM_BASE}/switchgear.mp4` }],
+    streams: PROFILE.streams.map((s) => ({ id: s.id, name: s.name, kind: s.kind, url: `${STREAM_BASE}/${s.file}` })),
   })
   const srcs = await call(clients.image, 'ListImageSources', { header: header() }, md()).catch(() => null)
-  log.info(`已注册 SPOT·A → plant-07 · 机身相机 ${srcs?.image_sources?.length ?? 0} 源（GetImage 帧走协议，证据图走平台快照服务）`)
+  log.info(`已注册 ${PROFILE.callsign}（${SERIAL}）· 机身相机 ${srcs?.image_sources?.length ?? 0} 源`)
 
   setInterval(() => void stateLoop(), 1000)
 

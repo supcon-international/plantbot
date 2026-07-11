@@ -20,11 +20,33 @@ const log = makeLog('deepro-adp')
 const DR_HOST = process.env.DR_HOST ?? '127.0.0.1'
 const DR_PORT = Number(process.env.DR_PORT ?? 30000)
 const STREAM_BASE = (process.env.STREAM_BASE ?? '/media').replace(/\/$/, '')
-const SERIAL = process.env.DR_SERIAL ?? 'X30-JY-2024-0007'
+// One X30 adapter per site — DR_PROFILE selects identity + channels + key.
+const DR_PROFILES = {
+  plant12: {
+    serial: 'X30-JY-2024-0007',
+    callsign: 'X30·HB',
+    key: 'pbk_dev_plant12',
+    streams: [
+      { id: 'x30hb-optical', name: 'Front optical', kind: 'camera', file: 'substation.mp4' },
+      { id: 'x30hb-therm', name: 'Thermal', kind: 'thermal', file: 'thermal.mp4' },
+    ],
+  },
+  campus: {
+    serial: 'X30-JY-2024-0031',
+    callsign: 'X30·CE',
+    key: 'pbk_dev_campuseast',
+    streams: [
+      { id: 'x30ce-optical', name: 'Front optical', kind: 'camera', file: 'night_walkway.mp4' },
+      { id: 'x30ce-therm', name: 'Thermal', kind: 'thermal', file: 'thermal.mp4' },
+    ],
+  },
+} as const
+const DR_PROFILE = DR_PROFILES[(process.env.DR_PROFILE as keyof typeof DR_PROFILES) ?? 'plant12'] ?? DR_PROFILES.plant12
+const SERIAL = process.env.DR_SERIAL ?? DR_PROFILE.serial
 // 充电桩坐标（世界系）——真实部署中由集成方标定
 const DOCK = { x: Number(process.env.DR_DOCK_X ?? -11), z: Number(process.env.DR_DOCK_Z ?? -6) }
 
-const plantbot = new PlantbotClient({ key: process.env.PLANTBOT_KEY ?? 'pbk_dev_plant12', log })
+const plantbot = new PlantbotClient({ key: process.env.PLANTBOT_KEY ?? DR_PROFILE.key, log })
 
 // 机器人地图系（x 东, y 北, yaw 弧度）↔ 站点世界系（x 东, z 南）
 const toWorld = (s: { PosX: number; PosY: number }) => ({ x: s.PosX, z: -s.PosY })
@@ -265,17 +287,14 @@ async function main() {
     serial: SERIAL,
     model: 'Jueying X30',
     vendor: 'DeepRobotics 云深处',
-    callsign: 'X30·EXT',
+    callsign: DR_PROFILE.callsign,
     family: 'quadruped',
     level: 'dispatchable',
     protocol: 'robotserver_sdk wire (TCP EB90 + PatrolDevice XML)',
     home: toWorld(first),
-    streams: [
-      { id: 'x30ext-front', name: 'Front optical', kind: 'camera', url: `${STREAM_BASE}/substation.mp4` },
-      { id: 'x30ext-thermal', name: 'Thermal', kind: 'thermal', url: `${STREAM_BASE}/thermal.mp4` },
-    ],
+    streams: DR_PROFILE.streams.map((s) => ({ id: s.id, name: s.name, kind: s.kind, url: `${STREAM_BASE}/${s.file}` })),
   })
-  log.info('X30 已注册 → plant-12（协议无 payload 读数面，readings 不上报）')
+  log.info(`${DR_PROFILE.callsign}（${SERIAL}）已注册 · robotserver 无 payload 读数面`)
 
   // 1 Hz：1002 轮询 → state（robotserver 无推送，轮询即官方姿势）
   setInterval(async () => {

@@ -20,20 +20,27 @@ sim 的唯一职责是把官方协议的 server 面演到以假乱真（包括�
 
 ## 2. 拓扑与进程
 
+平台是**纯集成层**——`sites.ts` 的 `def.robots` 恒为空,三个场站的机器人全部经 adaptor 接入,
+没有平台原生仿真机队。`pnpm dev` 拉起 10 个进程（每个「场站×厂商」一对 sim/adapter）:
+
 ```
-┌─────────────────────────── pnpm dev ───────────────────────────┐
-│ server :8787 (platform)      web :5173 (vite)                  │
-│                                                                 │
-│ integrations/ (six standalone node processes)                   │
-│  spot-sim        :9103 gRPC(bosdyn.api, 59 官方 proto)          │
-│    ⇅ spot-adapter        — mini bosdyn-client → plant-07        │
-│  deeprobotics-sim :9102 TCP(EB90 二进制帧头+XML, robotserver)    │
-│    ⇅ deeprobotics-adapter — robotserver client → plant-12       │
-│  gosuncn-sim     :9101 HTTP+WS(/robotservice/**.action + 推送)  │
-│    ⇅ gosuncn-adapter      — GoRobot cloud client → campus-east  │
-└─────────────────────────────────────────────────────────────────┘
+┌───────────────────────────── pnpm dev ─────────────────────────────┐
+│ server :8787 (pure integration layer)   web :5173 (vite)           │
+│                                                                     │
+│ integrations/ (10 standalone node processes)                        │
+│  plant-07  spot-sim :9103  ⇅ spot-adapter(SPOT_PROFILE=plant07)     │  SPOT·A
+│  plant-12  dr-sim  :30000  ⇅ dr-adapter(DR_PROFILE=plant12)         │  X30·HB
+│  campus    gosuncn-sim :9101 ⇅ gosuncn-adapter                      │  GS·F2×2
+│  campus    spot-sim :9113  ⇅ spot-adapter(SPOT_PROFILE=campus)      │  SPOT·CE
+│  campus    dr-sim  :30010  ⇅ dr-adapter(DR_PROFILE=campus)          │  X30·CE
+└─────────────────────────────────────────────────────────────────────┘
     adapter 北向统一走 /api/integration/v1(Bearer 场站 key)
+    campus 一屏体现三厂商三 adaptor 协同(Spot + X30 + GS·F2)
 ```
+
+`ROBOT_CATALOG`(`fleet.ts`)与接入向导只列有 adaptor 的三种型号:Spot / Jueying X30 / GS Patrol F2。
+spot/deeprobotics 的 sim+adapter 用 `SPOT_PROFILE`/`DR_PROFILE` 选身份(serial/callsign)+通道命名+场站 key,
+同一份代码起两个实例。
 
 - 每个 sim / adapter 都可**单独启动**：`pnpm --filter integrations sim:spot` 等六条脚本;
   `pnpm dev` 用 `integrations/scripts/dev-all.mjs` 一起拉起（崩溃自动重生,前缀日志）。
