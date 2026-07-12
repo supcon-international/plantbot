@@ -1,0 +1,41 @@
+<script type="text/javascript">
+  RED.nodes.registerType('plantbot-config', {
+    category: 'config',
+    defaults: {
+      name: { value: '' },
+      baseUrl: { value: 'http://127.0.0.1:8787', required: true },
+    },
+    credentials: {
+      apiKey: { type: 'password' },
+    },
+    label: function () {
+      return this.name || this.baseUrl || 'plantbot site'
+    },
+  })
+</script>
+
+<script type="text/html" data-template-name="plantbot-config">
+  <div class="form-row">
+    <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-config-input-name" placeholder="Plant 07" />
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-baseUrl"><i class="fa fa-globe"></i> Base URL</label>
+    <input type="text" id="node-config-input-baseUrl" placeholder="http://plantbot-host:8787" />
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-apiKey"><i class="fa fa-key"></i> Site API key</label>
+    <input type="password" id="node-config-input-apiKey" placeholder="pbk_…" />
+  </div>
+  <div class="form-tips">
+    Issue the key in Plantbot → INTEG → SITE API KEYS. The plaintext is shown
+    exactly once on creation; it is stored here in Node-RED's credential store
+    and never exported with the flow.
+  </div>
+</script>
+
+<script type="text/html" data-help-name="plantbot-config">
+  <p>Connection to one Plantbot site: the platform's base URL and a site-scoped
+  integration API key (<code>pbk_…</code>). All Plantbot nodes reference a
+  config node like this one.</p>
+</script>

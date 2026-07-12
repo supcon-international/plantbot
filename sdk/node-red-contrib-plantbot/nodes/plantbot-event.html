@@ -1,0 +1,39 @@
+<script type="text/javascript">
+  RED.nodes.registerType('plantbot-event', {
+    category: 'plantbot',
+    color: '#c8ff00',
+    defaults: {
+      name: { value: '' },
+      site: { value: '', type: 'plantbot-config', required: true },
+    },
+    inputs: 1,
+    outputs: 0,
+    icon: 'font-awesome/fa-exclamation-triangle',
+    label: function () {
+      return this.name || 'plantbot event'
+    },
+    inputLabels: 'msg.payload = EventReport',
+  })
+</script>
+
+<script type="text/html" data-template-name="plantbot-event">
+  <div class="form-row">
+    <label for="node-input-site"><i class="fa fa-server"></i> Site</label>
+    <input type="text" id="node-input-site" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" />
+  </div>
+</script>
+
+<script type="text/html" data-help-name="plantbot-event">
+  <p>Raises a detection / robot-fault event on the site.</p>
+  <h3>Input</h3>
+  <p><code>msg.payload</code> = <code>{type, robotSerial?, detail?, severity?,
+  x?, z?, confidence?, category?, snapshotUrl?}</code>. <code>type</code> must
+  be an event-type id from the site vocabulary (see INTEG → EVENT VOCABULARY).</p>
+  <p>Set <code>snapshotStream</code> to a registered stream id instead of
+  <code>snapshotUrl</code> and the platform's evidence service grabs a frame
+  from that stream first — the event lands with a hosted snapshot.</p>
+</script>

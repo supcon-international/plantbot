@@ -11,7 +11,7 @@ import WebSocket from 'ws'
 import { createHash } from 'node:crypto'
 import { makeLog } from '../../shared/log.js'
 import { PlantbotClient, type PlantbotOrder } from '../../shared/plantbot.js'
-import { waitForSite, streamsToFactsheet, reportFault, pumpOrders, runWaypointMission, type MissionRun } from '../../shared/bridge.js'
+import { waitForSite, streamsToFactsheet, reportFault, pumpOrders, runWaypointMission, customProfileFromEnv, type MissionRun } from '../../shared/bridge.js'
 
 const log = makeLog('gosuncn-adp')
 
@@ -54,27 +54,41 @@ interface Unit {
   mission?: MissionRun
 }
 
-const UNITS: Unit[] = [
-  {
-    sn: 'F2230204117',
-    serial: 'GSCN-F2-2024-0117',
-    callsign: 'GS·F2-01',
-    level: 'dispatchable',
-    streams: [
-      { id: 'gs1-front', name: 'Front PTZ', kind: 'camera', file: 'campus_quad.mp4' },
-      { id: 'gs1-rear', name: 'Rear camera', kind: 'camera', file: 'theft_cctv.mp4' },
-    ],
-    evidenceStream: 'gs1-rear',
-  },
-  {
-    sn: 'F2230204118',
-    serial: 'GSCN-F2-2024-0118',
-    callsign: 'GS·F2-02',
-    level: 'state-only',
-    streams: [{ id: 'gs2-front', name: 'Front PTZ', kind: 'camera', file: 'campus_walk.mp4' }],
-    evidenceStream: 'gs2-front',
-  },
-]
+const CUSTOM = customProfileFromEnv()
+const UNITS: Unit[] = CUSTOM
+  ? [
+      // managed-connector mode: one connector drives ONE F2 — the vendor SN
+      // (PB_GS_SN) maps the GoRobot cloud robot to this Plantbot identity
+      {
+        sn: process.env.PB_GS_SN ?? CUSTOM.serial,
+        serial: CUSTOM.serial,
+        callsign: CUSTOM.callsign,
+        level: 'dispatchable',
+        streams: CUSTOM.streams as Unit['streams'],
+        evidenceStream: CUSTOM.streams[0]?.id ?? '',
+      },
+    ]
+  : [
+      {
+        sn: 'F2230204117',
+        serial: 'GSCN-F2-2024-0117',
+        callsign: 'GS·F2-01',
+        level: 'dispatchable',
+        streams: [
+          { id: 'gs1-front', name: 'Front PTZ', kind: 'camera', file: 'campus_quad.mp4' },
+          { id: 'gs1-rear', name: 'Rear camera', kind: 'camera', file: 'theft_cctv.mp4' },
+        ],
+        evidenceStream: 'gs1-rear',
+      },
+      {
+        sn: 'F2230204118',
+        serial: 'GSCN-F2-2024-0118',
+        callsign: 'GS·F2-02',
+        level: 'state-only',
+        streams: [{ id: 'gs2-front', name: 'Front PTZ', kind: 'camera', file: 'campus_walk.mp4' }],
+        evidenceStream: 'gs2-front',
+      },
+    ]
 
 // ---- 厂商告警码 → Plantbot 事件类型（campus-east 词表）----
 const ALARM_MAP: Record<number, string> = {

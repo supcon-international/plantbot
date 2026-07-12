@@ -65,12 +65,27 @@ function ConnectGuide({ onClose }: { onClose: () => void }) {
     api.getCatalog().then((c) => setModels(c.models ?? []))
   }, [])
 
+  const [mode, setMode] = useState<'managed' | 'external' | null>(null)
   const [step, setStep] = useState(0)
   const [model, setModel] = useState<RobotModelSpec | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState<string | null>(null)
 
   const launchCmd = model ? (ADAPTER_CMD[model.model]?.(`${location.origin}${BASE}`) ?? '') : ''
-  const steps = [t('fl.wiz.stepModel'), t('fl.wiz.stepGuide')]
+  const steps = [t('fl.wiz.stepMode'), t('fl.wiz.stepModel'), t('fl.wiz.stepGuide')]
+
+  const SDK_TS = `npm i <plantbot>/sdk/adapter-sdk-ts    # @plantbot/adapter-sdk
+
+import { PlantbotClient, waitForSite, pumpOrders } from '@plantbot/adapter-sdk'
+const pb = new PlantbotClient({ base: '${location.origin}${BASE}', key: 'pbk_…' })
+await waitForSite(pb)
+await pb.registerUntilUp({ serial: 'MY-ROBOT-001', model: 'My Robot X1', level: 'dispatchable' })
+setInterval(async () => {
+  const rep = await pb.state('MY-ROBOT-001', { x: 0, z: 0, battery: 80, mode: 'idle' })
+  await pumpOrders(pb, 'MY-ROBOT-001', rep, async (o) => pb.orderStatus(o.id, 'done'))
+}, 1000)`
+  const SDK_NR = `cd ~/.node-red && npm i <plantbot>/sdk/node-red-contrib-plantbot
+# restart Node-RED, then import examples/minimal-adapter-flow.json —
+# plantbot-robot (state 1 Hz) → plantbot-orders → switch(kind) → settle`
 
   return (
     <Modal onClose={onClose} wide title={t('fl.wiz.title')}>
@@ -94,6 +109,36 @@ function ConnectGuide({ onClose }: { onClose: () => void }) {
 
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
           {step === 0 && (
+            <div className="space-y-3">
+              <div className="text-[12.5px] leading-relaxed text-ink-3">{t('fl.wiz.modeIntro')}</div>
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                {(
+                  [
+                    ['managed', t('fl.wiz.modeManaged'), t('fl.wiz.modeManagedDesc')],
+                    ['external', t('fl.wiz.modeExternal'), t('fl.wiz.modeExternalDesc')],
+                  ] as const
+                ).map(([m, title, desc]) => {
+                  const sel = mode === m
+                  return (
+                    <button
+                      key={m}
+                      onClick={() => setMode(m)}
+                      className="panel-hover border p-3.5 text-left"
+                      style={{ borderColor: sel ? 'var(--color-accent)' : 'var(--color-line)' }}
+                    >
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="text-[14px] font-medium text-ink">{title}</span>
+                        {sel && <Check size={13} className="shrink-0 text-accent" />}
+                      </div>
+                      <div className="mt-1.5 text-[12px] leading-relaxed text-ink-3">{desc}</div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {step === 1 && (
             <div className="space-y-3">
               <div className="text-[12.5px] leading-relaxed text-ink-3">{t('fl.wiz.guideIntro')}</div>
               <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
@@ -122,7 +167,7 @@ function ConnectGuide({ onClose }: { onClose: () => void }) {
             </div>
           )}
 
-          {step === 1 && model && (
+          {step === 2 && model && (
             <div className="space-y-4">
               <div className="flex items-center justify-between border-b border-line/60 pb-2.5">
                 <span className="microlabel">{t('fl.wiz.stepModel')}</span>
@@ -141,18 +186,7 @@ function ConnectGuide({ onClose }: { onClose: () => void }) {
               <div>
                 <div className="mb-1.5 flex items-center justify-between">
                   <span className="microlabel">2 · {t('fl.wiz.launch')}</span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      navigator.clipboard?.writeText(launchCmd).catch(() => {})
-                      setCopied(true)
-                      setTimeout(() => setCopied(false), 1600)
-                    }}
-                    className="mono h-auto gap-1 px-2 py-1 text-[10px] normal-case tracking-[0.1em]"
-                  >
-                    <Copy size={10} /> {copied ? t('fl.wiz.copied') : t('fl.wiz.copy')}
-                  </Button>
+                  <CopyBtn text={launchCmd} tag="launch" copied={copied} setCopied={setCopied} t={t} />
                 </div>
                 <pre className="mono overflow-x-auto border border-line bg-surface-2 p-3 text-[11.5px] leading-relaxed text-ink-2">
                   {launchCmd}
@@ -162,6 +196,26 @@ function ConnectGuide({ onClose }: { onClose: () => void }) {
                 <div className="microlabel mb-1">3 · {t('fl.wiz.stepGuide')}</div>
                 <div className="text-[12.5px] leading-relaxed text-ink-2">{t('fl.wiz.autoAppear')}</div>
               </div>
+
+              {/* build-your-own adapter: the SDK in two flavors */}
+              <div className="border-t border-line/60 pt-3">
+                <div className="microlabel mb-1">{t('fl.wiz.sdkTitle')}</div>
+                <div className="mb-2 text-[12.5px] leading-relaxed text-ink-3">{t('fl.wiz.sdkIntro')}</div>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <span className="mono text-[11px] tracking-[0.1em] text-ink-2">TYPESCRIPT · @plantbot/adapter-sdk</span>
+                  <CopyBtn text={SDK_TS} tag="sdkts" copied={copied} setCopied={setCopied} t={t} />
+                </div>
+                <pre className="mono mb-3 overflow-x-auto border border-line bg-surface-2 p-3 text-[10.5px] leading-relaxed text-ink-2">
+                  {SDK_TS}
+                </pre>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <span className="mono text-[11px] tracking-[0.1em] text-ink-2">NODE-RED · node-red-contrib-plantbot</span>
+                  <CopyBtn text={SDK_NR} tag="sdknr" copied={copied} setCopied={setCopied} t={t} />
+                </div>
+                <pre className="mono overflow-x-auto border border-line bg-surface-2 p-3 text-[10.5px] leading-relaxed text-ink-2">
+                  {SDK_NR}
+                </pre>
+              </div>
             </div>
           )}
         </div>
@@ -169,16 +223,36 @@ function ConnectGuide({ onClose }: { onClose: () => void }) {
         <div className="flex items-center justify-between border-t border-line px-4 py-3">
           <Button
             variant="ghost"
-            onClick={() => (step === 0 ? onClose() : setStep(0))}
+            onClick={() => (step === 0 ? onClose() : setStep(step - 1))}
             className="mono px-2 text-[11.5px] normal-case tracking-[0.1em]"
           >
             {step === 0 ? t('c.cancel') : t('fl.wiz.back')}
           </Button>
-          {step === 0 ? (
+          {step === 0 && mode === 'managed' ? (
+            <Button
+              variant="signal"
+              onClick={() => {
+                onClose()
+                nav('/integrations')
+              }}
+              className="mono gap-1.5 px-3.5 text-[11.5px] normal-case tracking-[0.12em]"
+            >
+              {t('fl.wiz.openConnectors')} <ArrowUpRight size={12} />
+            </Button>
+          ) : step === 0 ? (
+            <Button
+              variant="outline"
+              disabled={!mode}
+              onClick={() => setStep(1)}
+              className="mono px-3.5 text-[11.5px] normal-case tracking-[0.12em] text-ink disabled:opacity-40"
+            >
+              {t('fl.wiz.next')}
+            </Button>
+          ) : step === 1 ? (
             <Button
               variant="outline"
               disabled={!model}
-              onClick={() => setStep(1)}
+              onClick={() => setStep(2)}
               className="mono px-3.5 text-[11.5px] normal-case tracking-[0.12em] text-ink disabled:opacity-40"
             >
               {t('fl.wiz.next')}
@@ -199,6 +273,23 @@ function ConnectGuide({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </Modal>
+  )
+}
+
+function CopyBtn({ text, tag, copied, setCopied, t }: { text: string; tag: string; copied: string | null; setCopied: (v: string | null) => void; t: (k: string) => string }) {
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => {
+        navigator.clipboard?.writeText(text).catch(() => {})
+        setCopied(tag)
+        setTimeout(() => setCopied(null), 1600)
+      }}
+      className="mono h-auto gap-1 px-2 py-1 text-[10px] normal-case tracking-[0.1em]"
+    >
+      <Copy size={10} /> {copied === tag ? t('fl.wiz.copied') : t('fl.wiz.copy')}
+    </Button>
   )
 }
 

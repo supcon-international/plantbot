@@ -1,0 +1,54 @@
+<script type="text/javascript">
+  RED.nodes.registerType('plantbot-orders', {
+    category: 'plantbot',
+    color: '#c8ff00',
+    defaults: {
+      name: { value: '' },
+      site: { value: '', type: 'plantbot-config', required: true },
+      serial: { value: '', required: true },
+      intervalS: { value: 5 },
+    },
+    inputs: 1,
+    outputs: 1,
+    icon: 'font-awesome/fa-list-ol',
+    label: function () {
+      return this.name || `orders · ${this.serial || '?'}`
+    },
+    inputLabels: 'settle {orderId,status,note} · anything else = pull now',
+    outputLabels: 'one msg per order (msg.payload = order)',
+  })
+</script>
+
+<script type="text/html" data-template-name="plantbot-orders">
+  <div class="form-row">
+    <label for="node-input-site"><i class="fa fa-server"></i> Site</label>
+    <input type="text" id="node-input-site" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-serial"><i class="fa fa-barcode"></i> Serial</label>
+    <input type="text" id="node-input-serial" placeholder="MY-ROBOT-001" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-intervalS"><i class="fa fa-clock-o"></i> Poll every (s)</label>
+    <input type="number" id="node-input-intervalS" placeholder="5" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" />
+  </div>
+</script>
+
+<script type="text/html" data-help-name="plantbot-orders">
+  <p>The order pump for one robot: pulls pending orders and emits one message
+  per order; settles orders your flow has executed.</p>
+  <h3>Output</h3>
+  <p><code>msg.payload</code> = the order
+  (<code>{id, kind, payload, …}</code>), <code>msg.topic</code> = its kind
+  (<code>goto | mission | announce | pause | resume | abort | ptz</code>).
+  Route with a <code>switch</code> node on <code>msg.topic</code> — that switch
+  is your adapter's capability matrix.</p>
+  <h3>Input</h3>
+  <p>Send <code>msg.payload = {orderId, status: 'done'|'failed', note?}</code>
+  to settle an order. Any other message (e.g. the <code>ordersPending</code>
+  output of <code>plantbot-robot</code>) triggers an immediate pull.</p>
+</script>

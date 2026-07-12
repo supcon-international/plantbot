@@ -1,0 +1,107 @@
+[
+  {
+    "id": "pb-site-1",
+    "type": "plantbot-config",
+    "name": "Plant 07",
+    "baseUrl": "http://127.0.0.1:8787"
+  },
+  {
+    "id": "tick-1hz",
+    "type": "inject",
+    "z": "flow-1",
+    "name": "1 Hz",
+    "props": [{ "p": "payload" }],
+    "repeat": "1",
+    "once": true,
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 130,
+    "y": 120,
+    "wires": [["pose-fn"]]
+  },
+  {
+    "id": "pose-fn",
+    "type": "function",
+    "z": "flow-1",
+    "name": "read pose from my robot",
+    "func": "// Replace with your vendor protocol (Modbus, MQTT, HTTP…)\nconst t = Date.now() / 20000\nmsg.payload = {\n  x: Math.round(Math.cos(t) * 60) / 10,\n  z: Math.round(Math.sin(t) * 40) / 10,\n  battery: 80,\n  mode: 'idle',\n}\nreturn msg",
+    "outputs": 1,
+    "x": 340,
+    "y": 120,
+    "wires": [["robot-1"]]
+  },
+  {
+    "id": "robot-1",
+    "type": "plantbot-robot",
+    "z": "flow-1",
+    "name": "NR·AGV-01",
+    "site": "pb-site-1",
+    "serial": "NR-AGV-001",
+    "model": "Node-RED AGV",
+    "callsign": "NR·AGV-01",
+    "family": "ugv",
+    "level": "dispatchable",
+    "streams": "",
+    "x": 570,
+    "y": 120,
+    "wires": [["orders-1"]]
+  },
+  {
+    "id": "orders-1",
+    "type": "plantbot-orders",
+    "z": "flow-1",
+    "name": "",
+    "site": "pb-site-1",
+    "serial": "NR-AGV-001",
+    "intervalS": 5,
+    "x": 570,
+    "y": 200,
+    "wires": [["kind-switch"]]
+  },
+  {
+    "id": "kind-switch",
+    "type": "switch",
+    "z": "flow-1",
+    "name": "capability matrix",
+    "property": "topic",
+    "propertyType": "msg",
+    "rules": [
+      { "t": "eq", "v": "goto", "vt": "str" },
+      { "t": "else" }
+    ],
+    "checkall": "false",
+    "outputs": 2,
+    "x": 350,
+    "y": 200,
+    "wires": [["exec-goto"], ["reject-fn"]]
+  },
+  {
+    "id": "exec-goto",
+    "type": "function",
+    "z": "flow-1",
+    "name": "drive there, then settle",
+    "func": "// Send the target to your robot, wait for arrival, then settle:\nconst order = msg.payload\nreturn { payload: { orderId: order.id, status: 'done', note: `reached (${order.payload.x}, ${order.payload.z})` } }",
+    "outputs": 1,
+    "x": 350,
+    "y": 260,
+    "wires": [["orders-1"]]
+  },
+  {
+    "id": "reject-fn",
+    "type": "function",
+    "z": "flow-1",
+    "name": "unsupported → failed",
+    "func": "const order = msg.payload\nreturn { payload: { orderId: order.id, status: 'failed', note: `unsupported: ${order.kind}` } }",
+    "outputs": 1,
+    "x": 350,
+    "y": 320,
+    "wires": [["orders-1"]]
+  },
+  {
+    "id": "flow-1",
+    "type": "tab",
+    "label": "Plantbot minimal adapter",
+    "disabled": false
+  }
+]

@@ -11,7 +11,7 @@ import { makeLog } from '../../shared/log.js'
 import { PlantbotClient, type PlantbotOrder } from '../../shared/plantbot.js'
 import {
   waitForSite, streamsToFactsheet, reportFault, pumpOrders, runWaypointMission,
-  pickProfile, type VendorProfile, type MissionRun,
+  pickProfile, customProfileFromEnv, type VendorProfile, type MissionRun,
 } from '../../shared/bridge.js'
 
 const log = makeLog('spot-adp')
@@ -44,7 +44,8 @@ const PROFILES: Record<string, VendorProfile> = {
     ],
   },
 }
-const PROFILE = pickProfile(PROFILES, process.env.SPOT_PROFILE, 'plant07')
+// managed-connector mode (PB_SERIAL set) overrides the built-in demo profiles
+const PROFILE = customProfileFromEnv() ?? pickProfile(PROFILES, process.env.SPOT_PROFILE, 'plant07')
 const SERIAL = PROFILE.serial
 
 const plantbot = new PlantbotClient({ key: process.env.PLANTBOT_KEY ?? PROFILE.key, log })

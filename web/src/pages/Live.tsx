@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
-import { Grid2X2, Focus, Radio } from 'lucide-react'
-import { useApp, api } from '../lib/store'
+import { Grid2X2, Focus, Plus, Radio, X } from 'lucide-react'
+import { toast } from 'sonner'
+import { useApp, useCan, useSite, api } from '../lib/store'
 import { useT } from '../lib/i18n'
 import { FeedPlayer, VideoThumb } from '../components/StreamPlayer'
-import { Panel } from '../components/ui'
+import { Modal, Panel } from '../components/ui'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { utcClock } from '../lib/format'
 import type { Channel, StreamSession } from '../lib/types'
@@ -130,40 +133,60 @@ function FeedTile({ feed }: { feed: Feed }) {
 export function Live() {
   const feeds = useFeeds()
   const t = useT()
+  const isAdmin = useCan('admin')
   const [params, setParams] = useSearchParams()
   const [mode, setMode] = useState<'focus' | 'grid'>('focus')
+  const [adding, setAdding] = useState(false)
   const active = params.get('src') ?? feeds[0]?.stream
   const feed = feeds.find((f) => f.stream === active) ?? feeds[0]
 
   if (feeds.length === 0)
     return (
       <div className="p-6">
-        <div className="skeleton h-64 w-full" />
+        {isAdmin ? (
+          <div className="flex h-64 flex-col items-center justify-center gap-3 border border-line">
+            <span className="mono text-[12px] text-ink-3">{t('live.noFeeds')}</span>
+            <Button variant="signal" size="sm" onClick={() => setAdding(true)} className="mono h-auto gap-1 px-3 py-1.5 text-[11px]">
+              <Plus size={12} /> {t('live.addCamera')}
+            </Button>
+          </div>
+        ) : (
+          <div className="skeleton h-64 w-full" />
+        )}
+        {adding && <AddCameraModal onClose={() => setAdding(false)} />}
       </div>
     )
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-3 p-3 md:p-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-[15px] font-medium text-ink">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="truncate text-[15px] font-medium text-ink">
             {mode === 'focus' ? feed?.name : `${t('live.allFeeds')} · ${feeds.length} ${t('live.channels')}`}
           </div>
         </div>
-        <ToggleGroup type="single" value={mode} onValueChange={(v) => v && setMode(v as typeof mode)} className="hidden md:flex">
-          {(
-            [
-              ['focus', Focus, t('live.focus')],
-              ['grid', Grid2X2, t('live.wall')],
-            ] as const
-          ).map(([m, Icon, label]) => (
-            <ToggleGroupItem key={m} value={m} className="gap-1.5 px-3 data-[state=on]:bg-surface-2 data-[state=on]:text-ink">
-              <Icon size={13} strokeWidth={1.5} />
-              <span className="mono text-[12px] tracking-[0.08em]">{label}</span>
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
+        <div className="flex shrink-0 items-center gap-2">
+          {isAdmin && (
+            <Button variant="outline" size="sm" onClick={() => setAdding(true)} className="mono h-auto gap-1 px-2.5 py-1.5 text-[11px] normal-case tracking-[0.08em]">
+              <Plus size={12} /> {t('live.addCamera')}
+            </Button>
+          )}
+          <ToggleGroup type="single" value={mode} onValueChange={(v) => v && setMode(v as typeof mode)} className="hidden md:flex">
+            {(
+              [
+                ['focus', Focus, t('live.focus')],
+                ['grid', Grid2X2, t('live.wall')],
+              ] as const
+            ).map(([m, Icon, label]) => (
+              <ToggleGroupItem key={m} value={m} className="gap-1.5 px-3 data-[state=on]:bg-surface-2 data-[state=on]:text-ink">
+                <Icon size={13} strokeWidth={1.5} />
+                <span className="mono text-[12px] tracking-[0.08em]">{label}</span>
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </div>
       </div>
+      {adding && <AddCameraModal onClose={() => setAdding(false)} />}
 
       {mode === 'focus' ? (
         <>
@@ -217,5 +240,66 @@ export function Live() {
         </div>
       )}
     </div>
+  )
+}
+
+/** quick-add for a fixed RTSP camera — the server appends it to the site
+ *  geometry and the new channel arrives over the WS geo frame */
+function AddCameraModal({ onClose }: { onClose: () => void }) {
+  const t = useT()
+  const siteId = useSite((s) => s.siteId)
+  const [name, setName] = useState('')
+  const [rtsp, setRtsp] = useState('')
+  const [place, setPlace] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  const create = async () => {
+    if (!name.trim() || busy) return
+    setBusy(true)
+    setErr('')
+    const r = await api.addCamera(siteId, { name: name.trim(), rtsp: rtsp.trim() || undefined, place: place.trim() || undefined })
+    setBusy(false)
+    if (r.error) {
+      setErr(r.error)
+      return
+    }
+    toast.success(t('live.cameraAdded'))
+    onClose()
+  }
+
+  return (
+    <Modal onClose={onClose} title={t('live.addCamera')}>
+      <div className="flex flex-col">
+        <div className="flex items-center justify-between border-b border-line px-4 py-3">
+          <span className="microlabel">{t('live.addCamera')}</span>
+          <Button variant="ghost" size="iconSm" onClick={onClose} aria-label="close">
+            <X size={16} />
+          </Button>
+        </div>
+        <div className="space-y-3 p-4">
+          <div>
+            <div className="microlabel mb-1">{t('live.camName')}</div>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Gate North PTZ" autoFocus className="mono h-auto bg-surface-2 py-1.5 text-[12px]" />
+          </div>
+          <div>
+            <div className="microlabel mb-1">{t('live.camRtsp')}</div>
+            <Input value={rtsp} onChange={(e) => setRtsp(e.target.value)} placeholder="rtsp://user:pass@10.0.0.4:554/stream1" className="mono h-auto bg-surface-2 py-1.5 text-[12px]" />
+            <div className="mt-0.5 text-[10.5px] leading-snug text-ink-3">{t('live.camRtspHint')}</div>
+          </div>
+          <div>
+            <div className="microlabel mb-1">{t('live.camPlace')}</div>
+            <Input value={place} onChange={(e) => setPlace(e.target.value)} placeholder={t('live.camPlacePh')} className="mono h-auto bg-surface-2 py-1.5 text-[12px]" />
+          </div>
+          {err && <div className="mono border border-crit/40 bg-crit/10 px-2.5 py-1.5 text-[12px]" style={{ color: 'var(--color-crit)' }}>{err}</div>}
+        </div>
+        <div className="flex items-center justify-end gap-2 border-t border-line px-4 py-3">
+          <Button variant="ghost" onClick={onClose} className="mono h-auto px-3 py-1.5 text-[11px]">{t('c.cancel')}</Button>
+          <Button variant="signal" disabled={!name.trim() || busy} onClick={create} className="mono h-auto px-4 py-1.5 text-[11px] disabled:opacity-30">
+            {t('live.addCamera')}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   )
 }

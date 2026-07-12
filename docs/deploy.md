@@ -69,10 +69,12 @@ Restart=on-failure
 
 1. 管理员登录 → SITES → NEW SITE（名称即 id slug）。
 2. Site Builder：MAP 上传 SLAM 占据栅格 PNG（分辨率/原点按 ROS map.yaml 换算,内建两点比例尺测量）→ FIT BOUNDS。
-3. +WP 点选放航点（一个设为 DOCK）、+ZONE 画区域、CAMS 填 RTSP 摄像头 → SAVE（实时生效）。
+3. +WP 点选放航点（一个设为 DOCK）、+ZONE 画区域、CAMS 填 RTSP 摄像头 → SAVE（实时生效）。临时补一路固定摄像头也可以直接在 LIVE 页 ADD CAMERA。
 4. CALIB 标定厂商坐标系（如 GoRobot 激光图 px→米）：取 ≥2 组对应点求解,保存 Transform,一键复制 adapter 环境变量。
-5. INTEG 面板签发场站 API key（**明文只显示一次**,库里存哈希）→ 填进 adapter 的 `PLANTBOT_KEY`。
-6. 起 adapter（见下节）→ 机器人自动注册出现在机队。
+5. 接机器人,二选一：
+   - **托管连接器**（平台可直连机器人网络时的首选）：INTEG → MANAGED CONNECTORS → 选厂商填机器人地址/凭证/dock 坐标/相机 rtsp:// → 创建即接入。平台代跑 adapter 子进程（崩溃退避重启、日志面板可查、重启平台自动恢复）,无需手工密钥。
+   - **外部 adapter**（跨网/自有运行时/内置三型号之外）：INTEG 签发场站 API key（**明文只显示一次**,库里存哈希）→ 填进 adapter 的 `PLANTBOT_KEY`,起 adapter（见下节）。SDK 有 TypeScript 与 Node-RED 两种形态（`sdk/`,见 docs/integration.md）。
+6. 机器人自动注册出现在机队。
 
 ### 集成层（simulator/adapter 五对，演示环境）
 

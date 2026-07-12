@@ -2,6 +2,15 @@
 
 把任意品牌的巡检机器人/外部检测系统接入 Plantbot 场站。设计对齐业界既有标准,而不是再发明一套:
 
+## 两种接入模式
+
+| 模式 | 适用 | 操作 |
+| --- | --- | --- |
+| **托管连接器（Managed）** | 平台部署在厂内、能直连机器人网络;型号为内置三种(Spot / X30 / GS F2) | INTEG 面板 → MANAGED CONNECTORS → 选厂商填地址/凭证/机器人相机 rtsp:// → 创建即接入。平台把官方 adapter 作为**受监督子进程**代跑(崩溃退避重启、日志面板可查、随平台启停),北向经回环集成 API + 每次启动重签的内部密钥。 |
+| **外部 adapter（External）** | 跨网部署(平台在云、机器人在厂内)、内置之外的任意型号、或想用自己的运行时 | 签发场站 API Key → 用下述 HTTP 契约自建 adapter。SDK 两种形态:**TypeScript**(`sdk/adapter-sdk-ts`,零依赖 `@plantbot/adapter-sdk`)与 **Node-RED**(`sdk/node-red-contrib-plantbot`,四个节点拖出一个 adapter,南向随意用 Modbus/MQTT/OPC UA 节点)。 |
+
+两种模式落到同一套集成 API——托管只是平台替你跑进程,协议契约完全一致。机器人原生相机以 `rtsp://user:pass@…` 直接写进 factsheet `streams[]`:平台经 go2rtc 中继播放、ffmpeg 抓证据帧,**含凭证的 URL 只对该站 admin 回传**(公开面 fleet/channels/WS 一律剥除)。
+
 | 借鉴 | 用在哪里 |
 | --- | --- |
 | **VDA 5050**(factsheet / state / order / instantAction 语义) | 注册消息=factsheet;`state` 上报;`orders` 拉取执行 |
@@ -178,3 +187,35 @@ while True:
     requests.post(f'{B}/robots/PY-01/state', headers=K, json={'x':x,'z':z,'speed':0.5 if target else 0,'battery':88,'mode':'navigating' if target else 'idle'})
     time.sleep(1)
 ```
+
+## SDK（两种形态）
+
+同一套契约的两个官方封装,都在 `sdk/`:
+
+**TypeScript — `@plantbot/adapter-sdk`**（`sdk/adapter-sdk-ts`,Node ≥18 零依赖;仓库内 `workspace:*`,体外 `npm i <repo>/sdk/adapter-sdk-ts`）。传输错误永不 throw(adapter 必须活过平台重启):
+
+```ts
+import { PlantbotClient, waitForSite, pumpOrders } from '@plantbot/adapter-sdk'
+const pb = new PlantbotClient({ base: 'http://plantbot:8787', key: process.env.PLANTBOT_KEY! })
+await waitForSite(pb)
+await pb.registerUntilUp({ serial: 'MY-01', model: 'My Robot X1', level: 'dispatchable',
+  streams: [{ id: 'front', name: 'Front', url: 'rtsp://user:pw@10.0.0.9:554/ch1' }] })
+setInterval(async () => {
+  const rep = await pb.state('MY-01', { x: 0, z: 0, battery: 80, mode: 'idle' })
+  await pumpOrders(pb, 'MY-01', rep, async (o) => pb.orderStatus(o.id, 'done'))
+}, 1000)
+```
+
+仓库内置的三个厂商 adapter 就 import 这个包(`integrations/shared` 是薄 re-export)——SDK 源码即平台自跑的客户端,永不漂移。
+
+**Node-RED — `node-red-contrib-plantbot`**（`sdk/node-red-contrib-plantbot`,Node-RED ≥3.0）:
+
+```bash
+cd ~/.node-red && npm i <repo>/sdk/node-red-contrib-plantbot   # 重启 Node-RED
+```
+
+四个节点:`plantbot-config`(站点+密钥,凭证存 Node-RED credential store 不随 flow 导出) /
+`plantbot-robot`(部署即注册,输入=1Hz 状态上报,输出=ordersPending) /
+`plantbot-orders`(订单泵:输出每单一条 msg、`msg.topic`=kind,用 switch 节点路由——那就是你的能力矩阵;输入 `{orderId,status,note}` 回报) /
+`plantbot-event`(事件上报,`snapshotStream` 自动经平台证据服务抓帧)。
+示例流 `examples/minimal-adapter-flow.json`:inject 1Hz → function(读你的机器人) → robot → orders → switch(kind) → 执行 → 回报。

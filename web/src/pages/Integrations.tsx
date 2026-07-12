@@ -1,16 +1,18 @@
-// Admin panel for the open integration API: site keys, external units,
-// custom event vocabulary, occupancy-map upload (ROS map_server convention).
+// Admin panel for the open integration API: managed connectors (platform-run
+// vendor adapters), site keys, external units, custom event vocabulary,
+// occupancy-map upload (ROS map_server convention).
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { KeyRound, Plug, Copy, Trash2, Upload, Tags, ListOrdered, RefreshCw } from 'lucide-react'
+import { Check, Cpu, KeyRound, Plug, Copy, Trash2, Upload, Tags, ListOrdered, RefreshCw, X } from 'lucide-react'
+import { toast } from 'sonner'
 import { api, useApp, useCan, useSite } from '../lib/store'
 import { BASE } from '../lib/base'
 import { useT } from '../lib/i18n'
-import { Panel, PanelHead } from '../components/ui'
+import { Modal, Panel, PanelHead } from '../components/ui'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table'
-import type { AdapterOrder, ApiKeyRec, EventTypeDef, ExternalUnit, Severity, SiteMapMeta } from '../lib/types'
+import type { AdapterOrder, ApiKeyRec, Connector, ConnectorCatalogEntry, ConnectorField, EventTypeDef, ExternalUnit, Severity, SiteMapMeta } from '../lib/types'
 import { SEVERITY_COLOR } from '../lib/types'
 
 interface Summary {
@@ -104,6 +106,9 @@ export function Integrations() {
         </div>
         <p className="microlabel mt-1">{t('integ.sub')}</p>
       </div>
+
+      {/* ---------- managed connectors (platform runs the adapter) ---------- */}
+      <ConnectorsPanel siteId={siteId} />
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* ---------- API keys ---------- */}
@@ -361,5 +366,294 @@ curl -X POST ${curlBase}/events -H 'authorization: Bearer ${demoKey}' \\
         </pre>
       </Panel>
     </div>
+  )
+}
+
+// ---------- managed connectors (platform-hosted vendor adapters) ----------
+
+const STATUS_DOT: Record<string, string> = {
+  running: 'var(--color-ok)',
+  backoff: 'var(--color-warn, #e0a400)',
+  stopped: 'var(--color-ink-3)',
+}
+
+function ConnectorsPanel({ siteId }: { siteId: string }) {
+  const t = useT()
+  const [connectors, setConnectors] = useState<Connector[]>([])
+  const [catalog, setCatalog] = useState<ConnectorCatalogEntry[]>([])
+  const [creating, setCreating] = useState(false)
+  const [logsFor, setLogsFor] = useState<Connector | null>(null)
+
+  const reload = useCallback(() => {
+    api
+      .connectors(siteId)
+      .then((d: { connectors?: Connector[]; catalog?: ConnectorCatalogEntry[]; error?: string }) => {
+        if (d.error) return
+        setConnectors(d.connectors ?? [])
+        setCatalog(d.catalog ?? [])
+      })
+      .catch(() => {})
+  }, [siteId])
+
+  useEffect(() => {
+    reload()
+    const timer = setInterval(reload, 8000) // runtime status drifts (backoff → running)
+    return () => clearInterval(timer)
+  }, [reload])
+
+  const act = async (c: Connector, action: 'start' | 'stop' | 'restart') => {
+    const r = await api.connectorAction(siteId, c.id, action)
+    if (r.error) toast.error(r.error)
+    reload()
+  }
+  const remove = async (c: Connector) => {
+    if (!confirm(t('conn.deleteConfirm'))) return
+    const r = await api.deleteConnector(siteId, c.id)
+    if (r.error) toast.error(r.error)
+    reload()
+  }
+
+  return (
+    <Panel>
+      <PanelHead
+        label={
+          <span className="flex items-center gap-2">
+            <Cpu size={13} /> {t('conn.title')}
+            <Button variant="ghost" size="iconSm" onClick={reload} className="ml-auto size-6 hover:bg-transparent" aria-label="refresh">
+              <RefreshCw size={12} />
+            </Button>
+          </span>
+        }
+      />
+      <div className="space-y-2 p-3">
+        <p className="text-[12.5px] leading-relaxed text-ink-3">{t('conn.sub')}</p>
+        {connectors.map((c) => (
+          <div key={c.id} className="flex flex-wrap items-center gap-2.5 border border-line bg-surface-2 p-2.5">
+            <span className="live-dot shrink-0" style={{ background: STATUS_DOT[c.runtime.status] }} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-baseline gap-2">
+                <span className="mono text-[12.5px] text-ink">{c.name}</span>
+                <span className="truncate text-[11.5px] text-ink-3">
+                  {catalog.find((v) => v.vendor === c.vendor)?.model ?? c.vendor} · {String(c.config.serial ?? c.config.sn ?? '')}
+                </span>
+              </div>
+              <div className="microlabel mt-0.5">
+                {t(`conn.status.${c.runtime.status}`)}
+                {c.runtime.pid ? ` · pid ${c.runtime.pid}` : ''}
+                {c.runtime.restarts > 0 ? ` · ${t('conn.restarts')} ${c.runtime.restarts}` : ''}
+                {c.runtime.status !== 'running' && c.runtime.lastExit ? ` · ${c.runtime.lastExit}` : ''}
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              {c.enabled ? (
+                <>
+                  <Button variant="ghost" size="sm" onClick={() => act(c, 'restart')} className="mono h-auto px-1.5 py-0.5 text-[10.5px] normal-case tracking-normal hover:bg-transparent">
+                    {t('conn.restart')}
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => act(c, 'stop')} className="mono h-auto px-1.5 py-0.5 text-[10.5px] normal-case tracking-normal hover:bg-transparent">
+                    {t('conn.stop')}
+                  </Button>
+                </>
+              ) : (
+                <Button variant="ghost" size="sm" onClick={() => act(c, 'start')} className="mono h-auto px-1.5 py-0.5 text-[10.5px] normal-case tracking-normal hover:bg-transparent text-accent">
+                  {t('conn.start')}
+                </Button>
+              )}
+              <Button variant="ghost" size="sm" onClick={() => setLogsFor(c)} className="mono h-auto px-1.5 py-0.5 text-[10.5px] normal-case tracking-normal hover:bg-transparent">
+                {t('conn.logs')}
+              </Button>
+              <Button variant="ghost" size="iconSm" onClick={() => remove(c)} aria-label="delete" className="hover:text-crit">
+                <Trash2 size={13} />
+              </Button>
+            </div>
+          </div>
+        ))}
+        {!connectors.length && <p className="mono text-[11.5px] text-ink-3">{t('conn.none')}</p>}
+        <Button variant="signal" size="sm" onClick={() => setCreating(true)} className="mono h-auto px-3 py-1.5 text-[11px]">
+          + {t('conn.new')}
+        </Button>
+      </div>
+      {creating && (
+        <NewConnectorModal
+          siteId={siteId}
+          catalog={catalog}
+          onClose={() => setCreating(false)}
+          onCreated={() => {
+            setCreating(false)
+            reload()
+          }}
+        />
+      )}
+      {logsFor && <ConnectorLogsModal siteId={siteId} connector={logsFor} onClose={() => setLogsFor(null)} />}
+    </Panel>
+  )
+}
+
+function FieldInput({ f, value, onChange }: { f: ConnectorField; value: string; onChange: (v: string) => void }) {
+  return (
+    <div>
+      <div className="microlabel mb-1">
+        {f.label}
+        {f.required && <span className="text-crit"> *</span>}
+      </div>
+      <Input
+        type={f.type === 'password' ? 'password' : f.type === 'number' ? 'number' : 'text'}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={f.placeholder}
+        className="mono h-auto bg-surface-2 py-1.5 text-[12px]"
+      />
+      {f.hint && <div className="mt-0.5 text-[10.5px] leading-snug text-ink-3">{f.hint}</div>}
+    </div>
+  )
+}
+
+function NewConnectorModal({
+  siteId,
+  catalog,
+  onClose,
+  onCreated,
+}: {
+  siteId: string
+  catalog: ConnectorCatalogEntry[]
+  onClose: () => void
+  onCreated: () => void
+}) {
+  const t = useT()
+  const [vendor, setVendor] = useState<ConnectorCatalogEntry | null>(null)
+  const [name, setName] = useState('')
+  const [cfg, setCfg] = useState<Record<string, string>>({})
+  const [streams, setStreams] = useState<{ name: string; url: string; kind: string }[]>([])
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  const setField = (k: string, v: string) => setCfg((c) => ({ ...c, [k]: v }))
+
+  const create = async () => {
+    if (!vendor || busy) return
+    setBusy(true)
+    setErr('')
+    const r = await api.createConnector(siteId, {
+      vendor: vendor.vendor,
+      name: name.trim(),
+      config: { ...cfg, streams: streams.filter((s) => s.name.trim() && s.url.trim()) },
+    })
+    setBusy(false)
+    if (r.error) {
+      setErr(r.error)
+      return
+    }
+    toast.success(t('conn.created'))
+    onCreated()
+  }
+
+  return (
+    <Modal onClose={onClose} wide title={t('conn.new')}>
+      <div className="flex max-h-[86dvh] flex-col">
+        <div className="flex items-center justify-between border-b border-line px-4 py-3">
+          <span className="microlabel">{t('conn.new')}</span>
+          <Button variant="ghost" size="iconSm" onClick={onClose} aria-label="close">
+            <X size={16} />
+          </Button>
+        </div>
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+          {/* vendor pick */}
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+            {catalog.map((v) => {
+              const sel = vendor?.vendor === v.vendor
+              return (
+                <button
+                  key={v.vendor}
+                  onClick={() => setVendor(v)}
+                  className="panel-hover border p-3 text-left"
+                  style={{ borderColor: sel ? 'var(--color-accent)' : 'var(--color-line)' }}
+                >
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-[13.5px] font-medium text-ink">{v.model}</span>
+                    {sel && <Check size={13} className="shrink-0 text-accent" />}
+                  </div>
+                  <div className="microlabel mt-0.5">{v.title}</div>
+                </button>
+              )
+            })}
+          </div>
+
+          {vendor && (
+            <>
+              <div>
+                <div className="microlabel mb-1">{t('conn.name')}</div>
+                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={`${vendor.model} · west wing`} className="mono h-auto bg-surface-2 py-1.5 text-[12px]" />
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {[...vendor.identity, ...vendor.fields].map((f) => (
+                  <FieldInput key={f.key} f={f} value={cfg[f.key] ?? ''} onChange={(v) => setField(f.key, v)} />
+                ))}
+              </div>
+
+              {/* robot camera streams (rtsp) */}
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="microlabel">{t('conn.streams')}</span>
+                  <Button variant="outline" size="sm" onClick={() => setStreams((s) => [...s, { name: '', url: '', kind: 'camera' }])} className="mono h-auto px-2 py-0.5 text-[10px] normal-case tracking-[0.1em]">
+                    + {t('conn.addStream')}
+                  </Button>
+                </div>
+                {streams.map((s, i) => (
+                  <div key={i} className="mb-1.5 flex items-center gap-1.5">
+                    <Input value={s.name} onChange={(e) => setStreams((all) => all.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} placeholder={t('conn.streamName')} className="mono h-auto w-32 bg-surface-2 py-1.5 text-[11.5px]" />
+                    <Input value={s.url} onChange={(e) => setStreams((all) => all.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)))} placeholder="rtsp://user:pass@10.0.0.9:554/ch1" className="mono h-auto min-w-0 flex-1 bg-surface-2 py-1.5 text-[11.5px]" />
+                    <Select value={s.kind} onValueChange={(v) => setStreams((all) => all.map((x, j) => (j === i ? { ...x, kind: v } : x)))}>
+                      <SelectTrigger size="sm" className="mono w-28 bg-surface-2 text-[11px]"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="camera">camera</SelectItem>
+                        <SelectItem value="thermal">thermal</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button variant="ghost" size="iconSm" onClick={() => setStreams((all) => all.filter((_, j) => j !== i))} aria-label="remove stream">
+                      <Trash2 size={12} />
+                    </Button>
+                  </div>
+                ))}
+                <div className="text-[10.5px] leading-snug text-ink-3">{t('conn.streamsHint')}</div>
+              </div>
+
+              {err && <div className="mono border border-crit/40 bg-crit/10 px-2.5 py-1.5 text-[12px]" style={{ color: 'var(--color-crit)' }}>{err}</div>}
+            </>
+          )}
+        </div>
+        <div className="flex items-center justify-end gap-2 border-t border-line px-4 py-3">
+          <Button variant="ghost" onClick={onClose} className="mono h-auto px-3 py-1.5 text-[11px]">{t('c.cancel')}</Button>
+          <Button variant="signal" disabled={!vendor || busy} onClick={create} className="mono h-auto px-4 py-1.5 text-[11px] disabled:opacity-30">
+            {t('conn.create')}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+function ConnectorLogsModal({ siteId, connector, onClose }: { siteId: string; connector: Connector; onClose: () => void }) {
+  const t = useT()
+  const [lines, setLines] = useState<string[]>([])
+  const load = useCallback(() => {
+    api.connectorLogs(siteId, connector.id).then((d: { lines?: string[] }) => setLines(d.lines ?? [])).catch(() => {})
+  }, [siteId, connector.id])
+  useEffect(() => {
+    load()
+    const timer = setInterval(load, 3000)
+    return () => clearInterval(timer)
+  }, [load])
+  return (
+    <Modal onClose={onClose} wide title={t('conn.logs')}>
+      <div className="flex max-h-[80dvh] flex-col">
+        <div className="flex items-center justify-between border-b border-line px-4 py-3">
+          <span className="microlabel">{connector.name} · {t('conn.logs')}</span>
+          <Button variant="ghost" size="iconSm" onClick={onClose} aria-label="close"><X size={16} /></Button>
+        </div>
+        <pre className="mono min-h-40 flex-1 overflow-auto bg-black/40 p-3 text-[10.5px] leading-relaxed text-ink-2">
+          {lines.length ? lines.join('\n') : t('conn.noLogs')}
+        </pre>
+      </div>
+    </Modal>
   )
 }

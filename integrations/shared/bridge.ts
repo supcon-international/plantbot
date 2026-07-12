@@ -1,96 +1,28 @@
-// Northbound boilerplate shared by every adapter — the pieces that carry ZERO
-// vendor-protocol semantics, only Plantbot integration-API etiquette. The
-// southbound side (session dances, wire framing, .action RPC) and each
-// adapter's `switch (order.kind)` capability matrix stay in the vendor files:
-// that switch IS the honest capability surface, don't abstract it away.
+// Adapter-side glue that is NOT part of the public SDK: profile tables for
+// the bundled demo instances and the managed-connector identity env. The
+// northbound etiquette (waitForSite/pumpOrders/runWaypointMission/reportFault)
+// now lives in @plantbot/adapter-sdk and is re-exported here so the bundled
+// adapters keep their import paths. Each adapter's `switch (order.kind)`
+// capability matrix stays in the vendor files: that switch IS the honest
+// capability surface, don't abstract it away.
 
-import type { PlantbotClient, PlantbotOrder, SiteFactsheet } from './plantbot.js'
+export { waitForSite, pumpOrders, reportFault, runWaypointMission, type MissionRun } from '@plantbot/adapter-sdk'
 
-/** poll /site until the platform is up — adapters must outlive platform restarts */
-export async function waitForSite(pb: PlantbotClient, retryMs = 3000): Promise<SiteFactsheet> {
-  for (;;) {
-    const s = await pb.site()
-    if (s) return s
-    await new Promise((r) => setTimeout(r, retryMs))
-  }
-}
-
-/** adapter stream table → factsheet streams (demo loops served from STREAM_BASE) */
+/** adapter stream table → factsheet streams. Demo loops are bare filenames
+ *  served from STREAM_BASE; absolute sources (rtsp://…, http://…, /path)
+ *  pass through untouched — that's how a managed connector publishes the
+ *  robot's native RTSP cameras. */
 export function streamsToFactsheet(
   streams: readonly { id: string; name: string; kind: string; file: string }[],
   base: string,
 ): { id: string; name: string; kind?: string; url?: string }[] {
-  return streams.map((s) => ({ id: s.id, name: s.name, kind: s.kind, url: `${base}/${s.file}` }))
-}
-
-/** vendor-side robot fault → platform 'fault' event (the robot-health stream) */
-export function reportFault(pb: PlantbotClient, serial: string, detail: string): void {
-  void pb.event({ type: 'fault', robotSerial: serial, detail, severity: 'high', category: 'robot-fault' })
-}
-
-/** after a state report: pull pending orders and hand each to the executor */
-export async function pumpOrders(
-  pb: PlantbotClient,
-  serial: string,
-  rep: { ordersPending: number } | null,
-  exec: (order: PlantbotOrder) => void | Promise<void>,
-): Promise<void> {
-  if (!rep || rep.ordersPending <= 0) return
-  for (const order of await pb.pullOrders(serial)) void exec(order)
-}
-
-// ---------- waypoint mission runner ----------
-// Shared by vendors whose protocol has no native multi-point mission (Spot,
-// GoRobot): navigate point-by-point, honor pause/abort, dwell per the step's
-// action durations, settle the order. DeepRobotics does NOT use this — its
-// Type 1003 is natively a multi-point task, one order maps to one 1003.
-
-export interface MissionRun {
-  orderId: string
-  missionId?: string
-  aborted: boolean
-  paused: boolean
-}
-
-export async function runWaypointMission(opts: {
-  pb: PlantbotClient
-  order: PlantbotOrder
-  run: MissionRun
-  waypoints: readonly { id: string; x: number; z: number }[]
-  /** vendor motion primitive — resolve true when the point is reached */
-  navTo: (x: number, z: number) => Promise<{ ok: boolean; note?: string }>
-  /** vendor-flavored completion note */
-  doneNote: (done: number, total: number) => string
-  onSettled?: () => void
-}): Promise<void> {
-  const { pb, order, run, waypoints, navTo } = opts
-  const steps = order.payload.steps ?? []
-  let done = 0
-  for (const step of steps) {
-    if (run.aborted) break
-    while (run.paused && !run.aborted) await new Promise((r) => setTimeout(r, 500))
-    const wp = waypoints.find((w) => w.id === step.waypointId)
-    if (!wp) continue
-    const r = await navTo(wp.x, wp.z)
-    if (!r.ok) {
-      if (!run.aborted) {
-        await pb.orderStatus(order.id, 'failed', `stalled at ${step.waypointId}${r.note ? `: ${r.note}` : ''}`)
-        opts.onSettled?.()
-        return
-      }
-      break
-    }
-    // dwell for the step's action durations — capture/scan happens on-robot
-    const dwell = step.actions?.reduce((s, a) => s + (a.durationS ?? 3), 0) ?? 4
-    await new Promise((r2) => setTimeout(r2, Math.min(dwell, 20) * 1000))
-    done++
-  }
-  await pb.orderStatus(
-    order.id,
-    run.aborted ? 'failed' : 'done',
-    run.aborted ? `aborted after ${done}/${steps.length} waypoints` : opts.doneNote(done, steps.length),
-  )
-  opts.onSettled?.()
+  const abs = /^([a-z][a-z0-9+.-]*:)?\/\//i
+  return streams.map((s) => ({
+    id: s.id,
+    name: s.name,
+    kind: s.kind,
+    url: abs.test(s.file) || s.file.startsWith('/') ? s.file : `${base}/${s.file}`,
+  }))
 }
 
 // ---------- per-site profile selection ----------
@@ -112,4 +44,36 @@ export function pickProfile<T extends Record<string, VendorProfile>>(
   fallback: keyof T,
 ): VendorProfile {
   return table[(envValue as keyof T) ?? fallback] ?? table[fallback]
+}
+
+/** managed-connector identity: when the platform supervises this adapter it
+ *  passes the robot's identity via env instead of a built-in demo profile.
+ *  PB_SERIAL is the switch; PB_STREAMS is a JSON array of
+ *  {id?, name, kind?, url} — rtsp:// URLs publish the robot's native cameras. */
+export function customProfileFromEnv(): VendorProfile | null {
+  const serial = process.env.PB_SERIAL
+  if (!serial) return null
+  let streams: { id: string; name: string; kind: string; file: string }[] = []
+  try {
+    const raw = JSON.parse(process.env.PB_STREAMS ?? '[]') as { id?: string; name?: string; kind?: string; url?: string }[]
+    streams = raw
+      .filter((s) => s?.name && s?.url)
+      .map((s, i) => ({
+        id: s.id || `cam-${i + 1}`,
+        name: s.name!,
+        kind: s.kind ?? 'camera',
+        file: s.url!, // absolute URLs pass through streamsToFactsheet untouched
+      }))
+  } catch {
+    console.error('[bridge] PB_STREAMS is not valid JSON — publishing no streams')
+  }
+  const dx = process.env.PB_DOCK_X
+  const dz = process.env.PB_DOCK_Z
+  return {
+    serial,
+    callsign: process.env.PB_CALLSIGN || serial,
+    key: process.env.PLANTBOT_KEY ?? '',
+    dock: dx !== undefined && dz !== undefined ? { x: Number(dx), z: Number(dz) } : undefined,
+    streams,
+  }
 }

@@ -16,8 +16,14 @@ import {
   listExternals, saveExternal, deleteExternal,
   listEventTypes, saveEventType, deleteEventTypeRec,
   makePersist, loadSiteOps, loadSeqs, queryReadings,
-  type SiteRow, type ExternalRec,
+  listConnectors, getConnector, saveConnector, deleteConnectorRec,
+  type SiteRow, type ExternalRec, type ConnectorRec, type ConnectorVendor,
 } from './config.js'
+import {
+  connectorCatalog, validateConnectorConfig, connectorRuntime, connectorLogs,
+  startConnector, stopConnector, restartConnector, dropConnector,
+  resumeConnectors, stopSiteConnectors, shutdownConnectors,
+} from './connectors.js'
 import { requestUser, requireRole, issueSession, clearSession, login, loginThrottled, publicUser, PUBLIC_VIEW } from './auth.js'
 import { ROBOT_CATALOG, METRIC_DEFS, type Command, type Waypoint, type Zone, type SiteCamera } from './fleet.js'
 import { relayConfigured } from './media.js'
@@ -169,7 +175,7 @@ function helloFrame(w: World) {
     t: 'hello',
     siteId: w.id,
     site: w.site,
-    robots: w.robots,
+    robots: w.publicRobots(),
     cameras: w.publicCameras(),
     waypoints: w.waypoints,
     zones: w.zones,
@@ -335,6 +341,7 @@ app.delete(`/api/sites/:siteId`, { preHandler: requireRole('admin') }, async (re
   for (const c of rooms.get(w.id) ?? []) c.close(4010, 'site deleted')
   rooms.delete(w.id)
   worlds.delete(w.id)
+  stopSiteConnectors(w.id)
   deleteSiteRow(w.id)
   return { ok: true }
 })
@@ -362,6 +369,28 @@ app.put(`/api/sites/:siteId/geometry`, { preHandler: requireRole('admin') }, asy
   w.setGeometry({ waypoints, zones, cameras, dockWp, bounds: b.bounds })
   broadcast(w.id, { t: 'geo', site: w.site, waypoints, zones, cameras: w.publicCameras(), dockWp, channels: w.publicChannels() })
   return { ok: true, waypoints: waypoints.length, zones: zones.length, cameras: cameras.length }
+})
+
+/** add one fixed camera (Video wall's quick-add) — server-side append so a
+ *  client that only saw public (rtsp-stripped) cameras can't clobber the rest */
+app.post(`/api/sites/:siteId/cameras`, { preHandler: requireRole('admin') }, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  const b = (req.body ?? {}) as { name?: string; rtsp?: string; place?: string }
+  const name = (b.name ?? '').trim()
+  const rtsp = (b.rtsp ?? '').trim()
+  if (!name) return reply.code(400).send({ error: 'camera needs a name' })
+  if (rtsp && !rtsp.startsWith('rtsp://')) return reply.code(400).send({ error: 'source must be an rtsp:// URL' })
+  const id = `cam-${String(w.cameras.length + 1).padStart(2, '0')}-${Math.random().toString(16).slice(2, 5)}`
+  const cam: SiteCamera = {
+    id, name, place: (b.place ?? '').trim(), stream: id,
+    rtsp: rtsp || undefined, live: !!rtsp, source: rtsp ? 'RTSP camera' : '—',
+  }
+  const cameras = [...w.cameras, cam]
+  saveGeometry(w.id, { waypoints: w.waypoints, zones: w.zones, cameras })
+  w.setGeometry({ waypoints: w.waypoints, zones: w.zones, cameras, dockWp: w.dockWp })
+  broadcast(w.id, { t: 'geo', site: w.site, waypoints: w.waypoints, zones: w.zones, cameras: w.publicCameras(), dockWp: w.dockWp, channels: w.publicChannels() })
+  return { camera: { ...cam, rtsp: undefined }, ok: true }
 })
 
 /** occupancy upload (Site Builder) — same convention as the integration API */
@@ -423,7 +452,7 @@ app.get(`${S}/fleet`, async (req: FastifyRequest, reply) => {
   // in the Site Builder) get them back; everyone else gets the public shape
   const admin = roleFor(requestUser(req), w.id) === 'admin'
   const cameras = admin ? w.cameras : w.publicCameras()
-  return { site: w.site, robots: w.robots, cameras, waypoints: w.waypoints, zones: w.zones, buildings: w.buildings, dockWp: w.dockWp }
+  return { site: w.site, robots: w.publicRobots(), cameras, waypoints: w.waypoints, zones: w.zones, buildings: w.buildings, dockWp: w.dockWp }
 })
 
 app.get(`${S}/catalog`, async (req: FastifyRequest, reply) => {
@@ -453,7 +482,7 @@ app.delete(`${S}/external-robots/:id`, { preHandler: requireRole('admin') }, asy
   const robot = w.robots.find((r) => r.id === (req.params as P).id)
   if (!robot || !w.removeExternal((req.params as P).id)) return reply.code(404).send({ error: 'not found' })
   deleteExternal(w.id, robot.serial)
-  broadcast(w.id, { t: 'fleet', robots: w.robots })
+  broadcast(w.id, { t: 'fleet', robots: w.publicRobots() })
   return { ok: true }
 })
 
@@ -641,6 +670,98 @@ app.delete(`${S}/api-keys/:id`, { preHandler: requireRole('admin') }, async (req
   if (!w) return
   if (!deleteApiKey(w.id, (req.params as P).id)) return reply.code(404).send({ error: 'not found' })
   return { ok: true }
+})
+
+// -- managed connectors (admin; the platform runs the vendor adapter as a
+//    supervised child process — config carries credentials, admin-only) --
+
+const connectorView = (rec: ConnectorRec) => ({ ...rec, runtime: connectorRuntime(rec.siteId, rec.id) })
+
+app.get(`${S}/connectors`, { preHandler: requireRole('admin') }, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  return { connectors: listConnectors(w.id).map(connectorView), catalog: connectorCatalog() }
+})
+
+app.post(`${S}/connectors`, { preHandler: requireRole('admin') }, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  const b = (req.body ?? {}) as { vendor?: string; name?: string; config?: Record<string, unknown> }
+  const config = b.config ?? {}
+  const bad = validateConnectorConfig(b.vendor ?? '', config)
+  if (bad) return reply.code(400).send({ error: bad })
+  const rec: ConnectorRec = {
+    id: `CN-${Math.random().toString(16).slice(2, 8)}`,
+    siteId: w.id,
+    vendor: b.vendor as ConnectorVendor,
+    name: (b.name ?? '').trim() || `${b.vendor} connector`,
+    config,
+    enabled: true,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  }
+  saveConnector(rec)
+  startConnector(rec)
+  return { connector: connectorView(rec) }
+})
+
+app.patch(`${S}/connectors/:id`, { preHandler: requireRole('admin') }, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  const rec = getConnector(w.id, (req.params as P).id)
+  if (!rec) return reply.code(404).send({ error: 'not found' })
+  const b = (req.body ?? {}) as { name?: string; config?: Record<string, unknown>; enabled?: boolean }
+  if (b.config) {
+    const bad = validateConnectorConfig(rec.vendor, b.config)
+    if (bad) return reply.code(400).send({ error: bad })
+    rec.config = b.config
+  }
+  if (b.name !== undefined) rec.name = b.name.trim() || rec.name
+  if (b.enabled !== undefined) rec.enabled = b.enabled
+  rec.updatedAt = Date.now()
+  saveConnector(rec)
+  if (rec.enabled) restartConnector(rec)
+  else stopConnector(w.id, rec.id)
+  return { connector: connectorView(rec) }
+})
+
+app.delete(`${S}/connectors/:id`, { preHandler: requireRole('admin') }, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  if (!deleteConnectorRec(w.id, (req.params as P).id)) return reply.code(404).send({ error: 'not found' })
+  dropConnector(w.id, (req.params as P).id)
+  return { ok: true }
+})
+
+app.post(`${S}/connectors/:id/:action`, { preHandler: requireRole('admin') }, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  const { id, action } = req.params as P
+  const rec = getConnector(w.id, id)
+  if (!rec) return reply.code(404).send({ error: 'not found' })
+  if (action === 'start') {
+    rec.enabled = true
+    rec.updatedAt = Date.now()
+    saveConnector(rec)
+    startConnector(rec)
+  } else if (action === 'stop') {
+    rec.enabled = false
+    rec.updatedAt = Date.now()
+    saveConnector(rec)
+    stopConnector(w.id, id)
+  } else if (action === 'restart') {
+    restartConnector(rec)
+  } else {
+    return reply.code(404).send({ error: `unknown action '${action}'` })
+  }
+  return { connector: connectorView(rec) }
+})
+
+app.get(`${S}/connectors/:id/logs`, { preHandler: requireRole('admin') }, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  if (!getConnector(w.id, (req.params as P).id)) return reply.code(404).send({ error: 'not found' })
+  return { lines: connectorLogs(w.id, (req.params as P).id) }
 })
 
 // -- integrations summary (admin panel) --
@@ -862,7 +983,7 @@ app.post(`${I}/robots`, async (req: FastifyRequest<{ Body: any }>, reply) => {
   }
   const robot = w.registerExternal(rec)
   saveExternal(w.id, rec)
-  broadcast(w.id, { t: 'fleet', robots: w.robots })
+  broadcast(w.id, { t: 'fleet', robots: w.publicRobots() })
   broadcast(w.id, { t: 'channels', channels: w.publicChannels() })
   return { robot: { id: robot.id, callsign: robot.callsign, integrationLevel: robot.integrationLevel } }
 })
@@ -873,7 +994,7 @@ app.delete(`${I}/robots/:serial`, async (req: FastifyRequest<{ Params: { serial:
   const robot = w.robotBySerial(req.params.serial)
   if (!robot || !w.removeExternal(robot.id)) return reply.code(404).send({ error: 'not found' })
   deleteExternal(w.id, req.params.serial)
-  broadcast(w.id, { t: 'fleet', robots: w.robots })
+  broadcast(w.id, { t: 'fleet', robots: w.publicRobots() })
   return { ok: true }
 })
 
@@ -1048,6 +1169,13 @@ app.server.on('upgrade', (req, socket, head) => {
   wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req))
 })
 
+// managed connectors: resume the enabled ones now that the API is listening
+// (their loopback northbound calls need the server up)
+resumeConnectors((m) => console.log(m))
+
 for (const sig of ['SIGINT', 'SIGTERM'] as const) {
-  process.on(sig, () => process.exit(0))
+  process.on(sig, () => {
+    shutdownConnectors()
+    process.exit(0)
+  })
 }

@@ -2,6 +2,7 @@ packages:
   - server
   - web
   - integrations
+  - sdk/adapter-sdk-ts
 allowBuilds:
   esbuild: true
   protobufjs: true

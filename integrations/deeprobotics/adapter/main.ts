@@ -8,7 +8,7 @@
 import net from 'node:net'
 import { makeLog } from '../../shared/log.js'
 import { PlantbotClient, type PlantbotOrder } from '../../shared/plantbot.js'
-import { waitForSite, streamsToFactsheet, reportFault, pumpOrders, pickProfile, type VendorProfile } from '../../shared/bridge.js'
+import { waitForSite, streamsToFactsheet, reportFault, pumpOrders, pickProfile, customProfileFromEnv, type VendorProfile } from '../../shared/bridge.js'
 import {
   FrameParser, encodeFrame, TYPE, ERROR_STATUS,
   buildRealtimeReq, buildCancelReq, buildQueryReq, buildNavTaskReq, defaultNavPoint,
@@ -45,9 +45,11 @@ const DR_PROFILES: Record<string, VendorProfile> = {
     ],
   },
 }
-const DR_PROFILE = pickProfile(DR_PROFILES, process.env.DR_PROFILE, 'plant12')
+// managed-connector mode (PB_SERIAL set) overrides the built-in demo profiles;
+// its dock comes from PB_DOCK_X/Z (required in the connector form)
+const DR_PROFILE = customProfileFromEnv() ?? pickProfile(DR_PROFILES, process.env.DR_PROFILE, 'plant12')
 const SERIAL = DR_PROFILE.serial
-const DOCK = DR_PROFILE.dock!
+const DOCK = DR_PROFILE.dock ?? { x: 0, z: 0 }
 
 const plantbot = new PlantbotClient({ key: process.env.PLANTBOT_KEY ?? DR_PROFILE.key, log })
 

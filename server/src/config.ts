@@ -253,7 +253,7 @@ export function patchSiteRow(id: string, patch: Partial<Pick<SiteRow, 'name' | '
 
 export function deleteSiteRow(id: string): void {
   inTx(() => {
-    for (const t of ['sites', 'waypoints', 'zones', 'cameras', 'transforms', 'site_maps', 'externals', 'event_types', 'rules', 'templates', 'schedules', 'missions', 'events', 'orders', 'commands', 'readings', 'api_keys'])
+    for (const t of ['sites', 'waypoints', 'zones', 'cameras', 'transforms', 'site_maps', 'externals', 'event_types', 'rules', 'templates', 'schedules', 'missions', 'events', 'orders', 'commands', 'readings', 'api_keys', 'connectors'])
       db.prepare(`DELETE FROM ${t} WHERE ${t === 'sites' ? 'id' : 'site_id'}=?`).run(id)
   })
 }
@@ -362,6 +362,59 @@ export function saveExternal(siteId: string, rec: ExternalRec): void {
 
 export function deleteExternal(siteId: string, serial: string): void {
   db.prepare('DELETE FROM externals WHERE site_id=? AND serial=?').run(siteId, serial)
+}
+
+// ---------- managed connectors (platform-hosted adapters) ----------
+
+export type ConnectorVendor = 'spot' | 'deeprobotics' | 'gosuncn'
+
+export interface ConnectorRec {
+  id: string
+  siteId: string
+  vendor: ConnectorVendor
+  name: string
+  /** connection params + identity + camera streams; credentials live here —
+   *  the row is only ever served on site-admin routes */
+  config: Record<string, unknown>
+  enabled: boolean
+  createdAt: number
+  updatedAt: number
+}
+
+const rowToConnector = (r: Record<string, unknown>): ConnectorRec => ({
+  id: r.id as string,
+  siteId: r.site_id as string,
+  vendor: r.vendor as ConnectorVendor,
+  name: r.name as string,
+  config: JSON.parse(r.config as string),
+  enabled: !!r.enabled,
+  createdAt: r.created_at as number,
+  updatedAt: r.updated_at as number,
+})
+
+export function listConnectors(siteId: string): ConnectorRec[] {
+  return (db.prepare('SELECT * FROM connectors WHERE site_id=? ORDER BY created_at').all(siteId) as Record<string, unknown>[]).map(rowToConnector)
+}
+
+export function listAllConnectors(): ConnectorRec[] {
+  return (db.prepare('SELECT * FROM connectors ORDER BY created_at').all() as Record<string, unknown>[]).map(rowToConnector)
+}
+
+export function getConnector(siteId: string, id: string): ConnectorRec | null {
+  const r = db.prepare('SELECT * FROM connectors WHERE site_id=? AND id=?').get(siteId, id) as Record<string, unknown> | undefined
+  return r ? rowToConnector(r) : null
+}
+
+export function saveConnector(rec: ConnectorRec): void {
+  db.prepare('INSERT OR REPLACE INTO connectors VALUES (?,?,?,?,?,?,?,?)').run(
+    rec.siteId, rec.id, rec.vendor, rec.name, JSON.stringify(rec.config), rec.enabled ? 1 : 0, rec.createdAt, rec.updatedAt)
+}
+
+export function deleteConnectorRec(siteId: string, id: string): boolean {
+  const hit = db.prepare('SELECT 1 FROM connectors WHERE site_id=? AND id=?').get(siteId, id)
+  if (!hit) return false
+  db.prepare('DELETE FROM connectors WHERE site_id=? AND id=?').run(siteId, id)
+  return true
 }
 
 // ---------- custom event vocabulary ----------

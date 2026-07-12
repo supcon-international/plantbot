@@ -317,6 +317,17 @@ export const api = {
   saveTransform: (siteId: string, body: unknown) =>
     apiFetch(`/api/sites/${siteId}/transforms`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json()),
   deleteTransform: (siteId: string, id: string) => apiFetch(`/api/sites/${siteId}/transforms/${id}`, { method: 'DELETE' }),
+  // managed connectors (admin)
+  connectors: (siteId: string) => apiFetch(`/api/sites/${siteId}/connectors`).then((r) => r.json()),
+  createConnector: (siteId: string, body: unknown) =>
+    apiFetch(`/api/sites/${siteId}/connectors`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json()),
+  connectorAction: (siteId: string, id: string, action: 'start' | 'stop' | 'restart') =>
+    apiFetch(`/api/sites/${siteId}/connectors/${id}/${action}`, { method: 'POST' }).then((r) => r.json()),
+  deleteConnector: (siteId: string, id: string) => apiFetch(`/api/sites/${siteId}/connectors/${id}`, { method: 'DELETE' }).then((r) => r.json()),
+  connectorLogs: (siteId: string, id: string) => apiFetch(`/api/sites/${siteId}/connectors/${id}/logs`).then((r) => r.json()),
+  // quick camera add (Video wall)
+  addCamera: (siteId: string, body: { name: string; rtsp?: string; place?: string }) =>
+    apiFetch(`/api/sites/${siteId}/cameras`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json()),
   // users (platform admin)
   listUsers: () => apiFetch('/api/users').then((r) => r.json()),
   createUser: (body: unknown) =>

@@ -1,0 +1,82 @@
+<script type="text/javascript">
+  RED.nodes.registerType('plantbot-robot', {
+    category: 'plantbot',
+    color: '#c8ff00',
+    defaults: {
+      name: { value: '' },
+      site: { value: '', type: 'plantbot-config', required: true },
+      serial: { value: '', required: true },
+      model: { value: '' },
+      vendor: { value: '' },
+      callsign: { value: '' },
+      family: { value: '' },
+      level: { value: 'state-only' },
+      streams: { value: '' },
+    },
+    inputs: 1,
+    outputs: 1,
+    icon: 'font-awesome/fa-android',
+    label: function () {
+      return this.name || this.serial || 'plantbot robot'
+    },
+    inputLabels: 'state report (msg.payload = {x,z,heading,speed,battery,mode})',
+    outputLabels: 'ordersPending (>0)',
+  })
+</script>
+
+<script type="text/html" data-template-name="plantbot-robot">
+  <div class="form-row">
+    <label for="node-input-site"><i class="fa fa-server"></i> Site</label>
+    <input type="text" id="node-input-site" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-serial"><i class="fa fa-barcode"></i> Serial</label>
+    <input type="text" id="node-input-serial" placeholder="MY-ROBOT-001" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-model"><i class="fa fa-cube"></i> Model</label>
+    <input type="text" id="node-input-model" placeholder="AGV X1" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-callsign"><i class="fa fa-flag"></i> Callsign</label>
+    <input type="text" id="node-input-callsign" placeholder="AGV·01" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-family"><i class="fa fa-paw"></i> Family</label>
+    <select id="node-input-family">
+      <option value="">(unset)</option>
+      <option value="quadruped">quadruped</option>
+      <option value="ugv">ugv</option>
+    </select>
+  </div>
+  <div class="form-row">
+    <label for="node-input-level"><i class="fa fa-exchange"></i> Level</label>
+    <select id="node-input-level">
+      <option value="state-only">state-only (monitor)</option>
+      <option value="dispatchable">dispatchable (accepts orders)</option>
+    </select>
+  </div>
+  <div class="form-row">
+    <label for="node-input-streams"><i class="fa fa-video-camera"></i> Streams</label>
+    <input type="text" id="node-input-streams" placeholder='[{"id":"front","name":"Front","url":"rtsp://…"}]' />
+  </div>
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" />
+  </div>
+</script>
+
+<script type="text/html" data-help-name="plantbot-robot">
+  <p>Registers a robot on the Plantbot site (on deploy) and forwards each
+  incoming message as a state report.</p>
+  <h3>Input</h3>
+  <p><code>msg.payload</code> — <code>{x, z, heading?, speed?, battery?, mode?, errors?}</code>.
+  Feed it at ~1 Hz; the report doubles as the heartbeat (&gt;20 s silence →
+  OFFLINE on the platform).</p>
+  <h3>Output</h3>
+  <p>Emits <code>msg.payload = &lt;count&gt;</code> with <code>msg.serial</code>
+  when the platform has orders waiting — wire it to a
+  <code>plantbot-orders</code> node's input to pull immediately.</p>
+  <p><b>Streams</b> is a JSON array; <code>url</code> may be the robot's native
+  <code>rtsp://</code> camera (credentials stay admin-only on the platform).</p>
+</script>

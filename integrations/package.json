@@ -18,7 +18,8 @@
     "@grpc/grpc-js": "^1.13.4",
     "@grpc/proto-loader": "^0.7.15",
     "fastify": "^5.3.2",
-    "ws": "^8.18.2"
+    "ws": "^8.18.2",
+    "@plantbot/adapter-sdk": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

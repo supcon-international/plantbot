@@ -614,6 +614,18 @@ export class World {
     return this.cameras.map(({ rtsp: _rtsp, ...c }) => c)
   }
 
+  /** robots for client consumption — adapter-published payload sources may be
+   *  native rtsp:// URLs with embedded credentials; strip them (playback goes
+   *  through session leases, snapshots through the evidence service) */
+  publicRobots(): RobotSpec[] {
+    const leaky = (p: PayloadSpec) => p.file?.startsWith('rtsp://')
+    return this.robots.map((r) =>
+      r.payloads.some(leaky)
+        ? { ...r, payloads: r.payloads.map((p) => (leaky(p) ? { ...p, file: undefined } : p)) }
+        : r,
+    )
+  }
+
   /** where a snapshot for this stream key comes from (evidence service) */
   frameSource(streamKey: string): FrameSource | null {
     const ch = this.channels().find((c) => c.streamKey === streamKey || c.id === streamKey)

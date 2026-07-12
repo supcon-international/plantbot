@@ -30,7 +30,7 @@ db.exec('PRAGMA foreign_keys = ON')
 
 // ---------- schema ----------
 
-const SCHEMA_VERSION = 1
+const SCHEMA_VERSION = 2
 
 function migrate() {
   const v = (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
@@ -144,6 +144,16 @@ function migrate() {
       payload_id TEXT, quality TEXT, wp TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_readings ON readings (site_id, robot_id, metric, ts);
+    CREATE TABLE IF NOT EXISTS connectors (
+      site_id    TEXT NOT NULL, id TEXT NOT NULL,
+      vendor     TEXT NOT NULL,             -- spot | deeprobotics | gosuncn
+      name       TEXT NOT NULL,
+      config     TEXT NOT NULL,             -- json: connection params + identity + streams
+                                            -- (credentials inside — served on admin routes only)
+      enabled    INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+      PRIMARY KEY (site_id, id)
+    );
   `)
   db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`)
 }

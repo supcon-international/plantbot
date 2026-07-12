@@ -1,0 +1,19 @@
+{
+  "name": "node-red-contrib-plantbot",
+  "version": "0.1.0",
+  "description": "Node-RED nodes for Plantbot's open integration API — register robots, report state, pull & settle orders, raise events. Build a vendor adapter as a flow.",
+  "keywords": ["node-red", "plantbot", "robot", "vda5050", "integration"],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "node-red": {
+    "version": ">=3.0.0",
+    "nodes": {
+      "plantbot-config": "nodes/plantbot-config.js",
+      "plantbot-robot": "nodes/plantbot-robot.js",
+      "plantbot-orders": "nodes/plantbot-orders.js",
+      "plantbot-event": "nodes/plantbot-event.js"
+    }
+  }
+}

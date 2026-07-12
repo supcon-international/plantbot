@@ -130,6 +130,46 @@ export interface ApiKeyRec {
   lastUsedAt?: number
 }
 
+// ---- managed connectors (platform-hosted vendor adapters) ----
+
+export interface ConnectorField {
+  key: string
+  label: string
+  type?: 'text' | 'number' | 'password'
+  required?: boolean
+  placeholder?: string
+  hint?: string
+}
+
+export interface ConnectorCatalogEntry {
+  vendor: string
+  title: string
+  model: string
+  identity: ConnectorField[]
+  fields: ConnectorField[]
+  streamsHint: boolean
+}
+
+export interface ConnectorRuntime {
+  status: 'running' | 'backoff' | 'stopped'
+  pid?: number
+  restarts: number
+  since?: number
+  lastExit?: string
+}
+
+export interface Connector {
+  id: string
+  siteId: string
+  vendor: string
+  name: string
+  config: Record<string, unknown> & { streams?: { name: string; url: string; kind?: string }[] }
+  enabled: boolean
+  createdAt: number
+  updatedAt: number
+  runtime: ConnectorRuntime
+}
+
 export interface ExternalUnit {
   id: string
   serial: string
