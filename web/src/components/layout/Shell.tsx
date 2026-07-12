@@ -41,13 +41,25 @@ const NAV_ADMIN = [
   { to: '/sites', key: 'nav.sites', icon: Building2 },
 ]
 
+/** Tier0 mark (docs.tier0.app favicon) — inlined so subpath deploys need no asset lookup */
+function BrandMark({ size = 26 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 128 128" aria-hidden>
+      <rect width="128" height="128" rx="24" fill="#161616" />
+      <path
+        transform="translate(-293.45 15.6) scale(0.78)"
+        d="M411.795 109.369V14.7228L425.816 0.701172H490.666L504.688 14.7228V109.369L490.666 123.39H425.816L411.795 109.369ZM427.569 14.7228V109.369H488.914V14.7228H427.569Z"
+        fill="#B2ED1D"
+      />
+    </svg>
+  )
+}
+
 function Brand({ compact = false }: { compact?: boolean }) {
   const t = useT()
   return (
     <div className={`flex items-center ${compact ? 'gap-2' : 'gap-3'}`}>
-      <span className="brand-mark" aria-hidden>
-        <span className="brand-mark-core" />
-      </span>
+      <BrandMark size={compact ? 22 : 26} />
       <span className={compact ? '' : 'hidden xl:block'}>
         <span className="block text-[13px] font-semibold tracking-[0.18em] text-ink">PLANTBOT</span>
         {!compact && <span className="mono mt-0.5 block text-[9px] tracking-[0.16em] text-ink-3">{t('shell.brand')}</span>}

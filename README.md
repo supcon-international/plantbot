@@ -79,23 +79,3 @@ ffmpeg   快照抓帧：事件/任务快照直接从本地素材随机时间点�
 
 地图分层遵循行业惯例（InOrbit/Formant 同款）：机器人 SLAM 产出 OccupancyGrid（ROS map_server 三值规范，free=254/unknown=205/occupied=0），后端转 PNG 位图 + 元数据（resolution/origin），前端 canvas 做主题化渲染当底图；waypoint、zone、位姿、规划路径是独立矢量层随 WebSocket 实时更新。路径规划不暴露为可编辑对象——可编辑的只有 waypoint 和 action。
 
-## 真实资源清单
-
-| 资源 | 来源 | 许可 |
-|---|---|---|
-| X30 URDF+STL | [DeepRoboticsLab/deep_robotics_model](https://github.com/DeepRoboticsLab/deep_robotics_model)（云深处官方） | 官方公开模型 |
-| Spot 视觉网格 | [rai-opensource/spot_description](https://github.com/bdaiinstitute/spot_description)（RAI Institute · ROS 2 驱动官方描述包；repo 内含手工压平的 spot.urdf） | MIT |
-| 3DGS 场景 · 工业仓库 | [superspl.at/scene/3eedaa2b](https://superspl.at/scene/3eedaa2b)（SKANOSFERA 扫描的格利维采仓库大厅，XGRIDS PortalCam 采集；SOG→ply→`scripts/level_splat.py` 调平烘焙,天花板剖切） | superspl.at 公开发布 |
-| 巡检视频素材 | [Mixkit](https://mixkit.co/license/#videoFree)（配电室推进/变电站巡视/厂区航拍/烟囱/抽油机） | Mixkit Free License |
-| Spot 机器人整备区实拍 | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Spot_construction_robot.webm) | CC |
-| OccupancyGrid 底图 | `scripts/gen_occupancy.py` 程序化生成（ROS map_server 规范 + SLAM 噪声风格） | — |
-| 字体 IBM Plex | @fontsource | OFL |
-
-## 设计系统
-
-- **单色核心**（暗）：纯黑基底 + 暖白 ink，酸绿 `#b8ee46` 为唯一强调；线框与次级文字刻意加重一档——运营台易读性优先于含蓄
-- **明亮模式**：哑光羊皮纸基底（非亮白，长时间盯屏不刺眼），强调色加深为叶绿 `#4d7a00` 保证对比；3D 白模随主题切换纸板质感
-- **语义色只做状态**：warn / crit 去饱和、双模式各有一套明度，绝不用于装饰
-- **字体**：IBM Plex Sans（UI）+ IBM Plex Mono（数据、微标签、tabular-nums）
-- **机器人识别**：白/银/钢灰三阶 + 形状语义（四足=圆环 marker，轮式=方框 marker）
-- **移动端**：底部 tab bar（safe-area）、看板单列化、地图触控、3D 手势

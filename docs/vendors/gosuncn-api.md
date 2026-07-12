@@ -16,7 +16,7 @@
 ```
 
 - 命名漂移（文档原样，需忠实还原）：机器人主键在不同接口叫 `deviceId`（数据库 id）/ `robotSn`·`deviceSn`·`deviceCode`（SN 码）/ `modelId`；通道叫 `channelId` 或 `cameraId`。
-- 生产平台域名示例：`ab.gorobotop.com`（视频流走 `wss://ab.gorobotop.com:42001/...`）。
+- 生产平台域名示例：`cloud.example-vendor.com`（视频流走 `wss://cloud.example-vendor.com:42001/...`）。
 
 ## 1. 认证
 
@@ -122,7 +122,7 @@
 
 ### GET `/robotservice/device/getVideoUrl.action`
 - Query：`channelId`（摄像头 id）、`protocol` ∈ `websocket|rtsp|rtmp|hls`（建议 websocket + flv.js 播放）。
-- 响应示例：`{ret:1, code:"1000", msg:"操作成功", data:{cameraid:3304, url:"wss://ab.gorobotop.com:42001/2153_183.6.189.130"}}`
+- 响应示例：`{ret:1, code:"1000", msg:"操作成功", data:{cameraid:3304, url:"wss://cloud.example-vendor.com:42001/<session>_<edge-ip>"}}`
 - **获取到的 url 需要在 10 秒内点播，超时需要重新获取**。
 
 ## 4. 告警
@@ -275,17 +275,17 @@ AlarmRecordDTO 关键字段（全表）：
 6. **RobotStatus**（**增量 delta 推送**——「不是全量推，后台有变化才推，接收解析时需要判断是否有该字段」）：
 
 ```json
-{ "data": { "angle": -87.5, "latitude": 39.920886, "longitude": 116.318542, "mapName": "yytxb06131",
-  "robotSn": "F2230204203", "speed": 0, "xPosition": 1769, "yPosition": 162, "ifChargeTask": 0,
+{ "data": { "angle": -87.5, "latitude": 39.9, "longitude": 116.3, "mapName": "<map-name>",
+  "robotSn": "F2230200001", "speed": 0, "xPosition": 1769, "yPosition": 162, "ifChargeTask": 0,
   "charge": "正在充电", "electricity": 100, "voltage": 49.69, "batteryTemp": 37,
-  "longitudeWGS84": 116.30597932616666, "latitudeWGS84": 39.91366923166667, "stopStatus": 0,
+  "longitudeWGS84": 116.3, "latitudeWGS84": 39.9, "stopStatus": 0,
   "mileage": 236143, "currentMileage": 0, "duration": 46834, "currentDuration": 2,
   "isPatrolStop": 1, "planName": "111", "patrolPlanId": 1201,
   "temperature": "33.50", "humidity": "44.90" }, "type": "RobotStatus" }
 ```
 
   - 注意：帧内经纬度注释为 **BD09**，同时带 WGS84 字段；顶层无 sessionId/deviceId（以 robotSn 定位）。
-7. **PatrolCaptureInfo**：`{"data":[{"actionUnitId":43762,"algorithmDetectionImage":"/robotservice/minioservice/robotv2/patrolSnap/….jpeg","beaconPointCode":"207","createTime":"2025-06-17 16:41:45","detectionType":0,"deviceCode":"F2230203115L","deviceId":723,"deviceName":"xx广场","eCode":"abxahb","id":17505780,"lineCode":"2","patrolTime":"2025-06-17 16:41:44","picName":"周界安全","picUrl":"/robotservice/minioservice/robotv2/patrolSnap/….jpeg","uuid":"…"}],"type":"PatrolCaptureInfo"}`
+7. **PatrolCaptureInfo**：`{"data":[{"actionUnitId":43762,"algorithmDetectionImage":"/robotservice/minioservice/robotv2/patrolSnap/….jpeg","beaconPointCode":"207","createTime":"2025-06-17 16:41:45","detectionType":0,"deviceCode":"F2230200002L","deviceId":723,"deviceName":"示例广场","eCode":"<ecode>","id":17505780,"lineCode":"2","patrolTime":"2025-06-17 16:41:44","picName":"周界安全","picUrl":"/robotservice/minioservice/robotv2/patrolSnap/….jpeg","uuid":"…"}],"type":"PatrolCaptureInfo"}`
 
 ## 9. sim / adapter 实现面划分
 

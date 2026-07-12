@@ -186,27 +186,6 @@ textarea:focus-visible {
   border-bottom: 1px solid var(--color-line);
 }
 
-.brand-mark {
-  position: relative;
-  display: grid;
-  width: 24px;
-  height: 24px;
-  flex: none;
-  place-items: center;
-  border: 1px solid var(--color-line-2);
-  background:
-    linear-gradient(90deg, transparent 47%, var(--color-line-2) 48% 52%, transparent 53%),
-    linear-gradient(transparent 47%, var(--color-line-2) 48% 52%, transparent 53%);
-}
-.brand-mark::before {
-  content: '';
-  position: absolute;
-  inset: -1px auto -1px -1px;
-  width: 3px;
-  background: var(--signal);
-}
-.brand-mark-core { width: 5px; height: 5px; background: var(--signal); }
-
 .side-brand [class*='tracking'] { font-family: var(--font-condensed); }
 .side-rail-label {
   display: none;
