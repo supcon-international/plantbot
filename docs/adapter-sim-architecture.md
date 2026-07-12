@@ -49,8 +49,10 @@ spot/deeprobotics 的 sim+adapter 用 `SPOT_PROFILE`/`DR_PROFILE` 选身份(seri
   - Spot：**机直连 gRPC 会话模型**（auth JWT → time-sync → lease keep-alive → estop check-in → power → command）;
   - 云深处：**机直连裸 TCP**（16 字节二进制帧头 + XML 报文,请求/响应靠序列号配对）;
   - 高新兴：**厂商云 REST+WS**（adapter 连的是 GoRobot 云平台,不是机器人;告警/状态从云上转手）。
-- 北向共享客户端 `integrations/shared/plantbot.ts`：注册重试直到平台起来、state 兼心跳、
-  ordersPending 提示拉单、传输错误永不 throw（平台可以比 sim 晚启动、中途重启）。
+- 北向客户端 = **`@plantbot/adapter-sdk`**（`sdk/adapter-sdk-ts`,对外发布的同一个包;
+  `integrations/shared/{plantbot,bridge}.ts` 只是薄 re-export,SDK 与内置 adapter 永不漂移）：
+  注册重试直到平台起来、state 兼心跳、ordersPending 提示拉单、传输错误永不 throw
+  （平台可以比 sim 晚启动、中途重启）。
 
 ### 秘钥交接（adapter onboarding）
 

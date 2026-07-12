@@ -259,7 +259,7 @@ type Command =
    [adapter-sim-architecture.md](adapter-sim-architecture.md)):三家厂商协议忠实还原
    (Spot·官方 proto gRPC / 云深处·robotserver TCP+XML / 高新兴·GoRobot 云 REST+WS),
    adapter 对真机即插。GoRobot adapter 从设想变为实现:tk 保活、告警桥(含平台侧证据抓帧)、
-   px↔米标定、navigateToPoint 派单、一键充电 dock 语义,全部经 25 项 e2e 验证。
+   px↔米标定、navigateToPoint 派单、一键充电 dock 语义,全部经全行为 e2e 套件验证。
    配套平台增量:AdapterOrder 扩至七类(+pause/resume/abort/ptz + goto 的 dock 标志)、
    `POST /integration/v1/snapshot` 证据抓帧服务、`PB_SEED_KEYS`/`PB_DEV_KEYS` 秘钥播种、
    `PB_DATA_DIR` 测试隔离、排程可钉死外部机器人。

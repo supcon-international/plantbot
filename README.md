@@ -4,14 +4,14 @@
 
 ![stack](https://img.shields.io/badge/React_19-Vite_7-e6e8ea) ![3d](https://img.shields.io/badge/three.js-R3F_9-9aa2ab) ![video](https://img.shields.io/badge/Video-local_loops-b8ee46)
 
-**新读者从这里开始** → 平台指南（平实语言,功能模块 / 厂站中心设计 / 两种接入方式）:[中文](docs/guide.zh.md) · [English](docs/guide.en.md)。开放 API 的机器可读定义:[docs/openapi.yaml](docs/openapi.yaml)（OpenAPI 3.0,运行中的平台也在线提供 `GET /api/integration/v1/openapi.json`）。要接入新机器人/新品牌?仓库自带 **Agent Skill** [.claude/skills/robot-adapter](.claude/skills/robot-adapter/SKILL.md)——交给你的 code agent（Claude Code 等;文件夹自包含,可整体拷进自己的工程),由它引导完成外部 adapter 编写或内置厂商接入。
+**新读者从这里开始** → 平台指南（平实语言,功能模块 / 场站中心设计 / 两种接入方式）:[中文](docs/guide.zh.md) · [English](docs/guide.en.md)。开放 API 的机器可读定义:[docs/openapi.yaml](docs/openapi.yaml)（OpenAPI 3.0,运行中的平台也在线提供 `GET /api/integration/v1/openapi.json`）。要接入新机器人/新品牌?仓库自带 **Agent Skill** [.claude/skills/robot-adapter](.claude/skills/robot-adapter/SKILL.md)——交给你的 code agent（Claude Code 等;文件夹自包含,可整体拷进自己的工程),由它引导完成外部 adapter 编写或内置厂商接入。
 
 ## 功能
 
 | 模块 | 说明 |
 |---|---|
 | **OPS** 总览 | 大字 KPI、**实时 3D 作业地图**（占据主区）、fleet strip、检测流（带快照）、任务进度与最近巡检结果——视频统一收在 LIVE 页 |
-| **LIVE** 视频墙 | 9 路巡检画面（Focus / Wall 布局），全部为本地零掉帧环路（原生 video）：机器人载荷视角 + 周界/罐区/桅杆固定机位,含预渲染的**热成像 inferno** 与 **OGI/MWIR** 通道;事件快照压缩到 640w |
+| **LIVE** 视频墙 | 机器人机载相机 + 固定机位一屏聚焦或宫格;**RTSP-first**（生产源经 go2rtc 会话播放,demo 为本地零掉帧环路,含预渲染热成像 inferno 与 OGI/MWIR 通道）;admin 可在页内直接**增删改固定 RTSP 摄像头**;事件快照压缩到 640w |
 | **TASKS** 任务 | Mission = 航点 + 动作序列（拍照/热扫/OGI/气体采样/声学/读表）。创建向导在地图上点选航点、每站配动作；**调度器按优先级/电量/距离自动派单**（VDA5050 式整单交给 adapter）；路径由机器人端 Nav 栈计算，操作员只管目标点。步骤时间线 + 巡检结果记录（真实快照） |
 | **FLEET** 机器人 | 全部经三层集成架构接入的外部机器人（波士顿动力 Spot / 云深处 X30 四足 + 高新兴 GS Patrol F2 轮式）分组管理；接入向导只列有 adaptor 的三种型号；**传感器覆盖矩阵**（optical/thermal/OGI/gas/acoustic/LiDAR × 机型）；X30 与 Spot 带官方 URDF 数字孪生（walk/trot 步态动画），GS·F2 用 silhouette；payload 3D 标注联动 |
 | **MAP** 地图 | 双模式：**OPS MAP**（SLAM OccupancyGrid 栅格底图 → 主题化 canvas 渲染 + waypoint/zone/实时位姿/规划路径矢量层，点击航点即可 teleop 派遣）/ **3D SCAN**（高斯 splat 场景 + 实时 marker） |
@@ -24,7 +24,7 @@
 | **集成开放 API** | 语义对齐 **VDA 5050**（factsheet/state/order），接入级别学 **Open-RMF**（`state-only` / `dispatchable`），地图上传走 **ROS map_server** 约定（PNG+resolution+origin,上传即在 3D 地图渲染底图）;自定义事件类型注册 + ingest + 证据抓帧服务。场站级 API Key,admin 面板管理。详见 [docs/integration.md](docs/integration.md) |
 | **托管连接器 · 界面直连机器人** | INTEG 面板选厂商填**机器人地址/凭证/原生相机 rtsp://** 即接入——平台把官方 adapter 作为**受监督子进程**代跑（崩溃退避重启、日志面板、boot 自动恢复、退出级联回收）,北向走回环集成 API + 每次启动重签的内部密钥。机器人原生 RTSP 相机直接成为视频墙实时通道,含凭证 URL 只对 admin 回传;LIVE 页也可一键添加固定 RTSP 摄像头。跨网场景仍走外部 adapter + 场站 key（接入向导第一步选模式） |
 | **adapter SDK 双形态** | `sdk/adapter-sdk-ts`（**TypeScript** `@plantbot/adapter-sdk`,零依赖,~50 行写一个 adapter;内置三厂商 adapter 就 import 它,SDK 与实战代码永不漂移）+ `sdk/node-red-contrib-plantbot`（**Node-RED** 四节点:config/robot/orders/event + 示例 flow,南向随意接 Modbus/MQTT/OPC UA 节点）——内置三型号之外的机器人由此接入 |
-| **三层集成架构** | **simulator ⇄ adapter ⇄ platform**（Open-RMF fleet-adapter 式）:`integrations/` 里三家厂商各一对独立进程,**忠实还原官方协议**——Boston Dynamics Spot（59 个官方 proto,gRPC 会话舞蹈 auth→timesync→lease→estop→power 全套闸）/ 云深处 X30（robotserver_sdk 裸 TCP `EB90` 帧+XML,1003 终态语义）/ 高新兴 GS F2（GoRobot 云 `.action` RPC + WS 增量推送 + md5 登录 + 10s 流地址）。adapter 对「真机 or sim」零感知,接真机即插;26 项全行为 e2e（`cd integrations && pnpm test`,含托管连接器生命周期）。设计见 [docs/adapter-sim-architecture.md](docs/adapter-sim-architecture.md) |
+| **三层集成架构** | **simulator ⇄ adapter ⇄ platform**（Open-RMF fleet-adapter 式）:`integrations/` 里三家厂商各一对独立进程,**忠实还原官方协议**——Boston Dynamics Spot（59 个官方 proto,gRPC 会话舞蹈 auth→timesync→lease→estop→power 全套闸）/ 云深处 X30（robotserver_sdk 裸 TCP `EB90` 帧+XML,1003 终态语义）/ 高新兴 GS F2（GoRobot 云 `.action` RPC + WS 增量推送 + md5 登录 + 10s 流地址）。adapter 对「真机 or sim」零感知,接真机即插;全行为 e2e 套件（`cd integrations && pnpm test`,起真平台+真 sim+真 adapter,含托管连接器生命周期与开放 API）。设计见 [docs/adapter-sim-architecture.md](docs/adapter-sim-architecture.md) |
 
 ## 快速开始
 
@@ -49,8 +49,8 @@ web/     Vite 7 · React 19 · TS · Tailwind v4 · zustand · react-router 7
            - gaussian-splats-3d → 3DGS 场景（mkkellogg）
          OpsMap：occupancy PNG → canvas 三值主题化（占据=白色激光线）
                  + 真 3D 作业地图（R3F 白模体块 + 轨道相机 + 实时 marker/路径）
-         视频：全部本地环路直出（Range 静态服务,零转码零掉帧）；
-                 6 路巡检环路走原生 <video>（/media 静态直出，零掉帧）
+         视频：demo 环路本地直出（/media Range 静态服务,原生 <video> 零转码零掉帧）；
+                 真 RTSP 源经 go2rtc 会话租约播放（MSE,见 server 侧）
 
 server/  Fastify 5 + ws + @fastify/static（/media，Range）——纯集成层,无运动仿真
            - SQLite 持久层（node:sqlite/WAL）:场站建模/任务/事件/规则/读数全入库,
@@ -70,8 +70,8 @@ integrations/  三层集成（simulator ⇄ adapter ⇄ platform），10 个独�
                         → DR_PROFILE 双实例：plant-12 + campus-east
            - gosuncn/   GoRobot 云 API（.action RPC + Token + WS 推送）；sim=伪厂商云 + F2 行为模型，
                         adapter=登录保活/告警桥/px↔米标定 → campus-east（一对驱动两台 F2）
-           - test/      25 项全行为 e2e：起真平台+真 sim+真 adapter 断言注册/遥测/派单/任务/
-                        事件/读数/dock/故障/掉线恢复/线协议怪癖
+           - test/      全行为 e2e：起真平台+真 sim+真 adapter 断言注册/遥测/派单/任务/
+                        事件/读数/dock/故障/掉线恢复/线协议怪癖/托管连接器/开放 API
 
 ffmpeg   快照抓帧：事件/任务快照直接从本地素材随机时间点截取
            - 热成像 inferno / OGI·MWIR 两路观感由 setup 预渲染成离线环路

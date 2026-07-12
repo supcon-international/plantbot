@@ -78,3 +78,4 @@ Fields that contain video source addresses (with embedded credentials) never lea
 - Machine-readable interface definition: [openapi.yaml](openapi.yaml)
 - Deployment and operations: [deploy.md](deploy.md)
 - The three-layer integration architecture (simulator ⇄ adapter ⇄ platform): [adapter-sim-architecture.md](adapter-sim-architecture.md)
+- Connecting robots with a code agent (Claude Code etc.): the repo ships an Agent Skill at [.claude/skills/robot-adapter](../.claude/skills/robot-adapter/SKILL.md) — hand the folder to your agent
