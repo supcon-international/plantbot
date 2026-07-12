@@ -10,9 +10,9 @@ Plantbot：多场站巡检机器人运营平台——**纯集成层**，机器�
 ## 命令
 
 ```bash
-pnpm install              # 要求 Node ≥ 22.5（平台用内建 node:sqlite;Node 20 已 EOL）
-pnpm run setup            # 必须带 run（裸 `pnpm setup` 是 pnpm 内置命令）；下载素材+X30/Spot URDF+splat
-pnpm dev                  # server :8787（PB_DEMO=1 + PB_DEV_KEYS=1 + 固定 SESSION_SECRET,tsx 重启不丢会话）+ web :5173 + 五对 sim/adapter（12 进程全栈）
+pnpm install              # 要求 Node ≥ 22.22（react-router 8 / vite 8 要求;平台用内建 node:sqlite）
+pnpm run setup            # 必须带 run（裸 `pnpm setup` 是 pnpm 内置命令）；下载素材+X30/Spot URDF+splat+go2rtc(bin/)
+pnpm dev                  # server :8787（PB_DEMO=1 + PB_DEV_KEYS=1 + 固定 SESSION_SECRET + MEDIA_RELAY→:1984）+ web :5173 + go2rtc 中继 + 五对 sim/adapter
 pnpm dev:core             # 仅 server + web（不起集成层）
 WEB_BASE=/robots/ pnpm build   # 生产构建（见下）；本地根路径构建用 pnpm build
 cd server && node_modules/.bin/tsc --noEmit         # 服务端类型检查（无独立 build）
@@ -36,7 +36,7 @@ cd integrations && pnpm test                        # 全行为 e2e（起真平�
 - **场站中心**：路线/地图/检测器/摄像头属于 World，不属于机器人。**场站是数据不是代码**——`sites.ts` 只是 PB_DEMO 首启种子；运行时 `/api/sites` CRUD 动态起停 World+WS 房间；几何（航点/区域/摄像头/dock/bounds）在 **Site Builder**（`/sites/:id`，admin）编辑，PUT `/geometry` 实时生效（WS `geo` 帧）；坐标标定在 Builder 的 CALIB 页（相似变换最小二乘 → transforms 表，可导出 adapter 环境变量）；用户管理在 `/sites` 页（平台 admin）。
 - **六域模型已全量落地**（视频流 Channel+StreamSession / payload Reading+metric 注册表 / 事件 Detector+lifecycle / 任务 Template-Schedule-Run / 建图 Map+Transform / 控制语义化 Command）——动这六域先对照 `docs/platform-model.md`。关键：流地址是**会话资源**（TTL/续期/撤销）；schedule **创建即生效**（无「下发」步骤）；坐标对外**只有世界系一个出口**（其余坐标系经 Transform 在服务端换算）。
 - **调度**：`auto` 任务按能力/电量/距离挑在线的 dispatchable 外部机器人；显式钉死（任务 `requestedRobot` / 排程 `assign:{kind:'robot'}`）的机器人未注册时任务留队，注册后自动派发；**只有 `mission` 类订单的完结才结算平台侧任务**（pause/resume/abort 只是引用）。
-- **视频 RTSP-first**：摄像头/机器人流填 `rtsp://` 即生产源（经 go2rtc 播放、ffmpeg 快照），`file` 为 demo 环路；素材在 `scripts/setup.mjs` 登记；快照源由 `World.frameSource(streamKey)` 从 channel 源解析。LIVE 页有固定摄像头增删改（server 端 POST/PATCH/DELETE `/cameras/:camId` 定点改，防止看不到 rtsp 明文的客户端整组覆盖）。
+- **视频 RTSP-first**：摄像头/机器人流填 `rtsp://` 即生产源（经 go2rtc 播放、ffmpeg 快照），`file` 为 demo 环路；素材在 `scripts/setup.mjs` 登记；快照源由 `World.frameSource(streamKey)` 从 channel 源解析（rtsp 快照用 `-rtsp_transport tcp -timeout`，死源快速失败）。**go2rtc 中继开箱即用**：setup 下载二进制进 `bin/`，dev 经 `scripts/relay.mjs` 起在 :1984 并设 `MEDIA_RELAY`；`media.ts` 每 15s 探测 `<relay>/api` 保持 `relayOnline` 诚实（探测失败/流注册失败即 false，`openSession` 已 await 注册结果）；vite/nginx 反代 `/stream`→:1984。LIVE 页有固定摄像头增删改（server 端 POST/PATCH/DELETE `/cameras/:camId` 定点改，防止看不到 rtsp 明文的客户端整组覆盖）；播放会话是租约，前端 120s 前自动 renew、卸载即 close。
 
 ## 持久层与生产开关
 

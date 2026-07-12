@@ -268,6 +268,12 @@ export const api = {
     sfetch(`/channels/${encodeURIComponent(channelId)}/sessions`, { method: 'POST' }).then(
       (r) => r.json() as Promise<{ session: StreamSession }>,
     ),
+  renewSession: (sid: string) =>
+    sfetch(`/stream-sessions/${encodeURIComponent(sid)}/renew`, { method: 'POST' }).then(
+      (r) => r.json() as Promise<{ session: StreamSession }>,
+    ),
+  closeSession: (sid: string) =>
+    sfetch(`/stream-sessions/${encodeURIComponent(sid)}`, { method: 'DELETE' }).catch(() => {}),
   // readings
   readings: (robotId: string, metric?: string) =>
     sfetch(`/robots/${robotId}/readings${metric ? `?metric=${encodeURIComponent(metric)}` : ''}`).then((r) => r.json()),

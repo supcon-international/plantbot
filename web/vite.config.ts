@@ -27,11 +27,13 @@ export default defineConfig({
   },
   build: {
     chunkSizeWarningLimit: 1600,
-    rollupOptions: {
+    // Vite 8 / Rolldown: manualChunks is gone — codeSplitting.groups replaces it.
+    // Keep the heavy 3D stack (three + splats + urdf) in its own chunk so it
+    // stays behind the React.lazy boundary.
+    rolldownOptions: {
       output: {
-        manualChunks: {
-          // heavy 3D stack loads on demand behind React.lazy
-          three: ['three', '@mkkellogg/gaussian-splats-3d', 'urdf-loader'],
+        advancedChunks: {
+          groups: [{ name: 'three', test: /node_modules\/(three|@mkkellogg\/gaussian-splats-3d|urdf-loader)\// }],
         },
       },
     },

@@ -27,7 +27,7 @@ import {
 } from './connectors.js'
 import { requestUser, requireRole, issueSession, clearSession, login, loginThrottled, publicUser, PUBLIC_VIEW } from './auth.js'
 import { ROBOT_CATALOG, METRIC_DEFS, type Command, type Waypoint, type Zone, type SiteCamera } from './fleet.js'
-import { relayConfigured } from './media.js'
+import { relayConfigured, relayOnline, startRelayHealth } from './media.js'
 import type { DetectionRule, DetectionEvent, Mission, AdapterOrder } from './world.js'
 import type { MissionTemplate, Schedule, Reading } from './fleet.js'
 
@@ -287,7 +287,7 @@ app.delete('/api/users/:username', { preHandler: requireRole('admin') }, async (
 
 // ---------- global ----------
 
-app.get('/api/health', async () => ({ ok: true, ts: Date.now(), demo: DEMO, relay: relayConfigured(), sites: [...worlds.keys()] }))
+app.get('/api/health', async () => ({ ok: true, ts: Date.now(), demo: DEMO, relay: relayConfigured(), relayOnline: relayOnline(), sites: [...worlds.keys()] }))
 
 app.get('/api/sites', async (req) => {
   const u = requestUser(req)
@@ -542,7 +542,7 @@ app.get(`${S}/robots/:id/channels`, async (req: FastifyRequest, reply) => {
 app.post(`${S}/channels/:chId/sessions`, async (req: FastifyRequest, reply) => {
   const w = world(req, reply)
   if (!w) return
-  const s = w.openSession(decodeURIComponent((req.params as P).chId))
+  const s = await w.openSession(decodeURIComponent((req.params as P).chId))
   if (!s) return reply.code(404).send({ error: 'unknown channel' })
   return { session: s }
 })
@@ -1277,6 +1277,9 @@ app.server.on('upgrade', (req, socket, head) => {
   }
   wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req))
 })
+
+// keep relayOnline truthful: probe go2rtc's API on a loop when MEDIA_RELAY is set
+startRelayHealth()
 
 // managed connectors: resume the enabled ones now that the API is listening
 // (their loopback northbound calls need the server up)

@@ -24,7 +24,9 @@ export function loadUrdf(url: string): Promise<URDFRobot> {
   return new Promise((resolve, reject) => {
     const manager = new THREE.LoadingManager()
     const loader = new URDFLoader(manager)
-    loader.loadMeshCb = (path, mgr, done) => {
+    // urdf-loader ≥0.13 passes the parsed vendor material as the 3rd arg; we
+    // skin every mesh ourselves (materialFor), so it's ignored — done is 4th.
+    loader.loadMeshCb = (path, mgr, _material, done) => {
       if (/\.obj$/i.test(path)) {
         // Spot visual meshes — plain geometry, mtllib ignored (we skin them)
         new OBJLoader(mgr).load(

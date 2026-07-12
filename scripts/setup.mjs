@@ -9,7 +9,8 @@
  *  - SKANOSFERA warehouse 3DGS scan (superspl.at), merged from SOG
  *    chunks and leveled by scripts/level_splat.py      → web/public/assets/scenes/
  * Everything is skipped if already present.
- * Host requirements: node ≥ 20, ffmpeg on PATH, python3 with numpy.
+ * Host requirements: node ≥ 22.22, ffmpeg on PATH, python3 with numpy.
+ *   (unzip is used to unpack the go2rtc mac/win zip; present by default.)
  */
 import { mkdirSync, existsSync, writeFileSync, statSync } from 'node:fs'
 import { join, dirname } from 'node:path'
@@ -102,6 +103,47 @@ for (const m of [
 ])
   ROBOT_FILES[`spot/meshes/${m}.obj`] = `${SPOT}/${m}.obj`
 
+// ---------- media relay (go2rtc) — RTSP → MSE for live playback ----------
+// Single static binary, MIT. Bundled so `pnpm dev` can play rtsp:// cameras
+// and robot streams out of the box (scripts/relay.mjs starts it). Optional:
+// a failure here never blocks setup — RTSP just stays offline until a relay is
+// provided (system go2rtc in prod).
+const GO2RTC_VERSION = 'v1.9.14'
+async function relayBinary() {
+  const isWin = process.platform === 'win32'
+  const dest = join(ROOT, 'bin', isWin ? 'go2rtc.exe' : 'go2rtc')
+  if (existsSync(dest) && statSync(dest).size > 1e6) return console.log('  ✓ go2rtc (cached)')
+  const asset = {
+    'darwin-arm64': 'go2rtc_mac_arm64.zip',
+    'darwin-x64': 'go2rtc_mac_amd64.zip',
+    'linux-x64': 'go2rtc_linux_amd64',
+    'linux-arm64': 'go2rtc_linux_arm64',
+    'linux-arm': 'go2rtc_linux_arm',
+    'win32-x64': 'go2rtc_win64.zip',
+  }[`${process.platform}-${process.arch}`]
+  if (!asset) {
+    console.log(`  ⚠ go2rtc: no prebuilt binary for ${process.platform}-${process.arch} — install it manually for RTSP playback`)
+    return
+  }
+  const url = `https://github.com/AlexxIT/go2rtc/releases/download/${GO2RTC_VERSION}/${asset}`
+  mkdirSync(join(ROOT, 'bin'), { recursive: true })
+  try {
+    if (asset.endsWith('.zip')) {
+      const zip = join(ROOT, 'bin', asset)
+      await download(url, zip, `go2rtc ${GO2RTC_VERSION}`)
+      // zip holds a single `go2rtc` (or .exe) binary — extract flat into bin/
+      execSync(`unzip -o -j "${zip}" -d "${join(ROOT, 'bin')}"`, { stdio: 'ignore' })
+      execSync(`rm -f "${zip}"`)
+    } else {
+      await download(url, dest, `go2rtc ${GO2RTC_VERSION}`)
+    }
+    if (!isWin) execSync(`chmod +x "${dest}"`)
+    console.log('  ✓ go2rtc ready')
+  } catch (e) {
+    console.log(`  ⚠ go2rtc download failed (${e.message}) — RTSP playback stays offline until a relay is provided`)
+  }
+}
+
 // ---------- gaussian splat scene ----------
 async function splatScene() {
   const dest = join(ROOT, 'web', 'public', 'assets', 'scenes', 'plant_yard.splat')
@@ -175,7 +217,7 @@ async function filteredFeed(name, srcName, vf) {
   console.log('done')
 }
 
-console.log('[1/3] camera footage (Mixkit free license + Commons)')
+console.log('[1/4] camera footage (Mixkit free license + Commons)')
 for (const [name, url] of Object.entries(FOOTAGE)) await footage(name, url)
 await stagingFeed()
 await filteredFeed('thermal.mp4', 'smokestack.mp4', 'format=gray,format=gbrp,pseudocolor=preset=inferno,scale=960:-2')
@@ -189,12 +231,15 @@ await filteredFeed('ogi.mp4', 'pumpjack.mp4', 'format=gray,eq=contrast=1.55:brig
   }
 }
 
-console.log('[2/3] URDF twins — X30 (DeepRoboticsLab) + Spot (RAI spot_description)')
+console.log('[2/4] URDF twins — X30 (DeepRoboticsLab) + Spot (RAI spot_description)')
 for (const [rel, url] of Object.entries(ROBOT_FILES)) {
   await download(url, join(ROOT, 'web', 'public', 'assets', 'robots', rel), rel)
 }
 
-console.log('[3/3] gaussian splat scene (huggingface cakewalk/splat-data)')
+console.log('[3/4] gaussian splat scene (huggingface cakewalk/splat-data)')
 await splatScene()
+
+console.log('[4/4] media relay (go2rtc — RTSP → MSE for live playback)')
+await relayBinary()
 
 console.log('\nAll assets ready. Run: pnpm dev')

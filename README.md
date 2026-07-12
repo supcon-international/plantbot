@@ -28,17 +28,17 @@
 
 ## 快速开始
 
-前置依赖:**Node ≥ 22.5**(平台用内建 node:sqlite;推荐 Node 24 LTS)、**pnpm ≥ 9**、**ffmpeg**(素材转码与事件/RTSP 快照)、**python3 + numpy**(高斯场景调平烘焙)。可选:**go2rtc**(接真 RTSP 摄像头/机器人流时的媒体中继,`MEDIA_RELAY` 指向)。
+前置依赖:**Node ≥ 22.22**(平台用内建 node:sqlite;react-router 8 / vite 8 要求 ≥ 22.22,推荐 Node 24 LTS)、**pnpm ≥ 9**、**ffmpeg**(素材转码与事件/RTSP 快照)、**python3 + numpy**(高斯场景调平烘焙)。媒体中继 **go2rtc**(RTSP→MSE)由 `pnpm run setup` 自动下载进 `bin/`,`pnpm dev` 自动拉起并把 `MEDIA_RELAY` 指向它——RTSP 实时播放开箱即用,无需手工安装。
 
 ```bash
 git clone https://github.com/supcon-international/plantbot.git && cd plantbot
 pnpm install
 pnpm run setup # 下载巡检视频素材、URDF 孪生网格（云深处 X30 官方模型 + 波士顿动力 Spot 官方 spot_description）、高斯 splat 场景（全自动,约 180 MB）
-pnpm dev       # server :8787 + web :5173 + 五对厂商 sim/adapter（10 进程:SPOT·A / X30·HB / campus 三厂商协同）
+pnpm dev       # server :8787 + web :5173 + go2rtc 中继 :1984 + 五对厂商 sim/adapter（SPOT·A / X30·HB / campus 三厂商协同）
 pnpm dev:core  # 只起 server + web
 ```
 
-`pnpm run setup` 幂等可重跑:资产已存在则跳过;网络抖动(CDN 限流)会自动重试。注意必须是 `pnpm run setup`——裸 `pnpm setup` 会被 pnpm 内置命令遮蔽。
+`pnpm run setup` 幂等可重跑:资产已存在则跳过;网络抖动(CDN 限流)会自动重试。注意必须是 `pnpm run setup`——裸 `pnpm setup` 会被 pnpm 内置命令遮蔽。setup 第 4 步下载 go2rtc 二进制(约 18 MB,存 `bin/`,已在 .gitignore);下载失败不阻断其余素材,RTSP 播放会保持离线直到提供中继。
 
 ## 架构
 

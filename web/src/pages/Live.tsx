@@ -57,15 +57,41 @@ function useSession(channelId?: string): StreamSession | null {
   useEffect(() => {
     if (!channelId) return
     let dead = false
+    let renewTimer: ReturnType<typeof setTimeout>
+    let sid: string | null = null
     setSession(null)
+
+    // keep a leased (expiring) session alive: renew ~20s before expiry, loop.
+    // file sources have expiresAt:null and never schedule a renew.
+    const scheduleRenew = (s: StreamSession) => {
+      if (s.expiresAt === null) return
+      const ms = Math.max(5_000, s.expiresAt - Date.now() - 20_000)
+      renewTimer = setTimeout(async () => {
+        if (dead) return
+        const r = await api.renewSession(s.id).catch(() => null)
+        if (dead) return
+        if (r?.session) {
+          setSession(r.session)
+          scheduleRenew(r.session)
+        } else {
+          scheduleRenew({ ...s, expiresAt: Date.now() + 30_000 }) // transient miss — retry soon
+        }
+      }, ms)
+    }
+
     api
       .openSession(channelId)
       .then((r) => {
-        if (!dead && r.session) setSession(r.session)
+        if (dead || !r.session) return
+        sid = r.session.id
+        setSession(r.session)
+        scheduleRenew(r.session)
       })
       .catch(() => {})
     return () => {
       dead = true
+      clearTimeout(renewTimer)
+      if (sid) void api.closeSession(sid) // release the lease server-side
     }
   }, [channelId])
   return session

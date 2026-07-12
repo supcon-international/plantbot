@@ -14,17 +14,17 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@fastify/multipart": "^9.0.3",
+    "@fastify/multipart": "^10.1.0",
     "@grpc/grpc-js": "^1.13.4",
-    "@grpc/proto-loader": "^0.7.15",
+    "@grpc/proto-loader": "^0.8.1",
+    "@plantbot/adapter-sdk": "workspace:*",
     "fastify": "^5.3.2",
-    "ws": "^8.18.2",
-    "@plantbot/adapter-sdk": "workspace:*"
+    "ws": "^8.18.2"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
+    "@types/node": "^26.1.1",
     "@types/ws": "^8.18.1",
     "tsx": "^4.19.4",
-    "typescript": "^5.8.3"
+    "typescript": "^7.0.2"
   }
 }

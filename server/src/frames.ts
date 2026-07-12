@@ -43,7 +43,17 @@ export async function grabFrame(src: FrameSource, timeoutMs = 8000): Promise<Buf
       const at = (Math.random() * Math.max(0.5, dur - 1)).toFixed(2)
       args = ['-y', '-loglevel', 'error', '-ss', at, '-i', file, ...SCALE, out]
     } else {
-      args = ['-y', '-loglevel', 'error', '-rtsp_transport', 'tcp', '-i', src.url, ...SCALE, out]
+      // -timeout (µs) is the RTSP demuxer's socket I/O cap — a dead host fails
+      // fast (connection refused / read timeout) instead of hanging the whole
+      // process-timeout window. NB: rtsp uses -timeout, not -rw_timeout.
+      const socketUs = String(Math.max(1_000_000, (timeoutMs - 1500) * 1000))
+      args = [
+        '-y', '-loglevel', 'error',
+        '-rtsp_transport', 'tcp',
+        '-timeout', socketUs,
+        '-i', src.url,
+        ...SCALE, out,
+      ]
     }
     await new Promise<void>((resolve, reject) => {
       execFile(FFMPEG, args, { timeout: timeoutMs }, (err) => (err ? reject(err) : resolve()))

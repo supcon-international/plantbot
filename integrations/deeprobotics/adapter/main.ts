@@ -89,7 +89,7 @@ class RobotServerClient {
       log.info(`robot_server 已连接 tcp://${DR_HOST}:${DR_PORT}（无握手，直接可用）`)
       this.onConnect?.()
     })
-    sock.on('data', (chunk) => {
+    sock.on('data', (chunk: Buffer) => {
       for (const f of this.parser.push(chunk)) this.route(f.seq, f.type, f.body)
     })
     const drop = () => {

@@ -641,7 +641,7 @@ export class World {
   /** open a playback lease. Demo file sources never expire; RTSP goes through
    *  the go2rtc relay — the session url is the relay stream name the web
    *  player passes to <BASE>/stream/api/ws?src=… */
-  openSession(channelId: string): StreamSession | null {
+  async openSession(channelId: string): Promise<StreamSession | null> {
     const ch = this.channels().find((c) => c.id === channelId)
     if (!ch) return null
     const id = `SS-${this.id}-${String(this.sessSeq++).padStart(4, '0')}`
@@ -650,13 +650,15 @@ export class World {
       s = { id, channelId, url: ch.source.file, protocol: 'file', createdAt: Date.now(), expiresAt: null }
     } else if (ch.source.kind === 'rtsp') {
       const name = relayName(this.id, ch.streamKey ?? ch.id)
-      ensureRelayStream(name, ch.source.url)
+      // await the relay registration so relayOnline reflects reality: green
+      // only when MEDIA_RELAY is set AND go2rtc accepted the source
+      const online = relayConfigured() ? await ensureRelayStream(name, ch.source.url) : false
       s = {
         id,
         channelId,
         url: name,
         protocol: 'mse',
-        relayOnline: relayConfigured(),
+        relayOnline: online,
         createdAt: Date.now(),
         expiresAt: Date.now() + 120_000,
       }

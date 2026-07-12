@@ -117,7 +117,7 @@ test('线协议：seq 回填 / 执行中 41793 拒单 / 1004 取消触发 1003 �
   await new Promise((res, rej) => (sock.once('connect', res), sock.once('error', rej)))
   const parser = new FrameParser()
   const frames: { seq: number; type: number; body: string }[] = []
-  sock.on('data', (c) => frames.push(...parser.push(c)))
+  sock.on('data', (c: Buffer) => frames.push(...parser.push(c)))
   const send = (seq: number, xml: string) => sock.write(encodeFrame(seq, xml))
   const expect = (pred: (f: { seq: number; type: number; body: string }) => boolean, label: string) =>
     waitFor(async () => frames.find(pred), 20_000, label, 100)

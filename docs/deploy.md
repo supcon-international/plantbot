@@ -2,7 +2,7 @@
 
 当前生产实例：**https://m3rcyzzz.club/robots** — Ubuntu 云主机，nginx 子路径反代，Cloudflare named tunnel 出公网（源站只监听回环，机器本身不暴露端口）。
 
-**运行要求：Node ≥ 22.5**（平台用内建 `node:sqlite`，零原生依赖；Node 20 已 EOL）。推荐 Node 24 LTS。
+**运行要求：Node ≥ 22.22**（react-router 8 / vite 8 的下限；平台用内建 `node:sqlite`，零原生依赖）。推荐 Node 24 LTS。
 
 ## 拓扑
 
@@ -58,12 +58,12 @@ Restart=on-failure
 
 生产视频源是 **RTSP**（Site Builder 里给固定摄像头填 rtsp:// 地址；机器人流由 adapter 在 factsheet 里发布 rtsp:// URL）。链路：
 
-1. 装 go2rtc 单二进制，systemd 拉起（监听 127.0.0.1:1984，无需配置文件——平台会经 `PUT /api/streams` 注册源）。
+1. go2rtc 单二进制，systemd 拉起（监听 127.0.0.1:1984，无需配置文件——平台会经 `PUT /api/streams` 注册源）。**开发环境无需手动装**：`pnpm run setup` 已把 go2rtc 下进 `bin/`，`pnpm dev` 经 `scripts/relay.mjs` 自动拉起并把 `MEDIA_RELAY` 指向它。生产用系统包或同一 `bin/go2rtc` 挂 systemd unit 即可。
 2. plantbot 环境加 `MEDIA_RELAY=http://127.0.0.1:1984`。
 3. nginx 加 `location ^~ /robots/stream/ { proxy_pass http://127.0.0.1:1984/; }`（带 WS upgrade 头）。
-4. 浏览器播放走 `<BASE>/stream/api/ws?src=<site>-<streamKey>`（MSE，前端自动）；事件/任务快照由平台 ffmpeg 直抓 RTSP，不经中继。
+4. 浏览器播放走 `<BASE>/stream/api/ws?src=<site>-<streamKey>`（MSE，前端自动）；事件/任务快照由平台 ffmpeg 直抓 RTSP（`-rtsp_transport tcp -timeout`，死源快速失败不挂起），不经中继。
 
-未配置 MEDIA_RELAY 时：RTSP 通道在 LIVE 页显示 RELAY OFFLINE，快照功能不受影响；demo 本地环路照常直放。
+`MEDIA_RELAY` 已配但 go2rtc 未起/URL 错时：平台每 15s 探测 `<relay>/api`，探测失败则 `GET /api/health` 的 `relayOnline` 与会话的 `relayOnline` 都为 false，LIVE 页如实显示 RELAY OFFLINE（不会对着黑屏假装在线）；快照功能不受影响；demo 本地环路照常直放。`relayOnline` 只在 go2rtc 真实应答且流注册成功时为 true。
 
 ## 建站交付流程（交付工程师）
 

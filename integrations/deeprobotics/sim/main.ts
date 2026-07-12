@@ -175,7 +175,7 @@ const server = net.createServer((sock) => {
   const peer = `${sock.remoteAddress}:${sock.remotePort}`
   log.info(`SDK 接入 ${peer}`)
   const parser = new FrameParser()
-  sock.on('data', (chunk) => {
+  sock.on('data', (chunk: Buffer) => {
     for (const frame of parser.push(chunk)) {
       switch (frame.type) {
         case TYPE.REALTIME:
