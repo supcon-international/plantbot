@@ -7,10 +7,18 @@ import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 
 const BODY_MAT = new THREE.MeshStandardMaterial({ color: '#39424d', metalness: 0.55, roughness: 0.38 })
 const LIMB_MAT = new THREE.MeshStandardMaterial({ color: '#232a32', metalness: 0.5, roughness: 0.45 })
+// Spot wears a bright arctic-white shell — the dark steel palette made it
+// unreadable against the console's black stage
+const SPOT_BODY_MAT = new THREE.MeshStandardMaterial({ color: '#e9eaec', metalness: 0.2, roughness: 0.5 })
+const SPOT_LIMB_MAT = new THREE.MeshStandardMaterial({ color: '#c6cad0', metalness: 0.25, roughness: 0.55 })
 
-// two vendored twins: X30 (STL: torso + limbs) and Spot (OBJ: body + legs).
-// vendor materials are ignored — everything wears the console's steel palette
-const materialFor = (path: string) => (/torso|body/i.test(path) ? BODY_MAT : LIMB_MAT)
+// two vendored twins: X30 (STL: torso + limbs, steel) and Spot (OBJ: body +
+// legs, white). Vendor materials are ignored — we skin every mesh ourselves.
+const materialFor = (path: string) => {
+  const body = /torso|body/i.test(path)
+  if (/\/spot\//i.test(path)) return body ? SPOT_BODY_MAT : SPOT_LIMB_MAT
+  return body ? BODY_MAT : LIMB_MAT
+}
 
 export function loadUrdf(url: string): Promise<URDFRobot> {
   return new Promise((resolve, reject) => {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
-import { Grid2X2, Focus, Plus, Radio, X } from 'lucide-react'
+import { Grid2X2, Focus, Pencil, Plus, Radio, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useApp, useCan, useSite, api } from '../lib/store'
 import { useT } from '../lib/i18n'
@@ -134,11 +134,33 @@ export function Live() {
   const feeds = useFeeds()
   const t = useT()
   const isAdmin = useCan('admin')
+  const siteId = useSite((s) => s.siteId)
   const [params, setParams] = useSearchParams()
   const [mode, setMode] = useState<'focus' | 'grid'>('focus')
   const [adding, setAdding] = useState(false)
+  const [editing, setEditing] = useState<{ id: string; name: string; rtsp: string; place: string } | null>(null)
   const active = params.get('src') ?? feeds[0]?.stream
   const feed = feeds.find((f) => f.stream === active) ?? feeds[0]
+  // fixed site cameras are editable; robot channels belong to their adapter
+  const fixedCamId = feed?.channelId.startsWith('cam:') ? feed.channelId.slice(4) : null
+
+  const openEdit = async () => {
+    if (!fixedCamId) return
+    // the admin fleet view carries the rtsp source (public surfaces strip it)
+    const fl = await api.fleet(siteId)
+    const cam = (fl.cameras ?? []).find((c: { id: string }) => c.id === fixedCamId)
+    if (cam) setEditing({ id: cam.id, name: cam.name, rtsp: cam.rtsp ?? '', place: cam.place ?? '' })
+  }
+
+  const removeCamera = async () => {
+    if (!fixedCamId || !confirm(t('live.deleteConfirm'))) return
+    const r = await api.deleteCamera(siteId, fixedCamId)
+    if (r.error) toast.error(r.error)
+    else {
+      toast.success(t('live.cameraRemoved'))
+      setParams({}, { replace: true })
+    }
+  }
 
   if (feeds.length === 0)
     return (
@@ -153,7 +175,7 @@ export function Live() {
         ) : (
           <div className="skeleton h-64 w-full" />
         )}
-        {adding && <AddCameraModal onClose={() => setAdding(false)} />}
+        {adding && <CameraModal onClose={() => setAdding(false)} />}
       </div>
     )
 
@@ -166,6 +188,16 @@ export function Live() {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {isAdmin && mode === 'focus' && fixedCamId && (
+            <>
+              <Button variant="ghost" size="sm" onClick={openEdit} className="mono h-auto gap-1 px-2 py-1.5 text-[11px] normal-case tracking-[0.08em] hover:bg-transparent">
+                <Pencil size={11} /> {t('live.editCamera')}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={removeCamera} className="mono h-auto gap-1 px-2 py-1.5 text-[11px] normal-case tracking-[0.08em] hover:bg-transparent hover:text-crit">
+                <Trash2 size={11} /> {t('c.delete')}
+              </Button>
+            </>
+          )}
           {isAdmin && (
             <Button variant="outline" size="sm" onClick={() => setAdding(true)} className="mono h-auto gap-1 px-2.5 py-1.5 text-[11px] normal-case tracking-[0.08em]">
               <Plus size={12} /> {t('live.addCamera')}
@@ -186,7 +218,8 @@ export function Live() {
           </ToggleGroup>
         </div>
       </div>
-      {adding && <AddCameraModal onClose={() => setAdding(false)} />}
+      {adding && <CameraModal onClose={() => setAdding(false)} />}
+      {editing && <CameraModal edit={editing} onClose={() => setEditing(null)} />}
 
       {mode === 'focus' ? (
         <>
@@ -243,36 +276,39 @@ export function Live() {
   )
 }
 
-/** quick-add for a fixed RTSP camera — the server appends it to the site
- *  geometry and the new channel arrives over the WS geo frame */
-function AddCameraModal({ onClose }: { onClose: () => void }) {
+/** create/edit a fixed RTSP camera — the server mutates the site geometry
+ *  in place and the channel list refreshes over the WS geo frame */
+function CameraModal({ edit, onClose }: { edit?: { id: string; name: string; rtsp: string; place: string }; onClose: () => void }) {
   const t = useT()
   const siteId = useSite((s) => s.siteId)
-  const [name, setName] = useState('')
-  const [rtsp, setRtsp] = useState('')
-  const [place, setPlace] = useState('')
+  const [name, setName] = useState(edit?.name ?? '')
+  const [rtsp, setRtsp] = useState(edit?.rtsp ?? '')
+  const [place, setPlace] = useState(edit?.place ?? '')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  const title = edit ? t('live.editCamera') : t('live.addCamera')
 
-  const create = async () => {
+  const save = async () => {
     if (!name.trim() || busy) return
     setBusy(true)
     setErr('')
-    const r = await api.addCamera(siteId, { name: name.trim(), rtsp: rtsp.trim() || undefined, place: place.trim() || undefined })
+    const r = edit
+      ? await api.patchCamera(siteId, edit.id, { name: name.trim(), rtsp: rtsp.trim(), place: place.trim() })
+      : await api.addCamera(siteId, { name: name.trim(), rtsp: rtsp.trim() || undefined, place: place.trim() || undefined })
     setBusy(false)
     if (r.error) {
       setErr(r.error)
       return
     }
-    toast.success(t('live.cameraAdded'))
+    toast.success(t(edit ? 'live.cameraSaved' : 'live.cameraAdded'))
     onClose()
   }
 
   return (
-    <Modal onClose={onClose} title={t('live.addCamera')}>
+    <Modal onClose={onClose} title={title}>
       <div className="flex flex-col">
         <div className="flex items-center justify-between border-b border-line px-4 py-3">
-          <span className="microlabel">{t('live.addCamera')}</span>
+          <span className="microlabel">{title}</span>
           <Button variant="ghost" size="iconSm" onClick={onClose} aria-label="close">
             <X size={16} />
           </Button>
@@ -295,8 +331,8 @@ function AddCameraModal({ onClose }: { onClose: () => void }) {
         </div>
         <div className="flex items-center justify-end gap-2 border-t border-line px-4 py-3">
           <Button variant="ghost" onClick={onClose} className="mono h-auto px-3 py-1.5 text-[11px]">{t('c.cancel')}</Button>
-          <Button variant="signal" disabled={!name.trim() || busy} onClick={create} className="mono h-auto px-4 py-1.5 text-[11px] disabled:opacity-30">
-            {t('live.addCamera')}
+          <Button variant="signal" disabled={!name.trim() || busy} onClick={save} className="mono h-auto px-4 py-1.5 text-[11px] disabled:opacity-30">
+            {edit ? t('c.save') : t('live.addCamera')}
           </Button>
         </div>
       </div>

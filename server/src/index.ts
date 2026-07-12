@@ -1,5 +1,6 @@
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify'
 import fastifyStatic from '@fastify/static'
+import YAML from 'yaml'
 import { WebSocketServer, WebSocket } from 'ws'
 import { readFileSync, existsSync, writeFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
@@ -391,6 +392,44 @@ app.post(`/api/sites/:siteId/cameras`, { preHandler: requireRole('admin') }, asy
   w.setGeometry({ waypoints: w.waypoints, zones: w.zones, cameras, dockWp: w.dockWp })
   broadcast(w.id, { t: 'geo', site: w.site, waypoints: w.waypoints, zones: w.zones, cameras: w.publicCameras(), dockWp: w.dockWp, channels: w.publicChannels() })
   return { camera: { ...cam, rtsp: undefined }, ok: true }
+})
+
+/** edit one fixed camera in place (Video wall) — empty rtsp clears the source */
+app.patch(`/api/sites/:siteId/cameras/:camId`, { preHandler: requireRole('admin') }, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  const cam = w.cameras.find((c) => c.id === (req.params as P).camId)
+  if (!cam) return reply.code(404).send({ error: 'not found' })
+  const b = (req.body ?? {}) as { name?: string; rtsp?: string; place?: string }
+  if (b.rtsp !== undefined && b.rtsp.trim() && !b.rtsp.trim().startsWith('rtsp://'))
+    return reply.code(400).send({ error: 'source must be an rtsp:// URL' })
+  const cameras = w.cameras.map((c) =>
+    c.id !== cam.id
+      ? c
+      : {
+          ...c,
+          name: b.name !== undefined ? b.name.trim() || c.name : c.name,
+          place: b.place !== undefined ? b.place.trim() : c.place,
+          ...(b.rtsp !== undefined
+            ? { rtsp: b.rtsp.trim() || undefined, live: !!b.rtsp.trim(), source: b.rtsp.trim() ? 'RTSP camera' : c.file ? 'NVR loop · demo footage' : '—' }
+            : {}),
+        },
+  )
+  saveGeometry(w.id, { waypoints: w.waypoints, zones: w.zones, cameras })
+  w.setGeometry({ waypoints: w.waypoints, zones: w.zones, cameras, dockWp: w.dockWp })
+  broadcast(w.id, { t: 'geo', site: w.site, waypoints: w.waypoints, zones: w.zones, cameras: w.publicCameras(), dockWp: w.dockWp, channels: w.publicChannels() })
+  return { ok: true }
+})
+
+app.delete(`/api/sites/:siteId/cameras/:camId`, { preHandler: requireRole('admin') }, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  if (!w.cameras.some((c) => c.id === (req.params as P).camId)) return reply.code(404).send({ error: 'not found' })
+  const cameras = w.cameras.filter((c) => c.id !== (req.params as P).camId)
+  saveGeometry(w.id, { waypoints: w.waypoints, zones: w.zones, cameras })
+  w.setGeometry({ waypoints: w.waypoints, zones: w.zones, cameras, dockWp: w.dockWp })
+  broadcast(w.id, { t: 'geo', site: w.site, waypoints: w.waypoints, zones: w.zones, cameras: w.publicCameras(), dockWp: w.dockWp, channels: w.publicChannels() })
+  return { ok: true }
 })
 
 /** occupancy upload (Site Builder) — same convention as the integration API */
@@ -956,10 +995,80 @@ app.post(`${S}/robots/:id/goto`, { preHandler: requireRole('operator') }, async 
 
 const I = '/api/integration/v1'
 
+// machine-readable spec of everything under this prefix (docs/openapi.yaml
+// is the source of truth; parsed once at boot). No auth — it's documentation.
+const OPENAPI_DOC: unknown = (() => {
+  try {
+    const raw = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'docs', 'openapi.yaml'), 'utf8')
+    return YAML.parse(raw)
+  } catch (e) {
+    console.error('[api] openapi.yaml missing/invalid:', (e as Error).message)
+    return { openapi: '3.0.3', info: { title: 'Plantbot Open Integration API', version: 'unavailable' }, paths: {} }
+  }
+})()
+
+app.get(`${I}/openapi.json`, async () => OPENAPI_DOC)
+
 app.get(`${I}/site`, async (req, reply) => {
   const w = integrationSite(req, reply)
   if (!w) return
   return { site: w.site, waypoints: w.waypoints, zones: w.zones, eventTypes: w.eventTypes }
+})
+
+// -- open read API: the platform's operational data for third-party systems
+//    (BI, CMMS, dashboards). Same Bearer key as the report-side; rtsp sources
+//    stay redacted — playback is a session lease, snapshots go through the
+//    evidence service.
+
+app.get(`${I}/fleet`, async (req, reply) => {
+  const w = integrationSite(req, reply)
+  if (!w) return
+  return { robots: w.publicRobots(), telemetry: w.telemetry() }
+})
+
+app.get(`${I}/events`, async (req: FastifyRequest<{ Querystring: { limit?: string; since?: string; lifecycle?: string; category?: string } }>, reply) => {
+  const w = integrationSite(req, reply)
+  if (!w) return
+  const q = req.query
+  const limit = Math.min(Math.max(Number(q.limit ?? 100), 1), 500)
+  const since = Number(q.since ?? 0)
+  let events = w.listEvents(500)
+  if (since) events = events.filter((e) => e.ts > since)
+  if (q.lifecycle) events = events.filter((e) => e.lifecycle === q.lifecycle)
+  if (q.category) events = events.filter((e) => e.category === q.category)
+  return { events: events.slice(0, limit) }
+})
+
+app.get(`${I}/missions`, async (req: FastifyRequest<{ Querystring: { status?: string; limit?: string } }>, reply) => {
+  const w = integrationSite(req, reply)
+  if (!w) return
+  const limit = Math.min(Math.max(Number(req.query.limit ?? 100), 1), 500)
+  let missions = w.missions
+  if (req.query.status) missions = missions.filter((m) => m.status === req.query.status)
+  return { missions: missions.slice(-limit) }
+})
+
+app.get(`${I}/schedules`, async (req, reply) => {
+  const w = integrationSite(req, reply)
+  if (!w) return
+  return { schedules: w.schedules, templates: w.templates }
+})
+
+app.get(`${I}/channels`, async (req, reply) => {
+  const w = integrationSite(req, reply)
+  if (!w) return
+  return { channels: w.publicChannels() }
+})
+
+app.get(`${I}/robots/:serial/readings`, async (req: FastifyRequest<{ Params: { serial: string }; Querystring: { metric?: string; since?: string; limit?: string } }>, reply) => {
+  const w = integrationSite(req, reply)
+  if (!w) return
+  const robot = w.robotBySerial(req.params.serial)
+  if (!robot) return reply.code(404).send({ error: 'robot not registered' })
+  const q = req.query
+  const limit = Math.min(Math.max(Number(q.limit ?? 200), 1), 1000)
+  const since = Number(q.since ?? Date.now() - 3600_000)
+  return { readings: queryReadings(w.id, robot.id, q.metric, since, limit) }
 })
 
 app.post(`${I}/robots`, async (req: FastifyRequest<{ Body: any }>, reply) => {

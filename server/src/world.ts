@@ -1434,6 +1434,11 @@ export class World {
       this.thresholdClock = now
       this.checkThresholds(now)
     }
+    return this.telemetry(now)
+  }
+
+  /** pure read — the same frame tick() broadcasts, safe for GET endpoints */
+  telemetry(now = Date.now()): Telemetry[] {
     const out: Telemetry[] = []
     for (const spec of this.robots) {
       const s = this.nav.get(spec.id)!

@@ -1,0 +1,815 @@
+openapi: 3.0.3
+info:
+  title: Plantbot Open Integration API
+  version: "1.0"
+  description: |
+    The open API of the Plantbot multi-site inspection-robot operations platform.
+
+    One Bearer key (`pbk_…`, issued per site in the INTEG console) unlocks both directions:
+
+    * **Report side** — a vendor adapter registers a robot, streams ~1 Hz state
+      (doubles as the heartbeat), pulls dispatch orders, raises events with
+      evidence, uploads payload readings and occupancy maps.
+    * **Read side** — third-party systems (BI, CMMS, dashboards) read the
+      platform's operational data: fleet + live telemetry, events, missions,
+      schedules, video channels, payload readings.
+
+    Design follows existing standards rather than inventing new ones: VDA 5050
+    (factsheet / state / order semantics), Open-RMF control levels
+    (`state-only` / `dispatchable`), ROS map_server map convention.
+
+    Camera / robot stream URLs that embed credentials (rtsp://user:pass@…) are
+    never returned by this API — playback goes through session leases on the
+    operator console, snapshots through the evidence-capture endpoint.
+  license:
+    name: Proprietary
+externalDocs:
+  description: Narrative guide (integration.md)
+  url: https://github.com/supcon-international/plantbot/blob/main/docs/integration.md
+servers:
+  - url: /api/integration/v1
+    description: Same-origin deployment (subpath deployments prepend e.g. /robots)
+security:
+  - siteKey: []
+tags:
+  - name: site
+    description: Site shape — bounds, waypoints, zones, event vocabulary
+  - name: robots
+    description: Robot registration and state reporting (adapter → platform)
+  - name: orders
+    description: Pull-based dispatch queue (platform → adapter)
+  - name: events
+    description: Detections and robot-health events
+  - name: readings
+    description: Payload sensor readings (registry-typed metrics)
+  - name: media
+    description: Evidence snapshots and occupancy maps
+  - name: read
+    description: Open read side — operational data for third-party systems
+
+paths:
+  /site:
+    get:
+      tags: [site]
+      summary: Site factsheet
+      description: Bounds, waypoints, zones and the event-type vocabulary of the site the key is scoped to.
+      operationId: getSite
+      responses:
+        "200":
+          description: Site shape
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  site: { $ref: "#/components/schemas/SiteInfo" }
+                  waypoints:
+                    type: array
+                    items: { $ref: "#/components/schemas/Waypoint" }
+                  zones:
+                    type: array
+                    items: { $ref: "#/components/schemas/Zone" }
+                  eventTypes:
+                    type: array
+                    items: { $ref: "#/components/schemas/EventType" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /robots:
+    post:
+      tags: [robots]
+      summary: Register / refresh a robot (factsheet)
+      description: |
+        Idempotent on `serial`. The robot appears in the fleet within seconds.
+        `streams[].url` may be an adapter-hosted file/HLS URL or the robot's
+        native `rtsp://` camera — credentialed URLs stay admin-only on the platform.
+      operationId: registerRobot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Factsheet" }
+      responses:
+        "200":
+          description: Registered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  robot:
+                    type: object
+                    properties:
+                      id: { type: string, example: ext-acme-0007 }
+                      callsign: { type: string }
+                      integrationLevel: { $ref: "#/components/schemas/IntegrationLevel" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /robots/{serial}:
+    delete:
+      tags: [robots]
+      summary: Deregister a robot
+      description: Rarely needed — going silent just marks the robot OFFLINE after 20 s.
+      operationId: removeRobot
+      parameters: [{ $ref: "#/components/parameters/serial" }]
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /robots/{serial}/state:
+    post:
+      tags: [robots]
+      summary: State report (~1 Hz, doubles as heartbeat)
+      description: |
+        All fields optional — send what you have. More than 20 s of silence marks
+        the robot OFFLINE. The response carries `ordersPending` so the adapter
+        knows when to pull.
+      operationId: reportState
+      parameters: [{ $ref: "#/components/parameters/serial" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StateReport" }
+      responses:
+        "200":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  ordersPending: { type: integer, example: 1 }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /robots/{serial}/orders:
+    get:
+      tags: [orders]
+      summary: Pull pending orders
+      description: Taking an order marks it `acked`; settle it with the status endpoint.
+      operationId: pullOrders
+      parameters: [{ $ref: "#/components/parameters/serial" }]
+      responses:
+        "200":
+          description: Orders waiting for this robot
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  orders:
+                    type: array
+                    items: { $ref: "#/components/schemas/Order" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /orders/{orderId}/status:
+    post:
+      tags: [orders]
+      summary: Settle an order
+      description: Only `mission`-kind orders settle the platform-side mission run.
+      operationId: settleOrder
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema: { type: string, example: OR-0002 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [done, failed] }
+                note: { type: string, example: 3 waypoints inspected }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /events:
+    post:
+      tags: [events]
+      summary: Raise an event
+      description: |
+        `type` must be registered in the site vocabulary first (INTEG console or
+        the sites API) — unknown types return 400 to keep the vocabulary curated.
+      operationId: raiseEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EventReport" }
+      responses:
+        "200":
+          description: Event ingested
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  event: { $ref: "#/components/schemas/Event" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    get:
+      tags: [read]
+      summary: Read the event stream
+      operationId: listEvents
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, default: 100, maximum: 500 } }
+        - { name: since, in: query, description: "only events with ts > since (epoch ms)", schema: { type: integer } }
+        - { name: lifecycle, in: query, schema: { type: string, enum: [new, acked, resolved, dismissed] } }
+        - { name: category, in: query, schema: { type: string, enum: [security, fire, env, equipment, robot-fault] } }
+      responses:
+        "200":
+          description: Newest-first events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items: { $ref: "#/components/schemas/Event" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /robots/{serial}/readings:
+    post:
+      tags: [readings]
+      summary: Upload payload readings (batch)
+      description: Only metrics present in the site registry are accepted (see the sites API `/metrics`).
+      operationId: uploadReadings
+      parameters: [{ $ref: "#/components/parameters/serial" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [readings]
+              properties:
+                readings:
+                  type: array
+                  items:
+                    type: object
+                    required: [metric, value]
+                    properties:
+                      metric: { type: string, example: ch4.ppm }
+                      value: { type: number, example: 2.4 }
+                      ts: { type: integer, description: "epoch ms, defaults to now" }
+      responses:
+        "200":
+          description: Ingest summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accepted: { type: integer }
+                  skipped: { type: integer }
+                  metrics:
+                    type: array
+                    items: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    get:
+      tags: [read]
+      summary: Read payload readings (time range)
+      operationId: listReadings
+      parameters:
+        - { $ref: "#/components/parameters/serial" }
+        - { name: metric, in: query, schema: { type: string, example: batt.v } }
+        - { name: since, in: query, description: "epoch ms (default: 1 h ago)", schema: { type: integer } }
+        - { name: limit, in: query, schema: { type: integer, default: 200, maximum: 1000 } }
+      responses:
+        "200":
+          description: Readings, oldest-first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  readings:
+                    type: array
+                    items: { $ref: "#/components/schemas/Reading" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /snapshot:
+    post:
+      tags: [media]
+      summary: Evidence snapshot from a registered stream
+      description: |
+        The platform grabs a frame from the named stream source (demo loop or
+        RTSP) and returns a hosted JPEG URL — attach it to an event as evidence.
+      operationId: captureSnapshot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [stream]
+              properties:
+                stream: { type: string, example: acme-front }
+      responses:
+        "200":
+          description: Hosted snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url: { type: string, example: /media/snapshots/EV-0042-1783.jpg }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /maps:
+    post:
+      tags: [media]
+      summary: Upload an occupancy map (ROS map_server convention)
+      description: |
+        PNG + resolution (m/px) + origin = scene coords of the image's top-left
+        pixel. slam_toolbox / cartographer exports drop in directly (convert PGM
+        to PNG first). Applies live: persisted, broadcast, rendered as the 3D
+        ground underlay.
+      operationId: uploadMap
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resolution, origin, image]
+              properties:
+                name: { type: string, example: slam_toolbox 2026-07-10 }
+                resolution: { type: number, example: 0.05 }
+                origin:
+                  type: array
+                  items: { type: number }
+                  minItems: 2
+                  maxItems: 2
+                  example: [-16, -9]
+                image: { type: string, description: "data:image/png;base64,… (≤8 MB)" }
+      responses:
+        "200":
+          description: Stored map metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  map: { $ref: "#/components/schemas/SiteMap" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /fleet:
+    get:
+      tags: [read]
+      summary: Fleet + live telemetry snapshot
+      description: Every robot on the site with its current pose, battery, mode and mission binding. Stream URLs are redacted.
+      operationId: getFleet
+      responses:
+        "200":
+          description: Robots and the same telemetry frame the console renders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  robots:
+                    type: array
+                    items: { $ref: "#/components/schemas/Robot" }
+                  telemetry:
+                    type: array
+                    items: { $ref: "#/components/schemas/Telemetry" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /missions:
+    get:
+      tags: [read]
+      summary: Read mission runs
+      operationId: listMissions
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [queued, active, paused, done, failed, aborted] } }
+        - { name: limit, in: query, schema: { type: integer, default: 100, maximum: 500 } }
+      responses:
+        "200":
+          description: Mission runs (oldest-first tail)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  missions:
+                    type: array
+                    items: { $ref: "#/components/schemas/Mission" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /schedules:
+    get:
+      tags: [read]
+      summary: Read schedules and route templates
+      operationId: listSchedules
+      responses:
+        "200":
+          description: Recurring schedules with their route templates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  schedules:
+                    type: array
+                    items: { $ref: "#/components/schemas/Schedule" }
+                  templates:
+                    type: array
+                    items: { $ref: "#/components/schemas/MissionTemplate" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /channels:
+    get:
+      tags: [read]
+      summary: Read video channels
+      description: Robot payload channels + fixed site cameras. Source URLs are redacted (`rtsp` sources show kind only).
+      operationId: listChannels
+      responses:
+        "200":
+          description: Channel list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  channels:
+                    type: array
+                    items: { $ref: "#/components/schemas/Channel" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /openapi.json:
+    get:
+      tags: [site]
+      summary: This document
+      description: The machine-readable OpenAPI 3.0 spec (no auth required).
+      operationId: getOpenapi
+      security: []
+      responses:
+        "200":
+          description: OpenAPI document
+          content:
+            application/json:
+              schema: { type: object }
+
+components:
+  securitySchemes:
+    siteKey:
+      type: http
+      scheme: bearer
+      bearerFormat: pbk_…
+      description: Site-scoped API key issued in the INTEG console. One key = one site.
+
+  parameters:
+    serial:
+      name: serial
+      in: path
+      required: true
+      description: The robot serial used at registration
+      schema: { type: string, example: ACME-0007 }
+
+  responses:
+    Ok:
+      description: OK
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              ok: { type: boolean }
+    BadRequest:
+      description: Invalid payload
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthorized:
+      description: Missing or unknown Bearer key
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Unknown resource
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+
+    IntegrationLevel:
+      type: string
+      enum: [state-only, dispatchable]
+      description: Open-RMF-style control level — monitor-only vs. accepts orders
+
+    SiteInfo:
+      type: object
+      properties:
+        id: { type: string, example: plant-07 }
+        name: { type: string, example: Plant 07 }
+        operator: { type: string }
+        bounds:
+          type: object
+          properties:
+            x: { type: array, items: { type: number }, example: [-20, 20] }
+            z: { type: array, items: { type: number }, example: [-12, 12] }
+        map:
+          allOf: [{ $ref: "#/components/schemas/SiteMap" }]
+          nullable: true
+
+    SiteMap:
+      type: object
+      properties:
+        image: { type: string, description: hosted PNG URL }
+        resolution: { type: number, description: meters per pixel }
+        width: { type: integer }
+        height: { type: integer }
+        origin: { type: array, items: { type: number }, description: "scene [x, z] of the top-left pixel" }
+        source: { type: string }
+
+    Waypoint:
+      type: object
+      properties:
+        id: { type: string, example: WP-03 }
+        name: { type: string }
+        x: { type: number }
+        z: { type: number }
+        kind: { type: string, enum: [nav, inspect, dock] }
+
+    Zone:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        kind: { type: string }
+        polygon:
+          type: array
+          items: { type: array, items: { type: number }, minItems: 2, maxItems: 2 }
+
+    EventType:
+      type: object
+      properties:
+        id: { type: string, example: valve-leak }
+        label: { type: string }
+        severity: { type: string, enum: [critical, high, info] }
+        category: { type: string, enum: [security, fire, env, equipment, robot-fault] }
+
+    Factsheet:
+      type: object
+      required: [serial, model, level]
+      properties:
+        serial: { type: string, example: ACME-0007, description: idempotency key }
+        model: { type: string, example: Jueying X30, description: matching a catalog model brings the 3D twin }
+        vendor: { type: string }
+        callsign: { type: string, example: ACME·07 }
+        family: { type: string, enum: [quadruped, ugv] }
+        level: { $ref: "#/components/schemas/IntegrationLevel" }
+        ip: { type: string }
+        protocol: { type: string }
+        home:
+          type: object
+          description: initial pose in the site world frame (usually the first real pose)
+          properties:
+            x: { type: number }
+            z: { type: number }
+        streams:
+          type: array
+          items:
+            type: object
+            required: [name]
+            properties:
+              id: { type: string }
+              name: { type: string, example: Front cam }
+              kind: { type: string, enum: [camera, thermal, ogi], default: camera }
+              url: { type: string, description: file/HLS URL or the robot's native rtsp:// source }
+
+    StateReport:
+      type: object
+      properties:
+        x: { type: number }
+        z: { type: number }
+        heading: { type: number, description: radians }
+        speed: { type: number, description: m/s }
+        battery: { type: number, minimum: 0, maximum: 100 }
+        mode: { type: string, enum: [idle, navigating, executing, teleop, charging] }
+        errors:
+          type: array
+          items: { type: string }
+
+    Order:
+      type: object
+      properties:
+        id: { type: string, example: OR-0002 }
+        kind: { type: string, enum: [goto, mission, announce, pause, resume, abort, ptz] }
+        payload:
+          type: object
+          description: shape depends on kind
+          properties:
+            x: { type: number }
+            z: { type: number }
+            dock: { type: boolean, description: "goto: this is a return-to-dock — vendors may use their native docking routine" }
+            text: { type: string, description: "announce: TTS text" }
+            missionId: { type: string }
+            name: { type: string }
+            steps:
+              type: array
+              items:
+                type: object
+                properties:
+                  waypointId: { type: string }
+                  actions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        type: { type: string }
+                        durationS: { type: number }
+            channelId: { type: string, description: "ptz: target channel" }
+            pan: { type: number }
+            tilt: { type: number }
+            zoom: { type: number }
+        state: { type: string, enum: [pending, acked, done, failed] }
+        createdAt: { type: integer, description: epoch ms }
+
+    EventReport:
+      type: object
+      required: [type]
+      properties:
+        type: { type: string, description: an event-type id from the site vocabulary }
+        robotSerial: { type: string, description: attach to this robot's current position }
+        detail: { type: string }
+        severity: { type: string, enum: [critical, high, info], description: defaults to the type's registered severity }
+        x: { type: number }
+        z: { type: number }
+        snapshotUrl: { type: string }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        category: { type: string, enum: [security, fire, env, equipment, robot-fault] }
+        runId: { type: string, description: bind to a mission run }
+        evidence:
+          type: array
+          items:
+            type: object
+            properties:
+              kind: { type: string, enum: [image, reading] }
+              url: { type: string }
+              reading:
+                type: object
+                properties:
+                  metric: { type: string }
+                  value: { type: number }
+                  unit: { type: string }
+
+    Event:
+      type: object
+      properties:
+        id: { type: string, example: EV-0042 }
+        ts: { type: integer, description: epoch ms }
+        type: { type: string }
+        label: { type: string }
+        severity: { type: string, enum: [critical, high, info] }
+        category: { type: string }
+        lifecycle: { type: string, enum: [new, acked, resolved, dismissed] }
+        x: { type: number }
+        z: { type: number }
+        zone: { type: string }
+        sourceName: { type: string }
+        robotId: { type: string }
+        snapshot: { type: string, description: hosted evidence JPEG URL }
+        confidence: { type: number }
+        runId: { type: string }
+
+    Reading:
+      type: object
+      properties:
+        robotId: { type: string }
+        payloadId: { type: string }
+        metric: { type: string, example: batt.v }
+        ts: { type: integer }
+        value: { type: number }
+        quality: { type: string }
+        wp: { type: string, description: waypoint the reading was taken at }
+
+    Robot:
+      type: object
+      properties:
+        id: { type: string, example: ext-acme-0007 }
+        serial: { type: string }
+        callsign: { type: string }
+        vendor: { type: string }
+        model: { type: string }
+        family: { type: string, enum: [quadruped, ugv] }
+        integrationLevel: { $ref: "#/components/schemas/IntegrationLevel" }
+        payloads:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              name: { type: string }
+              kind: { type: string }
+              stream: { type: string, description: stream key (source URLs are redacted) }
+
+    Telemetry:
+      type: object
+      properties:
+        id: { type: string, description: robot id }
+        x: { type: number }
+        z: { type: number }
+        heading: { type: number }
+        speed: { type: number }
+        battery: { type: number }
+        mode: { type: string, enum: [idle, navigating, executing, teleop, charging, offline] }
+        odoKm: { type: number }
+        missionId: { type: string, nullable: true }
+        missionName: { type: string, nullable: true }
+
+    Mission:
+      type: object
+      properties:
+        id: { type: string, example: M-112 }
+        name: { type: string }
+        status: { type: string, enum: [queued, active, paused, done, failed, aborted] }
+        priority: { type: string }
+        robotId: { type: string, nullable: true }
+        requestedRobot: { type: string, nullable: true }
+        progress: { type: number, minimum: 0, maximum: 1 }
+        currentStep: { type: integer }
+        steps:
+          type: array
+          items:
+            type: object
+            properties:
+              waypointId: { type: string }
+        createdAt: { type: integer }
+        startedAt: { type: integer, nullable: true }
+        endedAt: { type: integer, nullable: true }
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              ts: { type: integer }
+              stepIdx: { type: integer }
+              waypointId: { type: string }
+              ok: { type: boolean }
+              note: { type: string }
+
+    MissionTemplate:
+      type: object
+      properties:
+        id: { type: string, example: T-03 }
+        name: { type: string }
+        priority: { type: string }
+        steps:
+          type: array
+          items:
+            type: object
+            properties:
+              waypointId: { type: string }
+
+    Schedule:
+      type: object
+      properties:
+        id: { type: string, example: SC-002 }
+        templateId: { type: string }
+        enabled: { type: boolean }
+        intervalMin: { type: number }
+        assign:
+          type: object
+          properties:
+            kind: { type: string, enum: [auto, robot] }
+            robotId: { type: string }
+        lastFiredAt: { type: integer, nullable: true }
+
+    Channel:
+      type: object
+      properties:
+        id: { type: string, example: "ext-acme-0007:front" }
+        robotId: { type: string, nullable: true }
+        payloadId: { type: string, nullable: true }
+        role: { type: string, enum: [front, optical, ptz, thermal, ogi, audio, fixed] }
+        label: { type: string }
+        codec: { type: string }
+        streamKey: { type: string }
+        source:
+          type: object
+          description: rtsp sources are redacted to kind-only
+          properties:
+            kind: { type: string, enum: [file, rtsp, hls] }
+            file: { type: string, description: public demo-loop URL (file kind) }
+            url: { type: string, description: always empty for rtsp }

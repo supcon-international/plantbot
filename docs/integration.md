@@ -11,6 +11,12 @@
 
 两种模式落到同一套集成 API——托管只是平台替你跑进程,协议契约完全一致。机器人原生相机以 `rtsp://user:pass@…` 直接写进 factsheet `streams[]`:平台经 go2rtc 中继播放、ffmpeg 抓证据帧,**含凭证的 URL 只对该站 admin 回传**(公开面 fleet/channels/WS 一律剥除)。
 
+> **机器可读定义**:本 API 的完整 OpenAPI 3.0 规范在 [openapi.yaml](openapi.yaml),运行中的平台也在线提供
+> `GET /api/integration/v1/openapi.json`(免鉴权)——拖进 Swagger UI / Postman / Apifox 即可浏览与调试。
+> 除下述上报向端点外,同一把 key 还可**只读**平台运营数据:`GET /fleet`(机队+实时遥测)、`GET /events`(事件流,
+> 支持 since/lifecycle/category 过滤)、`GET /missions`、`GET /schedules`、`GET /channels`(脱敏)、
+> `GET /robots/:serial/readings`(读数时间段查询)——供 BI/工单/大屏等第三方系统对接。
+
 | 借鉴 | 用在哪里 |
 | --- | --- |
 | **VDA 5050**(factsheet / state / order / instantAction 语义) | 注册消息=factsheet;`state` 上报;`orders` 拉取执行 |

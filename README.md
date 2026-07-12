@@ -4,6 +4,8 @@
 
 ![stack](https://img.shields.io/badge/React_19-Vite_7-e6e8ea) ![3d](https://img.shields.io/badge/three.js-R3F_9-9aa2ab) ![video](https://img.shields.io/badge/Video-local_loops-b8ee46)
 
+**新读者从这里开始** → 平台指南（平实语言,功能模块 / 厂站中心设计 / 两种接入方式）:[中文](docs/guide.zh.md) · [English](docs/guide.en.md)。开放 API 的机器可读定义:[docs/openapi.yaml](docs/openapi.yaml)（OpenAPI 3.0,运行中的平台也在线提供 `GET /api/integration/v1/openapi.json`）。
+
 ## 功能
 
 | 模块 | 说明 |

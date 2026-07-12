@@ -11,7 +11,7 @@ import { makeLog } from '../../shared/log.js'
 import { PlantbotClient, type PlantbotOrder } from '../../shared/plantbot.js'
 import {
   waitForSite, streamsToFactsheet, reportFault, pumpOrders, runWaypointMission,
-  pickProfile, customProfileFromEnv, type VendorProfile, type MissionRun,
+  pickProfile, customProfileFromEnv, worldTransformFromEnv, type VendorProfile, type MissionRun,
 } from '../../shared/bridge.js'
 
 const log = makeLog('spot-adp')
@@ -50,9 +50,14 @@ const SERIAL = PROFILE.serial
 
 const plantbot = new PlantbotClient({ key: process.env.PLANTBOT_KEY ?? PROFILE.key, log })
 
-// seed 帧（x 东 y 北）↔ 世界系（x 东 z 南）
-const toWorld = (p: { x?: number; y?: number }) => ({ x: p.x ?? 0, z: -(p.y ?? 0) })
-const toSeed = (x: number, z: number) => ({ x, y: -z })
+// seed 帧（x 东 y 北）↔ 世界系（x 东 z 南）。真机的 GraphNav seed 原点未必是
+// 场站原点——PB_TF_*（CALIB 页解出）做相似变换精修。
+const TF = worldTransformFromEnv()
+const toWorld = (p: { x?: number; y?: number }) => TF.fwd(p.x ?? 0, -(p.y ?? 0))
+const toSeed = (x: number, z: number) => {
+  const q = TF.inv(x, z)
+  return { x: q.x, y: -q.z }
+}
 
 const creds = grpc.credentials.createInsecure()
 const mk = (svc: any) => new svc(HOST, creds) as any

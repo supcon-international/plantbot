@@ -325,9 +325,13 @@ export const api = {
     apiFetch(`/api/sites/${siteId}/connectors/${id}/${action}`, { method: 'POST' }).then((r) => r.json()),
   deleteConnector: (siteId: string, id: string) => apiFetch(`/api/sites/${siteId}/connectors/${id}`, { method: 'DELETE' }).then((r) => r.json()),
   connectorLogs: (siteId: string, id: string) => apiFetch(`/api/sites/${siteId}/connectors/${id}/logs`).then((r) => r.json()),
-  // quick camera add (Video wall)
+  // fixed-camera CRUD (Video wall)
   addCamera: (siteId: string, body: { name: string; rtsp?: string; place?: string }) =>
     apiFetch(`/api/sites/${siteId}/cameras`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json()),
+  patchCamera: (siteId: string, camId: string, body: { name?: string; rtsp?: string; place?: string }) =>
+    apiFetch(`/api/sites/${siteId}/cameras/${encodeURIComponent(camId)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json()),
+  deleteCamera: (siteId: string, camId: string) =>
+    apiFetch(`/api/sites/${siteId}/cameras/${encodeURIComponent(camId)}`, { method: 'DELETE' }).then((r) => r.json()),
   // users (platform admin)
   listUsers: () => apiFetch('/api/users').then((r) => r.json()),
   createUser: (body: unknown) =>

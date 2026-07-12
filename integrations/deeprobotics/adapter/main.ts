@@ -8,7 +8,7 @@
 import net from 'node:net'
 import { makeLog } from '../../shared/log.js'
 import { PlantbotClient, type PlantbotOrder } from '../../shared/plantbot.js'
-import { waitForSite, streamsToFactsheet, reportFault, pumpOrders, pickProfile, customProfileFromEnv, type VendorProfile } from '../../shared/bridge.js'
+import { waitForSite, streamsToFactsheet, reportFault, pumpOrders, pickProfile, customProfileFromEnv, worldTransformFromEnv, type VendorProfile } from '../../shared/bridge.js'
 import {
   FrameParser, encodeFrame, TYPE, ERROR_STATUS,
   buildRealtimeReq, buildCancelReq, buildQueryReq, buildNavTaskReq, defaultNavPoint,
@@ -53,9 +53,14 @@ const DOCK = DR_PROFILE.dock ?? { x: 0, z: 0 }
 
 const plantbot = new PlantbotClient({ key: process.env.PLANTBOT_KEY ?? DR_PROFILE.key, log })
 
-// 机器人地图系（x 东, y 北, yaw 弧度）↔ 站点世界系（x 东, z 南）
-const toWorld = (s: { PosX: number; PosY: number }) => ({ x: s.PosX, z: -s.PosY })
-const toMap = (x: number, z: number) => ({ x, y: -z })
+// 机器人地图系（x 东, y 北, yaw 弧度）↔ 站点世界系（x 东, z 南）。
+// 真机的 SLAM 原点未必是场站原点——PB_TF_*（CALIB 页解出）做相似变换精修。
+const TF = worldTransformFromEnv()
+const toWorld = (s: { PosX: number; PosY: number }) => TF.fwd(s.PosX, -s.PosY)
+const toMap = (x: number, z: number) => {
+  const p = TF.inv(x, z)
+  return { x: p.x, y: -p.z }
+}
 
 // ---------- robotserver TCP client（mini SDK） ----------
 

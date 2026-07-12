@@ -60,6 +60,22 @@ interface VendorSpec {
 
 const str = (v: unknown, d = '') => (v === undefined || v === null || v === '' ? d : String(v))
 
+/** CALIB-page similarity transform (vendor map → site world) — optional on
+ *  vendors that navigate in their own SLAM frame (Spot, X30) */
+const TF_FIELDS: ConnectorField[] = [
+  { key: 'tfScale', label: 'Calib scale s', type: 'number', hint: 'from Site Builder → CALIB; leave empty if the robot map origin IS the site origin' },
+  { key: 'tfTheta', label: 'Calib θ (rad)', type: 'number' },
+  { key: 'tfTx', label: 'Calib t.x', type: 'number' },
+  { key: 'tfTz', label: 'Calib t.z', type: 'number' },
+]
+
+const tfEnv = (c: Record<string, unknown>): Record<string, string> => ({
+  ...(str(c.tfScale) ? { PB_TF_SCALE: str(c.tfScale) } : {}),
+  ...(str(c.tfTheta) ? { PB_TF_THETA: str(c.tfTheta) } : {}),
+  ...(str(c.tfTx) ? { PB_TF_TX: str(c.tfTx) } : {}),
+  ...(str(c.tfTz) ? { PB_TF_TZ: str(c.tfTz) } : {}),
+})
+
 const VENDORS: Record<ConnectorVendor, VendorSpec> = {
   spot: {
     vendor: 'spot',
@@ -73,12 +89,14 @@ const VENDORS: Record<ConnectorVendor, VendorSpec> = {
       { key: 'pass', label: 'Password', type: 'password', required: true },
       { key: 'dockX', label: 'Dock X (m)', type: 'number', hint: 'charge-pile pose in world frame' },
       { key: 'dockZ', label: 'Dock Z (m)', type: 'number' },
+      ...TF_FIELDS,
     ],
     env: (c) => ({
       SPOT_HOST: str(c.host, '127.0.0.1'),
       SPOT_PORT: str(c.port, '443'),
       SPOT_USER: str(c.user, 'admin'),
       SPOT_PASS: str(c.pass),
+      ...tfEnv(c),
     }),
   },
   deeprobotics: {
@@ -91,10 +109,12 @@ const VENDORS: Record<ConnectorVendor, VendorSpec> = {
       { key: 'port', label: 'robotserver port', type: 'number', placeholder: '30000' },
       { key: 'dockX', label: 'Dock X (m)', type: 'number', required: true, hint: 'charge-pile pose in world frame' },
       { key: 'dockZ', label: 'Dock Z (m)', type: 'number', required: true },
+      ...TF_FIELDS,
     ],
     env: (c) => ({
       DR_HOST: str(c.host, '127.0.0.1'),
       DR_PORT: str(c.port, '30000'),
+      ...tfEnv(c),
     }),
   },
   gosuncn: {

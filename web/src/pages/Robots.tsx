@@ -196,6 +196,10 @@ setInterval(async () => {
                 <div className="microlabel mb-1">3 · {t('fl.wiz.stepGuide')}</div>
                 <div className="text-[12.5px] leading-relaxed text-ink-2">{t('fl.wiz.autoAppear')}</div>
               </div>
+              <div>
+                <div className="microlabel mb-1">4 · {t('fl.wiz.sceneTitle')}</div>
+                <div className="text-[12.5px] leading-relaxed text-ink-2">{t('fl.wiz.sceneHint')}</div>
+              </div>
 
               {/* build-your-own adapter: the SDK in two flavors */}
               <div className="border-t border-line/60 pt-3">

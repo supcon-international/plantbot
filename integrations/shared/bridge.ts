@@ -46,6 +46,32 @@ export function pickProfile<T extends Record<string, VendorProfile>>(
   return table[(envValue as keyof T) ?? fallback] ?? table[fallback]
 }
 
+/** vendor-map → site-world similarity transform from env — the CALIB page
+ *  solves it (s, θ, t) and the connector form carries it here. Identity when
+ *  unset (i.e. the robot's SLAM origin IS the site origin, the demo case).
+ *  fwd: world = s·R(θ)·p + t · inv: p = R(−θ)·(world − t)/s (goto downlink) */
+export function worldTransformFromEnv(): {
+  fwd: (x: number, z: number) => { x: number; z: number }
+  inv: (x: number, z: number) => { x: number; z: number }
+} {
+  const s = Number(process.env.PB_TF_SCALE ?? 1)
+  const th = Number(process.env.PB_TF_THETA ?? 0)
+  const tx = Number(process.env.PB_TF_TX ?? 0)
+  const tz = Number(process.env.PB_TF_TZ ?? 0)
+  if (!s || (s === 1 && th === 0 && tx === 0 && tz === 0))
+    return { fwd: (x, z) => ({ x, z }), inv: (x, z) => ({ x, z }) }
+  const c = Math.cos(th)
+  const n = Math.sin(th)
+  return {
+    fwd: (x, z) => ({ x: s * (c * x - n * z) + tx, z: s * (n * x + c * z) + tz }),
+    inv: (x, z) => {
+      const dx = (x - tx) / s
+      const dz = (z - tz) / s
+      return { x: c * dx + n * dz, z: -n * dx + c * dz }
+    },
+  }
+}
+
 /** managed-connector identity: when the platform supervises this adapter it
  *  passes the robot's identity via env instead of a built-in demo profile.
  *  PB_SERIAL is the switch; PB_STREAMS is a JSON array of
