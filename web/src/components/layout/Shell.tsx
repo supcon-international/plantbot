@@ -19,7 +19,6 @@ import {
 import { useNavigate as useNav2 } from 'react-router'
 import { useApp, useAuth, useCan, useRole, useSite } from '../../lib/store'
 import { Login } from '../../pages/Login'
-import { useDataSaver } from '../../lib/media'
 import { useTheme } from '../../lib/theme'
 import { useT, useLang, type Lang } from '../../lib/i18n'
 import { Button } from '@/components/ui/button'
@@ -155,18 +154,6 @@ function ThemeToggle() {
   )
 }
 
-function EcoToggle() {
-  const on = useDataSaver((s) => s.on)
-  const toggle = useDataSaver((s) => s.toggle)
-  const t = useT()
-  return (
-    <Button variant={on ? 'signal' : 'utility'} onClick={toggle} title={t('shell.ecoTitle')} aria-pressed={on}>
-      <span className="eco-leaf" />
-      {t('shell.eco')}
-    </Button>
-  )
-}
-
 function ConnectionStatus({ compact = false }: { compact?: boolean }) {
   const connected = useApp((s) => s.connected)
   const t = useT()
@@ -194,7 +181,6 @@ function MobileUtilityMenu() {
       >
         <SiteSwitch />
         <div className="flex items-center justify-between gap-3">
-          <EcoToggle />
           <ThemeToggle />
           <LangSwitch />
         </div>
@@ -309,7 +295,6 @@ export function Shell() {
           <SiteSwitch />
           <ConnectionStatus />
           <AuthChip />
-          <EcoToggle />
           <ThemeToggle />
           <LangSwitch />
         </div>

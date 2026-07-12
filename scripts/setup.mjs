@@ -163,20 +163,6 @@ async function stagingFeed() {
   console.log('  ✓ staging.mp4 transcoded (seamless loop)')
 }
 
-/**
- * 640p capped-bitrate twin of a loop (<name>.low.mp4) — the client swaps to it
- * on Save-Data / 2G-3G links (or via the header ECO toggle). ~4-6× smaller.
- */
-async function lowVariant(name) {
-  const src = join(ROOT, 'server', 'media', name)
-  const dest = src.replace(/\.mp4$/, '.low.mp4')
-  if (existsSync(dest) && statSync(dest).size > 5e4) return console.log(`  ✓ ${name.replace('.mp4', '.low.mp4')} (cached)`)
-  execSync(
-    `"${FFMPEG}" -y -loglevel error -i "${src}" -vf "scale=640:-2" -c:v libx264 -crf 28 -maxrate 550k -bufsize 1100k -preset medium -g 15 -keyint_min 15 -pix_fmt yuv420p -movflags +faststart -an "${dest}"`,
-  )
-  console.log(`  ✓ ${name.replace('.mp4', '.low.mp4')} (640p data-saver)`)
-}
-
 /** Pre-render the thermal / OGI looks once — playback stays native & smooth. */
 async function filteredFeed(name, srcName, vf) {
   const dest = join(ROOT, 'server', 'media', name)
@@ -189,24 +175,26 @@ async function filteredFeed(name, srcName, vf) {
   console.log('done')
 }
 
-console.log('[1/4] camera footage (Mixkit free license + Commons)')
+console.log('[1/3] camera footage (Mixkit free license + Commons)')
 for (const [name, url] of Object.entries(FOOTAGE)) await footage(name, url)
 await stagingFeed()
 await filteredFeed('thermal.mp4', 'smokestack.mp4', 'format=gray,format=gbrp,pseudocolor=preset=inferno,scale=960:-2')
 await filteredFeed('ogi.mp4', 'pumpjack.mp4', 'format=gray,eq=contrast=1.55:brightness=-0.06,unsharp=5:5:0.8,noise=alls=5:allf=t,scale=960:-2')
+// the data-saver (.low.mp4) tier is retired — sweep any twins from old checkouts
+{
+  const { readdirSync, unlinkSync } = await import('node:fs')
+  for (const name of readdirSync(join(ROOT, 'server', 'media')).filter((f) => f.endsWith('.low.mp4'))) {
+    unlinkSync(join(ROOT, 'server', 'media', name))
+    console.log(`  ✗ ${name} (data-saver tier removed)`)
+  }
+}
 
-console.log('[2/4] data-saver variants (640p, capped bitrate — slow-link playback)')
-// every loop in media/ gets a twin — a hardcoded list silently skips new channels
-const { readdirSync } = await import('node:fs')
-for (const name of readdirSync(join(ROOT, 'server', 'media')).filter((f) => f.endsWith('.mp4') && !f.endsWith('.low.mp4')))
-  await lowVariant(name)
-
-console.log('[3/4] URDF twins — X30 (DeepRoboticsLab) + Spot (RAI spot_description)')
+console.log('[2/3] URDF twins — X30 (DeepRoboticsLab) + Spot (RAI spot_description)')
 for (const [rel, url] of Object.entries(ROBOT_FILES)) {
   await download(url, join(ROOT, 'web', 'public', 'assets', 'robots', rel), rel)
 }
 
-console.log('[4/4] gaussian splat scene (huggingface cakewalk/splat-data)')
+console.log('[3/3] gaussian splat scene (huggingface cakewalk/splat-data)')
 await splatScene()
 
 console.log('\nAll assets ready. Run: pnpm dev')

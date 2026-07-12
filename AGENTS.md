@@ -6,7 +6,7 @@ Plantbot：多场站巡检机器人运营平台演示。pnpm workspace：`server
 
 ```bash
 pnpm install              # 要求 Node ≥ 22.5（平台用内建 node:sqlite;Node 20 已 EOL）
-pnpm run setup            # 必须带 run（裸 `pnpm setup` 是 pnpm 内置命令）；下载素材+X30 URDF+splat，生成 .low.mp4 省流变体
+pnpm run setup            # 必须带 run（裸 `pnpm setup` 是 pnpm 内置命令）；下载素材+X30/Spot URDF+splat
 pnpm dev                  # server :8787（PB_DEMO=1 演示模式）+ web :5173 + 五对 sim/adapter（12 进程全栈）
 pnpm dev:core             # 仅 server + web（不起集成层）
 WEB_BASE=/robots/ pnpm build   # 生产构建（见下）；本地根路径构建用 pnpm build
@@ -31,7 +31,7 @@ cd integrations && pnpm test                        # 三厂商全行为 e2e（�
 - **持久层 = SQLite**（`server/data/plantbot.db`,node:sqlite/WAL,`server/src/db.ts`+`config.ts` store 层）：用户/API key(sha256 哈希,明文只在创建响应出现一次)/场站建模(sites/waypoints/zones/cameras/transforms/底图)/外部机注册/规则/模板/排程/任务/事件/订单/命令审计/读数(7d 滚动)。World 内存为热路径读模型,mutator 写穿(`Persist` 钩子),启动水合(`hydrate`+seq 恢复+僵尸 run 收尸)。旧 config.json 首启自动导入。e2e 用 `PB_DATA_DIR` 隔离。
 - **生产开关**：`PB_DEMO=1`=演示模式(首启导入三演示站种子+随机事件生成器;不设=空库生产,事件只来自集成上报+阈值检测器);`PB_PUBLIC_VIEW=0`=关匿名浏览(全站登录门禁+WS 拒连);`MEDIA_RELAY=http://…:1984`=go2rtc 中继(RTSP→MSE)。CORS 已整体移除(dev 走 vite 代理,生产同源 nginx)。
 - **场站是数据不是代码**：`sites.ts` 只是 PB_DEMO 首启种子;运行时增删场站走 `/api/sites` CRUD(动态起停 World+WS 房间),几何(航点/区域/摄像头/dock/bounds)在 **Site Builder**(`/sites/:id`,admin)编辑,PUT `/geometry` 实时生效(WS `geo` 帧)。摄像头填 `rtsp://` 即生产源(经 go2rtc 播放+ffmpeg 快照),留 `file` 为 demo 环路。标定 UI 在 Builder 的 CALIB 页(相似变换最小二乘,存 transforms 表,可导出 GOSUNCN_* 环境变量)。用户管理在 `/sites` 页(平台 admin)。
-- 新视频通道：素材在 `scripts/setup.mjs` 登记（自动出 640p `.low.mp4` 孪生）;快照源不再有 SOURCE 表——`World.frameSource(streamKey)` 从 channel 源解析(file→media 文件 / rtsp→直抓)。
+- 新视频通道：素材在 `scripts/setup.mjs` 登记;快照源不再有 SOURCE 表——`World.frameSource(streamKey)` 从 channel 源解析(file→media 文件 / rtsp→直抓)。
 - 权限：匿名=viewer 只读(可被 PB_PUBLIC_VIEW=0 关闭)；种子账户 `admin/operator/viewer`（默认密码 `plantbot`，生产用 `PB_*_PASSWORD` 环境变量覆盖,登录有 5 次/15 分钟限速）。写接口按 `viewer<operator<admin` × 场站授权;无 `:siteId` 的平台路由(sites/users)只有 `'*'` admin 可过。**摄像头 rtsp:// URL 含凭证,只对该站 admin 回传**——对外的 fleet/channels/WS 载荷走 `publicCameras()/publicChannels()` 剥 URL(前端 `roleFor/useRole` 有 `'*'` 通配兜底,空平台的平台 admin 才能建首站)。
 - 多场站：一个 `World` 实例一个场站（`server/src/world.ts`）。三演示站：plant-07 / plant-12 / campus-east。**平台是纯集成层：World 无运动仿真/A* 规划（路径规划在机器人端 Nav 栈）,机器人全部经 adaptor 的 `registerExternal` 接入；接入向导只出集成指引,不创建机器人**。规则种子绑定固定摄像头 + 外部机器人 stream；任务种子的 `requestedRobot` 钉外部机器人 id（`ext-<serial>`,未注册留队自愈）,`auto` 任务按能力/电量/距离挑在线的 dispatchable 外部机器人。
 - **纯集成层 · 三层架构（simulator ⇄ adapter ⇄ platform）**：`integrations/` 里每家厂商一对独立 Node 进程：**sim 按官方协议还原机器人/厂商云的 server 面，adapter 面向官方协议写 client、北向翻译到 `/api/integration/v1`**（对真机即插）。三家刻意异构：Spot=机直连 gRPC 会话（59 个官方 proto vendored，auth→timesync→lease→estop→power 全套闸）、云深处 X30=裸 TCP `EB90` 帧+XML（robotserver_sdk）、高新兴 F2=厂商云 REST `.action`+WS 推送。设计与厂商映射见 `docs/adapter-sim-architecture.md`，逐字段协议参考在 `docs/vendors/`（spot-sdk / deeprobotics-robotserver / gosuncn-api）。**动 sim/adapter 前先读对应 vendors 文档——实现必须忠实官方协议，禁止臆造报文**。

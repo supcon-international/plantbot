@@ -36,7 +36,6 @@ const D: Record<string, [string, string]> = {
   'shell.workspace': ['Workspace', '工作台'],
   'shell.controls': ['Application controls', '应用设置'],
   'shell.page.overview': ['Operations overview', '运营总览'],
-  'shell.eco': ['ECO', '省流'],
   'shell.theme': ['Toggle light / dark', '切换明暗模式'],
   'shell.signIn': ['SIGN IN', '登录'],
   'shell.signOut': ['SIGN OUT', '退出登录'],
@@ -193,11 +192,6 @@ const D: Record<string, [string, string]> = {
   'integ.originZ': ['origin z', '原点 z'],
   'integ.orders': ['Recent adapter orders', '适配器订单（最近）'],
   'integ.docs': ['Quick start (curl)', '快速接入 (curl)'],
-  'shell.ecoTitle': [
-    'Data saver — 640p low-bitrate video for slow links',
-    '省流模式 — 慢速网络使用 640p 低码率视频',
-  ],
-
   // ---------- common ----------
   'c.battery': ['Battery', '电量'],
   'c.speed': ['Speed', '速度'],
