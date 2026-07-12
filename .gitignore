@@ -3,6 +3,7 @@ dist/
 *.log
 *.tsbuildinfo
 .DS_Store
+.claude/settings.local.json
 
 # fetched by `pnpm run setup`
 server/media/*.mp4

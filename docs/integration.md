@@ -225,3 +225,7 @@ cd ~/.node-red && npm i <repo>/sdk/node-red-contrib-plantbot   # 重启 Node-RED
 `plantbot-orders`(订单泵:输出每单一条 msg、`msg.topic`=kind,用 switch 节点路由——那就是你的能力矩阵;输入 `{orderId,status,note}` 回报) /
 `plantbot-event`(事件上报,`snapshotStream` 自动经平台证据服务抓帧)。
 示例流 `examples/minimal-adapter-flow.json`:inject 1Hz → function(读你的机器人) → robot → orders → switch(kind) → 执行 → 回报。
+
+## Agent Skill（给 code agent 的接入向导）
+
+用 Claude Code 等 code agent 接机器人?仓库自带 Agent Skill [`.claude/skills/robot-adapter/`](../.claude/skills/robot-adapter/SKILL.md)——SKILL.md（模式选择 + 契约不变式 + 完成清单）加三份引用（北向 API 速查 / 外部 adapter 配方 / 内置厂商开发清单）。文件夹自包含,可整体拷进你自己的工程再交给 agent;它会引导写出符合上述契约的 adapter 并逐项核对验证清单。维护约定:改集成 API / SDK / connector 目录时同步更新该 skill。

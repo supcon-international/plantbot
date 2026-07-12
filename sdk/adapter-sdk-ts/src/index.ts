@@ -178,11 +178,19 @@ export class PlantbotClient {
     return (await this.call('POST', '/events', ev)) !== null
   }
 
-  async readings(serial: string, items: { metric: string; value: number; ts?: number }[]): Promise<number> {
-    const res = await this.call<{ accepted: number }>('POST', `/robots/${encodeURIComponent(serial)}/readings`, {
-      readings: items,
-    })
-    return res?.accepted ?? 0
+  /** batch payload readings. Only metrics in the site registry are accepted —
+   *  the response carries that registry (`metrics`), so a rejected write
+   *  (`accepted: 0`) tells you exactly which metric ids are valid. */
+  async readings(
+    serial: string,
+    items: { metric: string; value: number; ts?: number }[],
+  ): Promise<{ accepted: number; skipped: number; metrics: string[] }> {
+    const res = await this.call<{ accepted: number; skipped: number; metrics: string[] }>(
+      'POST',
+      `/robots/${encodeURIComponent(serial)}/readings`,
+      { readings: items },
+    )
+    return res ?? { accepted: 0, skipped: 0, metrics: [] }
   }
 
   /** ROS map_server-style occupancy upload (PNG data URL) */
@@ -219,12 +227,13 @@ export function reportFault(pb: PlantbotClient, serial: string, detail: string):
   void pb.event({ type: 'fault', robotSerial: serial, detail, severity: 'high', category: 'robot-fault' })
 }
 
-/** after a state report: pull pending orders and hand each to the executor */
+/** after a state report: pull pending orders and hand each to the executor.
+ *  The executor's return value is ignored — `return pb.orderStatus(…)` is fine. */
 export async function pumpOrders(
   pb: PlantbotClient,
   serial: string,
   rep: { ordersPending: number } | null,
-  exec: (order: PlantbotOrder) => void | Promise<void>,
+  exec: (order: PlantbotOrder) => unknown,
 ): Promise<void> {
   if (!rep || rep.ordersPending <= 0) return
   for (const order of await pb.pullOrders(serial)) void exec(order)

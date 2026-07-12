@@ -72,7 +72,7 @@ await pb.event({ type: 'person', robotSerial: SERIAL, severity: 'high', snapshot
 | `pullOrders(serial)` / `orderStatus(id, st, note)` | pull-based order queue; settle with done/failed |
 | `pumpOrders(pb, serial, rep, exec)` | pull + dispatch helper for the state loop |
 | `event(ev)` / `reportFault(pb, serial, detail)` | detections & robot-health events |
-| `readings(serial, items)` | batch payload metrics (registry-typed) |
+| `readings(serial, items)` | batch payload metrics; returns `{accepted, skipped, metrics}` — `metrics` is the site's registered-metric registry (a rejected write tells you the valid ids) |
 | `snapshot(stream)` | evidence frame from a registered stream → hosted URL |
 | `uploadMap(m)` | ROS map_server-style occupancy PNG |
 | `runWaypointMission(opts)` | point-by-point mission runner (pause/abort-aware) for vendors without a native task list |
