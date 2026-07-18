@@ -4,7 +4,7 @@
 
 ![stack](https://img.shields.io/badge/React_19-Vite_7-e6e8ea) ![3d](https://img.shields.io/badge/three.js-R3F_9-9aa2ab) ![video](https://img.shields.io/badge/Video-local_loops-b8ee46)
 
-**新读者从这里开始** → 平台指南（平实语言,功能模块 / 场站中心设计 / 两种接入方式）:[中文](docs/guide.zh.md) · [English](docs/guide.en.md)。开放 API 的机器可读定义:集成面 [docs/openapi.yaml](docs/openapi.yaml) + 会话面全量 [docs/openapi-platform.yaml](docs/openapi-platform.yaml)（OpenAPI 3.0,运行中的平台在线提供 `GET /api/integration/v1/openapi.json` 与 `GET /api/openapi.json`）。要接入新机器人/新品牌?仓库自带 **Agent Skill** [.claude/skills/robot-adapter](.claude/skills/robot-adapter/SKILL.md)——交给你的 code agent（Claude Code 等;文件夹自包含,可整体拷进自己的工程),由它引导完成外部 adapter 编写或内置厂商接入。
+**新读者从这里开始** → 平台指南（平实语言,功能模块 / 场站中心设计 / 两种接入方式）:[中文](docs/guide.zh.md) · [English](docs/guide.en.md)。开放 API 的机器可读定义:集成面 [docs/openapi.yaml](docs/openapi.yaml) + 会话面全量 [docs/openapi-platform.yaml](docs/openapi-platform.yaml)（OpenAPI 3.0,运行中的平台在线提供 `GET /api/integration/v1/openapi.json` 与 `GET /api/openapi.json`,并在 `<BASE>/api-docs.html` 提供 **Redoc 渲染版**（双规范切换,demo: [m3rcyzzz.club/robots/api-docs.html](https://m3rcyzzz.club/robots/api-docs.html)）)。要接入新机器人/新品牌?仓库自带 **Agent Skill** [.claude/skills/robot-adapter](.claude/skills/robot-adapter/SKILL.md)——交给你的 code agent（Claude Code 等;文件夹自包含,可整体拷进自己的工程),由它引导完成外部 adapter 编写或内置厂商接入。
 
 ## 功能
 

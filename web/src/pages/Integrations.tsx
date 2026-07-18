@@ -340,7 +340,19 @@ export function Integrations() {
 
       {/* ---------- quick start ---------- */}
       <Panel>
-          <PanelHead label={<span>{t('integ.docs')}</span>} />
+        <PanelHead
+          label={<span>{t('integ.docs')}</span>}
+          right={
+            <a
+              href={`${BASE}/api-docs.html`}
+              target="_blank"
+              rel="noopener"
+              className="mono text-[11px] tracking-[0.08em] text-accent underline decoration-line-2 underline-offset-2 hover:opacity-80"
+            >
+              {t('integ.apiRef')} ↗
+            </a>
+          }
+        />
         <pre className="mono overflow-x-auto p-3 text-[11px] leading-relaxed text-ink-3">
 {`# register a robot (factsheet)   levels: state-only | dispatchable
 curl -X POST ${curlBase}/robots -H 'authorization: Bearer ${demoKey}' \\
@@ -362,7 +374,7 @@ curl -X POST ${curlBase}/events -H 'authorization: Bearer ${demoKey}' \\
   -H 'content-type: application/json' \\
   -d '{"type":"valve-leak","robotSerial":"ACME-0007","detail":"CH4 8ppm at flange B-12"}'
 
-# full reference: docs/integration.md`}
+# rendered reference: <BASE>/api-docs.html · full text: docs/integration.md`}
         </pre>
       </Panel>
     </div>

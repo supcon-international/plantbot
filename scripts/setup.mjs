@@ -178,7 +178,7 @@ async function filteredFeed(name, srcName, vf) {
   console.log('done')
 }
 
-console.log('[1/3] camera footage (Mixkit free license + Commons)')
+console.log('[1/4] camera footage (Mixkit free license + Commons)')
 for (const [name, url] of Object.entries(FOOTAGE)) await footage(name, url)
 await stagingFeed()
 await filteredFeed('thermal.mp4', 'smokestack.mp4', 'format=gray,format=gbrp,pseudocolor=preset=inferno,scale=960:-2')
@@ -192,12 +192,22 @@ await filteredFeed('ogi.mp4', 'pumpjack.mp4', 'format=gray,eq=contrast=1.55:brig
   }
 }
 
-console.log('[2/3] URDF twins — X30 (DeepRoboticsLab) + Spot (RAI spot_description)')
+console.log('[2/4] URDF twins — X30 (DeepRoboticsLab) + Spot (RAI spot_description)')
 for (const [rel, url] of Object.entries(ROBOT_FILES)) {
   await download(url, join(ROOT, 'web', 'public', 'assets', 'robots', rel), rel)
 }
 
-console.log('[3/3] media relay (go2rtc — RTSP → MSE for live playback)')
+console.log('[3/4] media relay (go2rtc — RTSP → MSE for live playback)')
 await relayBinary()
+
+console.log('[4/4] api reference renderer (redoc)')
+// Redoc standalone bundle → web/public/vendor/, referenced by api-docs.html
+// (served at <BASE>/api-docs.html; relative paths keep it sub-path-safe).
+// redoc@2 is the long-stable major — pinned so the URL shape can't drift.
+await download(
+  'https://cdn.jsdelivr.net/npm/redoc@2/bundles/redoc.standalone.js',
+  join(ROOT, 'web', 'public', 'vendor', 'redoc.standalone.js'),
+  'redoc.standalone.js',
+)
 
 console.log('\nAll assets ready. Run: pnpm dev')

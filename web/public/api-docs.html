@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Plantbot · API Reference</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Crect width='128' height='128' rx='24' fill='%23161616'/%3E%3Cpath transform='translate(-293.45 15.6) scale(0.78)' d='M411.795 109.369V14.7228L425.816 0.701172H490.666L504.688 14.7228V109.369L490.666 123.39H425.816L411.795 109.369ZM427.569 14.7228V109.369H488.914V14.7228H427.569Z' fill='%23B2ED1D'/%3E%3C/svg%3E" />
+<style>
+  /* Carbon-console topbar over a stock Redoc body — all paths relative, so the
+     page works identically at / (dev) and under a sub-path (/robots) */
+  * { box-sizing: border-box }
+  html, body { margin: 0; height: 100% }
+  body { display: flex; flex-direction: column; font-family: 'IBM Plex Sans', system-ui, sans-serif }
+  header {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    background: #101114; border-bottom: 1px solid #2a2d31; padding: 10px 18px;
+  }
+  header .brand { display: flex; align-items: center; gap: 10px; color: #e6e8ea }
+  header .brand b { font-size: 13px; letter-spacing: .18em }
+  header .brand span { font-size: 10px; letter-spacing: .14em; color: #8a9096; font-family: 'IBM Plex Mono', monospace }
+  nav { display: flex; border: 1px solid #2f353c }
+  nav button {
+    appearance: none; border: 0; background: transparent; color: #8a9096; cursor: pointer;
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: .12em; padding: 7px 14px;
+  }
+  nav button.on { background: #b2ed1d; color: #101114; font-weight: 600 }
+  header .links { margin-left: auto; display: flex; gap: 14px }
+  header a { color: #8a9096; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: .08em; text-decoration: none }
+  header a:hover { color: #e6e8ea }
+  main { flex: 1; overflow: auto; background: #fff }
+  #fallback { padding: 40px; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #444 }
+  #fallback code { background: #f0f0ee; padding: 2px 6px }
+</style>
+</head>
+<body>
+<header>
+  <span class="brand">
+    <svg width="22" height="22" viewBox="0 0 128 128" aria-hidden><rect width="128" height="128" rx="24" fill="#161616"/><path transform="translate(-293.45 15.6) scale(0.78)" d="M411.795 109.369V14.7228L425.816 0.701172H490.666L504.688 14.7228V109.369L490.666 123.39H425.816L411.795 109.369ZM427.569 14.7228V109.369H488.914V14.7228H427.569Z" fill="#B2ED1D"/></svg>
+    <b>PLANTBOT</b><span>API REFERENCE</span>
+  </span>
+  <nav id="specs">
+    <button data-spec="api/integration/v1/openapi.json" class="on">INTEGRATION · Bearer</button>
+    <button data-spec="api/openapi.json">PLATFORM · session</button>
+  </nav>
+  <span class="links">
+    <a id="raw" href="api/integration/v1/openapi.json" target="_blank" rel="noopener">openapi.json ↗</a>
+    <a href="./">← app</a>
+  </span>
+</header>
+<main><div id="redoc"></div><div id="fallback" hidden></div></main>
+<script src="vendor/redoc.standalone.js"></script>
+<script>
+  const el = document.getElementById('redoc')
+  const fallback = document.getElementById('fallback')
+  const raw = document.getElementById('raw')
+  const THEME = {
+    colors: { primary: { main: '#3d5c00' } },
+    typography: { fontFamily: "'IBM Plex Sans', system-ui, sans-serif", code: { fontFamily: "'IBM Plex Mono', monospace" }, headings: { fontFamily: "'IBM Plex Sans', system-ui, sans-serif" } },
+    sidebar: { backgroundColor: '#101114', textColor: '#c8ccd0' },
+    rightPanel: { backgroundColor: '#16181c' },
+  }
+  function show(spec) {
+    raw.href = spec
+    if (typeof Redoc === 'undefined') {
+      fallback.hidden = false
+      fallback.innerHTML = 'Renderer bundle missing — run <code>pnpm run setup</code> to fetch <code>web/public/vendor/redoc.standalone.js</code>, or open the raw spec: <a href="' + spec + '">' + spec + '</a>'
+      return
+    }
+    Redoc.init(spec, { theme: THEME, expandResponses: '200', hideDownloadButton: false }, el)
+  }
+  document.getElementById('specs').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-spec]')
+    if (!b) return
+    for (const x of document.querySelectorAll('#specs button')) x.classList.toggle('on', x === b)
+    show(b.dataset.spec)
+  })
+  show('api/integration/v1/openapi.json')
+</script>
+</body>
+</html>

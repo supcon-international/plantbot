@@ -13,6 +13,7 @@
 
 > **机器可读定义**:本 API 的完整 OpenAPI 3.0 规范在 [openapi.yaml](openapi.yaml),运行中的平台也在线提供
 > `GET /api/integration/v1/openapi.json`(免鉴权)——拖进 Swagger UI / Postman / Apifox 即可浏览与调试。
+> 平台同时在 **`<BASE>/api-docs.html`** serve 一份 Redoc 渲染版(集成面/会话面双规范切换,`pnpm run setup` 会取回渲染 bundle 到 `web/public/vendor/`)。
 > 除下述上报向端点外,同一把 key 还可**只读**平台运营数据:`GET /fleet`(机队+实时遥测)、`GET /events`(事件流,
 > 支持 since/lifecycle/category 过滤)、`GET /missions`、`GET /schedules`、`GET /channels`(脱敏)、
 > `GET /robots/:serial/readings`(读数时间段查询)——供 BI/工单/大屏等第三方系统对接。

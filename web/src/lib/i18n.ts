@@ -194,6 +194,7 @@ const D: Record<string, [string, string]> = {
   'integ.originZ': ['origin z', '原点 z'],
   'integ.orders': ['Recent adapter orders', '适配器订单（最近）'],
   'integ.docs': ['Quick start (curl)', '快速接入 (curl)'],
+  'integ.apiRef': ['API reference', '在线 API 文档'],
   // ---------- common ----------
   'c.battery': ['Battery', '电量'],
   'c.speed': ['Speed', '速度'],
