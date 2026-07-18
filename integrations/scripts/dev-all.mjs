@@ -46,7 +46,11 @@ const SIMS = [
   { name: 'x30CE·sim', entry: 'deeprobotics/sim/main.ts', color: '36', env: { DR_SIM_PORT: '30010', DR_SIM_HOME_X: '0', DR_SIM_HOME_Y: '9' } },
 ].map((p) => ({ ...p, layer: 'sim' }))
 
-const procs = SIMS_UP ? [...SIMS, ...ADAPTERS] : ADAPTERS
+// the sibling also serves its cameras over RTSP (go2rtc) — start that too so
+// the demo pulls real rtsp:// video from the sims, not just file loops
+const RTSP = { name: 'sim·rtsp', entry: 'rtsp/serve.mjs', color: '32', env: {}, layer: 'rtsp' }
+
+const procs = SIMS_UP ? [RTSP, ...SIMS, ...ADAPTERS] : ADAPTERS
 
 if (SIMS_UP) console.log(`[dev-all] simulators from ${SIM_DIR}`)
 else
@@ -60,9 +64,11 @@ const children = new Set()
 
 function launch(p) {
   const tag = `\x1b[${p.color}m[${p.name}]\x1b[0m`
-  const sim = p.layer === 'sim'
-  const child = spawn(sim ? SIM_TSX : TSX, [p.entry], {
-    cwd: sim ? SIM_DIR : ROOT,
+  const fromSim = p.layer === 'sim' || p.layer === 'rtsp'
+  // sims are tsx entrypoints; the rtsp server is a plain .mjs run with node
+  const bin = p.layer === 'rtsp' ? process.execPath : fromSim ? SIM_TSX : TSX
+  const child = spawn(bin, [p.entry], {
+    cwd: fromSim ? SIM_DIR : ROOT,
     env: { ...process.env, ...p.env },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
