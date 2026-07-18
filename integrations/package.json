@@ -3,11 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "sim:gosuncn": "tsx gosuncn/sim/main.ts",
     "adapter:gosuncn": "tsx gosuncn/adapter/main.ts",
-    "sim:deeprobotics": "tsx deeprobotics/sim/main.ts",
     "adapter:deeprobotics": "tsx deeprobotics/adapter/main.ts",
-    "sim:spot": "tsx spot/sim/main.ts",
     "adapter:spot": "tsx spot/adapter/main.ts",
     "dev": "node scripts/dev-all.mjs",
     "test": "node --import tsx --test test/*.e2e.ts",

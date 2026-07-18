@@ -2,7 +2,7 @@
 
 工业巡检机器人管理平台。近黑科技灰 × 暖白的单色作战室美学（IBM Plex 字型体系），酸绿为唯一强调色；一键切换**明亮纸面模式**（3D 白模随主题换纸板质感，强调色自动加深保证对比度）。桌面与移动端全适配。
 
-![stack](https://img.shields.io/badge/React_19-Vite_7-e6e8ea) ![3d](https://img.shields.io/badge/three.js-R3F_9-9aa2ab) ![video](https://img.shields.io/badge/Video-local_loops-b8ee46)
+![stack](https://img.shields.io/badge/React_19-Vite_8-e6e8ea) ![3d](https://img.shields.io/badge/three.js-R3F_9-9aa2ab) ![video](https://img.shields.io/badge/Video-local_loops-b8ee46)
 
 **新读者从这里开始** → 平台指南（平实语言,功能模块 / 场站中心设计 / 两种接入方式）:[中文](docs/guide.zh.md) · [English](docs/guide.en.md)。开放 API 的机器可读定义:集成面 [docs/openapi.yaml](docs/openapi.yaml) + 会话面全量 [docs/openapi-platform.yaml](docs/openapi-platform.yaml)（OpenAPI 3.0,运行中的平台在线提供 `GET /api/integration/v1/openapi.json` 与 `GET /api/openapi.json`,并在 `<BASE>/api-docs.html` 提供 **Redoc 渲染版**（双规范切换,demo: [m3rcyzzz.club/robots/api-docs.html](https://m3rcyzzz.club/robots/api-docs.html)）)。要接入新机器人/新品牌?仓库自带 **Agent Skill** [.claude/skills/robot-adapter](.claude/skills/robot-adapter/SKILL.md)——交给你的 code agent（Claude Code 等;文件夹自包含,可整体拷进自己的工程),由它引导完成外部 adapter 编写或内置厂商接入。
 
@@ -25,7 +25,7 @@
 | **托管连接器 · 界面直连机器人** | INTEG 面板选厂商填**机器人地址/凭证/原生相机 rtsp://** 即接入——平台把官方 adapter 作为**受监督子进程**代跑（崩溃退避重启、日志面板、boot 自动恢复、退出级联回收）,北向走回环集成 API + 每次启动重签的内部密钥。机器人原生 RTSP 相机直接成为视频墙实时通道,含凭证 URL 只对 admin 回传;LIVE 页也可一键添加固定 RTSP 摄像头。跨网场景仍走外部 adapter + 场站 key（接入向导第一步选模式） |
 | **嵌入与 SSO** | 为「被宿主 webapp 集成」而生:**OIDC/OAuth2 单点登录**（授权码+PKCE,零依赖实现,JIT 开号+角色映射,`OIDC_*` 环境变量即启用）;**iframe 无壳嵌入**（`?embed=1` 隐藏导航壳、`?site=` 钉场站,`PB_COOKIE_SAMESITE=none` 支持跨站 cookie,CSP frame-ancestors 白名单）;**双 OpenAPI**（集成面 v1 + 会话面全量,均在线 serve） |
 | **adapter SDK 双形态** | `sdk/adapter-sdk-ts`（**TypeScript** `@plantbot/adapter-sdk`,零依赖,~50 行写一个 adapter;内置三厂商 adapter 就 import 它,SDK 与实战代码永不漂移）+ `sdk/node-red-contrib-plantbot`（**Node-RED** 四节点:config/robot/orders/event + 示例 flow,南向随意接 Modbus/MQTT/OPC UA 节点）——内置三型号之外的机器人由此接入 |
-| **三层集成架构** | **simulator ⇄ adapter ⇄ platform**（Open-RMF fleet-adapter 式）:`integrations/` 里三家厂商各一对独立进程,**忠实还原官方协议**——Boston Dynamics Spot（59 个官方 proto,gRPC 会话舞蹈 auth→timesync→lease→estop→power 全套闸）/ 云深处 X30（robotserver_sdk 裸 TCP `EB90` 帧+XML,1003 终态语义）/ 高新兴 GS F2（GoRobot 云 `.action` RPC + WS 增量推送 + md5 登录 + 10s 流地址）。adapter 对「真机 or sim」零感知,接真机即插;全行为 e2e 套件（`cd integrations && pnpm test`,起真平台+真 sim+真 adapter,含托管连接器生命周期与开放 API）。设计见 [docs/adapter-sim-architecture.md](docs/adapter-sim-architecture.md) |
+| **三层集成架构** | **simulator ⇄ adapter ⇄ platform**（Open-RMF fleet-adapter 式）:`integrations/` 里三家厂商 adapter（simulator 层剥离到独立仓库 [plantbotsimulator](https://github.com/supcon-international/plantbotsimulator)，自带 RTSP 视频）,**忠实还原官方协议**——Boston Dynamics Spot（59 个官方 proto,gRPC 会话舞蹈 auth→timesync→lease→estop→power 全套闸）/ 云深处 X30（robotserver_sdk 裸 TCP `EB90` 帧+XML,1003 终态语义）/ 高新兴 GS F2（GoRobot 云 `.action` RPC + WS 增量推送 + md5 登录 + 10s 流地址）。adapter 对「真机 or sim」零感知,接真机即插;全行为 e2e 套件（`cd integrations && pnpm test`,起真平台+真 sim+真 adapter,含托管连接器生命周期与开放 API）。设计见 [docs/adapter-sim-architecture.md](docs/adapter-sim-architecture.md) |
 
 ## 快速开始
 
@@ -35,7 +35,7 @@
 git clone https://github.com/supcon-international/plantbot.git && cd plantbot
 pnpm install
 pnpm run setup # 下载巡检视频素材、URDF 孪生网格（云深处 X30 官方模型 + 波士顿动力 Spot 官方 spot_description）、go2rtc 中继二进制（全自动）
-pnpm dev       # server :8787 + web :5173 + go2rtc 中继 :1984 + 五对厂商 sim/adapter（SPOT·A / X30·HB / campus 三厂商协同）
+pnpm dev       # server :8787 + web :5173 + go2rtc 中继 :1984 + 五个厂商 adapter（+仿真机器人若 ../plantbotsimulator 在侧）
 pnpm dev:core  # 只起 server + web
 ```
 
@@ -61,7 +61,7 @@ server/  Fastify 5 + ws + @fastify/static（/media，Range）——纯集成层,
            - 事件生成由启用中的规则驱动（PB_DEMO 限定）,快照 ffmpeg 抓帧（file 或 RTSP 直抓）
            - 视频面 RTSP-first:go2rtc 中继（MEDIA_RELAY）出 MSE 租约,demo 环路走 file 直放
 
-integrations/  三层集成（simulator ⇄ adapter ⇄ platform），10 个独立 Node 进程（5 对）
+integrations/  adapter 层（simulator 在独立仓库 plantbotsimulator），五个 adapter 进程
            - spot/      官方 bosdyn.api proto ×59；sim=gRPC server（lease/estop/power 闸），
                         adapter=mini bosdyn-client（会话舞蹈 + NavigateToAnchor）
                         → SPOT_PROFILE 双实例：plant-07 + campus-east

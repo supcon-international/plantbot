@@ -4,7 +4,7 @@
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import net from 'node:net'
-import { standUpVendor, spawnProc, waitFor, api, fleetRobot, sampleTelemetry, assertArrives, assertOfflineRecovers, type VendorStack } from './harness.js'
+import { standUpVendor, spawnProc, waitFor, api, fleetRobot, sampleTelemetry, assertArrives, assertOfflineRecovers, simsAvailable, type VendorStack } from './harness.js'
 import {
   FrameParser, encodeFrame, TYPE, buildRealtimeReq, buildNavTaskReq, buildCancelReq, defaultNavPoint,
   parseRealtimeResp, parseNavTaskResp, parseCancelResp,
@@ -19,7 +19,10 @@ const RID = 'ext-x30-jy-2024-0007'
 let vs: VendorStack
 let stack: VendorStack['stack']
 
+const SKIP = !simsAvailable() // plantbotsimulator sibling not checked out → skip vendor-behaviour suite
+
 before(async () => {
+  if (SKIP) return
   vs = await standUpVendor({
     port: P,
     site: SITE,
@@ -36,9 +39,9 @@ before(async () => {
   stack = vs.stack
 })
 
-after(() => vs.stop())
+after(() => vs?.stop())
 
-test('注册与遥测：X30 出现在 plant-12 并流动', { timeout: 40_000 }, async () => {
+test('注册与遥测：X30 出现在 plant-12 并流动', { skip: SKIP, timeout: 40_000 }, async () => {
   const r = await fleetRobot(stack, SITE, SN)
   assert.equal(r.integrationLevel, 'dispatchable')
   assert.equal(r.model, 'Jueying X30')
@@ -52,14 +55,14 @@ test('注册与遥测：X30 出现在 plant-12 并流动', { timeout: 40_000 }, 
   assert.ok(t.battery > 0)
 })
 
-test('goto 闭环：平台派单 → 1003 单点 → 到点 → done', { timeout: 90_000 }, async () => {
+test('goto 闭环：平台派单 → 1003 单点 → 到点 → done', { skip: SKIP, timeout: 90_000 }, async () => {
   const target = { x: 5, z: 3 }
   const r = await api(stack, 'POST', `/api/sites/${SITE}/robots/${RID}/goto`, target)
   assert.equal(r.status, 200)
   await assertArrives(stack, SITE, RID, target)
 })
 
-test('mission：多航点 → 单次 1003 原生多点任务 → done；abort → 1004', { timeout: 180_000 }, async () => {
+test('mission：多航点 → 单次 1003 原生多点任务 → done；abort → 1004', { skip: SKIP, timeout: 180_000 }, async () => {
   const m1 = await api(stack, 'POST', `/api/sites/${SITE}/missions`, {
     name: 'e2e berth short',
     requestedRobot: RID,
@@ -93,13 +96,13 @@ test('mission：多航点 → 单次 1003 原生多点任务 → done；abort �
   }, 25_000, 'mission aborted (1004 cancel)')
 })
 
-test('能力矩阵讲真话：announce/ptz 不受协议支持', { timeout: 20_000 }, async () => {
+test('能力矩阵讲真话：announce/ptz 不受协议支持', { skip: SKIP, timeout: 20_000 }, async () => {
   const r = await api(stack, 'POST', `/api/sites/${SITE}/robots/${RID}/commands`, { type: 'announce', text: 'x' })
   // 平台接受命令并转发订单；订单由 adapter 以 failed: unsupported 收尾（平台命令日志仍 accepted）
   assert.equal(r.body.command.accepted, true)
 })
 
-test('本体故障：定位丢失 → robot-fault 事件', { timeout: 90_000 }, async () => {
+test('本体故障：定位丢失 → robot-fault 事件', { skip: SKIP, timeout: 90_000 }, async () => {
   const ev = await waitFor(async () => {
     const { body } = await api(stack, 'GET', `/api/sites/${SITE}/events?limit=120`)
     return body?.events?.find((e: any) => e.source === 'integration' && e.category === 'robot-fault' && /定位丢失/.test(e.detail))
@@ -107,7 +110,7 @@ test('本体故障：定位丢失 → robot-fault 事件', { timeout: 90_000 }, 
   assert.equal(ev.type, 'fault')
 })
 
-test('线协议：seq 回填 / 执行中 41793 拒单 / 1004 取消触发 1003 终态', { timeout: 60_000 }, async () => {
+test('线协议：seq 回填 / 执行中 41793 拒单 / 1004 取消触发 1003 终态', { skip: SKIP, timeout: 60_000 }, async () => {
   // 用一台专属 sim，与 adapter 共用的那台隔离 —— 否则 adapter 的 ensureIdle
   // 会 1004 取消本测试直连下发的任务（共享单一导航栈）。这也更贴近真实:
   // 官方 SDK 客户端本就直连自己的机器人。
@@ -165,6 +168,6 @@ test('线协议：seq 回填 / 执行中 41793 拒单 / 1004 取消触发 1003 �
   }
 })
 
-test('掉线→恢复：sim 重启 → OFFLINE → 自动重连回归', { timeout: 120_000 }, async () => {
+test('掉线→恢复：sim 重启 → OFFLINE → 自动重连回归', { skip: SKIP, timeout: 120_000 }, async () => {
   await assertOfflineRecovers(vs, SITE, RID, { recoverMs: 60_000 })
 })

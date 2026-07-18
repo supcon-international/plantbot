@@ -4,7 +4,7 @@
 // deployment story the INTEG panel sells.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { bootPlatform, spawnProc, waitFor, api, fleetRobot } from './harness.js'
+import { bootPlatform, spawnProc, waitFor, api, fleetRobot, simsAvailable } from './harness.js'
 
 const PORT = 8971
 const SIM_PORT = 31971
@@ -12,7 +12,7 @@ const SITE = 'plant-07'
 const SERIAL = 'X30-CONN-E2E'
 const ROBOT_ID = 'ext-x30-conn-e2e'
 
-test('managed connector：建→托管进程拉起→机器人上线（rtsp 流已脱敏）→停→启→删', { timeout: 180_000 }, async () => {
+test('managed connector：建→托管进程拉起→机器人上线（rtsp 流已脱敏）→停→启→删', { skip: !simsAvailable(), timeout: 180_000 }, async () => {
   const stack = await bootPlatform(PORT)
   const sim = spawnProc('deeprobotics/sim/main.ts', { DR_SIM_PORT: String(SIM_PORT) }, 'dr-sim:conn')
   try {

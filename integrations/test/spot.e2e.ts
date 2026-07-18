@@ -4,7 +4,7 @@
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import grpc from '@grpc/grpc-js'
-import { standUpVendor, waitFor, api, fleetRobot, sampleTelemetry, assertArrives, assertOfflineRecovers, type VendorStack } from './harness.js'
+import { standUpVendor, waitFor, api, fleetRobot, sampleTelemetry, assertArrives, assertOfflineRecovers, simsAvailable, type VendorStack } from './harness.js'
 import { api as bosdyn } from '../spot/loader.js'
 
 const P = 18803
@@ -16,7 +16,10 @@ const RID = 'ext-bd-91250107'
 let vs: VendorStack
 let stack: VendorStack['stack']
 
+const SKIP = !simsAvailable() // plantbotsimulator sibling not checked out → skip vendor-behaviour suite
+
 before(async () => {
+  if (SKIP) return
   vs = await standUpVendor({
     port: P,
     site: SITE,
@@ -32,9 +35,9 @@ before(async () => {
   stack = vs.stack
 })
 
-after(() => vs.stop())
+after(() => vs?.stop())
 
-test('注册与遥测：会话舞蹈完成后 Spot 上线', { timeout: 40_000 }, async () => {
+test('注册与遥测：会话舞蹈完成后 Spot 上线', { skip: SKIP, timeout: 40_000 }, async () => {
   const r = await fleetRobot(stack, SITE, SN)
   assert.equal(r.integrationLevel, 'dispatchable')
   assert.equal(r.vendor, 'Boston Dynamics')
@@ -47,7 +50,7 @@ test('注册与遥测：会话舞蹈完成后 Spot 上线', { timeout: 40_000 },
   assert.ok(t.battery > 0)
 })
 
-test('读数：电池健康 metric（batt.v / batt.temp.c）', { timeout: 40_000 }, async () => {
+test('读数：电池健康 metric（batt.v / batt.temp.c）', { skip: SKIP, timeout: 40_000 }, async () => {
   await waitFor(async () => {
     const { body } = await api(stack, 'GET', `/api/sites/${SITE}/robots/${RID}/readings`)
     const s = JSON.stringify(body)
@@ -55,14 +58,14 @@ test('读数：电池健康 metric（batt.v / batt.temp.c）', { timeout: 40_000
   }, 35_000, 'battery readings')
 })
 
-test('goto 闭环：NavigateToAnchor → REACHED_GOAL', { timeout: 90_000 }, async () => {
+test('goto 闭环：NavigateToAnchor → REACHED_GOAL', { skip: SKIP, timeout: 90_000 }, async () => {
   const target = { x: 8, z: 4 }
   const r = await api(stack, 'POST', `/api/sites/${SITE}/robots/${RID}/goto`, target)
   assert.equal(r.status, 200)
   await assertArrives(stack, SITE, RID, target)
 })
 
-test('mission：逐点巡查 + pause/resume + done；abort 生效', { timeout: 240_000 }, async () => {
+test('mission：逐点巡查 + pause/resume + done；abort 生效', { skip: SKIP, timeout: 240_000 }, async () => {
   const m1 = await api(stack, 'POST', `/api/sites/${SITE}/missions`, {
     name: 'e2e anchors short',
     requestedRobot: RID,
@@ -106,7 +109,7 @@ test('mission：逐点巡查 + pause/resume + done；abort 生效', { timeout: 2
   }, 25_000, 'aborted')
 })
 
-test('dock：导航到 WP-09 充电桩 → 坐下 → charging', { timeout: 150_000 }, async () => {
+test('dock：导航到 WP-09 充电桩 → 坐下 → charging', { skip: SKIP, timeout: 150_000 }, async () => {
   const r = await api(stack, 'POST', `/api/sites/${SITE}/robots/${RID}/commands`, { type: 'dock' })
   assert.equal(r.body.command.accepted, true)
   await waitFor(async () => {
@@ -115,7 +118,7 @@ test('dock：导航到 WP-09 充电桩 → 坐下 → charging', { timeout: 150_
   }, 130_000, 'charging on dock')
 })
 
-test('BehaviorFault → robot-fault 事件（FALL）', { timeout: 60_000 }, async () => {
+test('BehaviorFault → robot-fault 事件（FALL）', { skip: SKIP, timeout: 60_000 }, async () => {
   const ev = await waitFor(async () => {
     const { body } = await api(stack, 'GET', `/api/sites/${SITE}/events?limit=120`)
     return body?.events?.find((e: any) => e.source === 'integration' && e.category === 'robot-fault' && /BehaviorFault/.test(e.detail))
@@ -123,7 +126,7 @@ test('BehaviorFault → robot-fault 事件（FALL）', { timeout: 60_000 }, asyn
   assert.match(ev.detail, /FALL/)
 })
 
-test('会话闸：无 token 拒访 / lease 独占', { timeout: 30_000 }, async () => {
+test('会话闸：无 token 拒访 / lease 独占', { skip: SKIP, timeout: 30_000 }, async () => {
   const creds = grpc.credentials.createInsecure()
   const state = new (bosdyn.RobotStateService as any)(`127.0.0.1:${SIM}`, creds)
   // 1) 不带 token → UNAUTHENTICATED
@@ -146,6 +149,6 @@ test('会话闸：无 token 拒访 / lease 独占', { timeout: 30_000 }, async (
   assert.equal(acq.status, 2, 'body lease exclusively held by adapter')
 })
 
-test('掉线→恢复：sim 重启 → 会话拆除重舞 → 回归', { timeout: 150_000 }, async () => {
+test('掉线→恢复：sim 重启 → 会话拆除重舞 → 回归', { skip: SKIP, timeout: 150_000 }, async () => {
   await assertOfflineRecovers(vs, SITE, RID, { recoverMs: 90_000 }) // 全套会话舞蹈重来
 })

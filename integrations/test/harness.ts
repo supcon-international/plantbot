@@ -3,13 +3,22 @@
 // 没有 mock。每个厂商 suite 用独立端口段，可并行。
 
 import { spawn, type ChildProcess } from 'node:child_process'
-import { mkdtempSync } from 'node:fs'
+import { existsSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const TSX = join(ROOT, 'integrations', 'node_modules', '.bin', 'tsx')
+
+// The robot SIMULATORS live in a separate repo (plantbotsimulator) — the
+// adapters here connect to them exactly as they would to real robots. For the
+// vendor-behaviour e2e we resolve it as a sibling (or PLANTBOT_SIM_DIR); when
+// it's not checked out, those suites skip. Everything sim-free (open-api, sso)
+// still runs.
+export const SIM_DIR = process.env.PLANTBOT_SIM_DIR || join(ROOT, '..', 'plantbotsimulator')
+const SIM_TSX = join(SIM_DIR, 'node_modules', '.bin', 'tsx')
+export const simsAvailable = (): boolean => existsSync(SIM_TSX)
 
 export interface Stack {
   procs: ChildProcess[]
@@ -19,9 +28,12 @@ export interface Stack {
   stop: () => void
 }
 
+/** spawn a process. Sim entries (`<vendor>/sim/…`) run from the sibling
+ *  plantbotsimulator repo; adapters and the server run from this repo. */
 export function spawnProc(entry: string, env: Record<string, string>, tag: string): ChildProcess {
-  const child = spawn(TSX, [entry], {
-    cwd: entry.startsWith('server') ? ROOT : join(ROOT, 'integrations'),
+  const isSim = entry.includes('/sim/')
+  const child = spawn(isSim ? SIM_TSX : TSX, [entry], {
+    cwd: isSim ? SIM_DIR : entry.startsWith('server') ? ROOT : join(ROOT, 'integrations'),
     env: { ...process.env, ...env },
     stdio: ['ignore', 'pipe', 'pipe'],
   })

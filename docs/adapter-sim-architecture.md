@@ -18,34 +18,34 @@
 核心不变式：**adapter 对「真机 or sim」零感知**。它按官方文档做会话、发指令、收状态；
 sim 的唯一职责是把官方协议的 server 面演到以假乱真（包括协议里的坏脾气——见 §3 各厂商「忠实还原的怪癖」）。
 
-## 2. 拓扑与进程
+## 2. 拓扑与进程（两仓库）
 
-平台是**纯集成层**——`sites.ts` 的 `def.robots` 恒为空,三个场站的机器人全部经 adaptor 接入,
-没有平台原生仿真机队。`pnpm dev` 拉起 10 个进程（每个「场站×厂商」一对 sim/adapter）:
+**simulator 层已剥离到独立仓库 [`plantbotsimulator`](https://github.com/supcon-international/plantbotsimulator)**——
+它是「台架上的假机队」:三家仿真机器人（按官方协议还原）+ 自带视频经 go2rtc 以 **RTSP** 对外服务
+（`rtsp://…:8554/<camera>`,机器人相机成为真实可拉取的 RTSP 源）。plantbot 本仓库只留 **adapter**
+（受监督子进程即托管连接器代跑的那份;接真机时也是这份）。adapter 对「真机 / 仿真机器人」零感知——
+指向 plantbotsimulator 就是仿真,指向真机就是生产。
 
 ```
-┌───────────────────────────── pnpm dev ─────────────────────────────┐
-│ server :8787 (pure integration layer)   web :5173 (vite)           │
-│                                                                     │
-│ integrations/ (10 standalone node processes)                        │
-│  plant-07  spot-sim :9103  ⇅ spot-adapter(SPOT_PROFILE=plant07)     │  SPOT·A
-│  plant-12  dr-sim  :30000  ⇅ dr-adapter(DR_PROFILE=plant12)         │  X30·HB
-│  campus    gosuncn-sim :9101 ⇅ gosuncn-adapter                      │  GS·F2×2
-│  campus    spot-sim :9113  ⇅ spot-adapter(SPOT_PROFILE=campus)      │  SPOT·CE
-│  campus    dr-sim  :30010  ⇅ dr-adapter(DR_PROFILE=campus)          │  X30·CE
-└─────────────────────────────────────────────────────────────────────┘
-    adapter 北向统一走 /api/integration/v1(Bearer 场站 key)
-    campus 一屏体现三厂商三 adaptor 协同(Spot + X30 + GS·F2)
+┌──────────── plantbot (this repo) ────────────┐   ┌──── plantbotsimulator (sibling repo) ────┐
+│ server :8787 (纯集成层)   web :5173 (vite)     │   │ RTSP 视频 :8554 (go2rtc,循环 mp4)        │
+│ integrations/ 五个 adapter 进程:               │   │ 三家仿真机器人(官方协议 server 面):       │
+│   spot-adapter ×2  (plant07 / campus)         │◄──┤   spot-sim   :9103/:9113 (bosdyn gRPC)   │
+│   dr-adapter   ×2  (plant12 / campus)         │   │   dr-sim     :30000/:30010 (EB90 TCP)    │
+│   gosuncn-adapter  (campus, 一对驱两台 F2)      │   │   gosuncn-sim :9101 (GoRobot 云 REST+WS) │
+└───────────────────────────────────────────────┘   └──────────────────────────────────────────┘
+    adapter 北向走 /api/integration/v1(Bearer 场站 key);campus 一屏三厂商协同
 ```
 
-`ROBOT_CATALOG`(`fleet.ts`)与接入向导只列有 adaptor 的三种型号:Spot / Jueying X30 / GS Patrol F2。
-spot/deeprobotics 的 sim+adapter 用 `SPOT_PROFILE`/`DR_PROFILE` 选身份(serial/callsign)+通道命名+场站 key,
+`pnpm dev` 经 `integrations/scripts/dev-all.mjs` 拉起五个 adapter;若 `../plantbotsimulator`
+（或 `PLANTBOT_SIM_DIR`）已 checkout,连它的仿真机器人一起拉起 → 全栈演示（含真 RTSP 视频）;
+未 checkout 则只跑 adapter,机器人显示 OFFLINE（即生产形态——等你指向真机）。
+
+`ROBOT_CATALOG`(`fleet.ts`)与接入向导只列有 adapter 的三种型号:Spot / Jueying X30 / GS Patrol F2。
+spot/deeprobotics 的 adapter 用 `SPOT_PROFILE`/`DR_PROFILE` 选身份(serial/callsign)+通道命名+场站 key,
 同一份代码起两个实例。
 
-- 每个 sim / adapter 都可**单独启动**：`pnpm --filter integrations sim:spot` 等六条脚本
-  （3 厂商 × sim/adapter;spot/deeprobotics 各以两组 profile 环境变量跑双实例 → 10 进程）;
-  `pnpm dev` 用 `integrations/scripts/dev-all.mjs` 一起拉起（崩溃自动重生,前缀日志）。
-- **三种协议形态刻意异构**——这正是 adapter 层存在的理由:
+- **三种协议形态刻意异构**——这正是 adapter 层存在的理由（sim 侧在 plantbotsimulator 忠实还原同一协议的 server 面）:
   - Spot：**机直连 gRPC 会话模型**（auth JWT → time-sync → lease keep-alive → estop check-in → power → command）;
   - 云深处：**机直连裸 TCP**（16 字节二进制帧头 + XML 报文,请求/响应靠序列号配对）;
   - 高新兴：**厂商云 REST+WS**（adapter 连的是 GoRobot 云平台,不是机器人;告警/状态从云上转手）。
@@ -57,7 +57,7 @@ spot/deeprobotics 的 sim+adapter 用 `SPOT_PROFILE`/`DR_PROFILE` 选身份(seri
 ### 秘钥交接（adapter onboarding）
 
 生产：管理员在 Integrations 面板签发场站 key，或 `PB_SEED_KEYS="plant-07=pbk_…"` 由 systemd 注入。
-开发：根 `pnpm dev` 给 server 挂 `PB_DEV_KEYS=1`，播种确定性 `pbk_dev_<site>`，十个进程零配置互认。
+开发：根 `pnpm dev` 给 server 挂 `PB_DEV_KEYS=1`，播种确定性 `pbk_dev_<site>`，adapter 与仿真机器人零配置互认。
 （对照反面：GoRobot 把 `Basic admin:admin` 写死在文档里——key 必须可轮换、不进 git。）
 
 ## 3. 厂商映射表（vendor ⇄ 平台六域）
@@ -154,7 +154,7 @@ deviceId/robotSn/deviceCode 并存；激光地图 y 轴原点左下角；WS Robo
 
 ## 6. 生产部署
 
-十个进程（5 对）用 systemd 各一个 unit（`plantbot-sim-*.service` 仅演示环境需要；接真机时只部署 adapter），
+生产只部署 **adapter**（五个进程,systemd 各一 unit;仿真机器人 plantbotsimulator 只在演示/开发环境需要），
 环境变量：`PLANTBOT_BASE=http://127.0.0.1:8787`、`PLANTBOT_KEY=<PB_SEED_KEYS 对应值>`、
 `STREAM_BASE=/robots/media`（子路径部署时流地址前缀）、多实例的 `SPOT_PROFILE`/`DR_PROFILE`。
 详见 [deploy.md](deploy.md)。

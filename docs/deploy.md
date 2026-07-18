@@ -79,9 +79,9 @@ Restart=on-failure
    - **外部 adapter**（跨网/自有运行时/内置三型号之外）：INTEG 签发场站 API key（**明文只显示一次**,库里存哈希）→ 填进 adapter 的 `PLANTBOT_KEY`,起 adapter（见下节）。SDK 有 TypeScript 与 Node-RED 两种形态（`sdk/`,见 docs/integration.md）。
 6. 机器人自动注册出现在机队。
 
-### 集成层（simulator/adapter 五对，演示环境）
+### 集成层（adapter × 五；simulator 在独立仓库 plantbotsimulator）
 
-全部机器人来自 `integrations/`：3 套厂商代码 → 10 个运行进程（5 对）——plant-07 = SPOT·A、
+机器人经 `integrations/` 的五个 **adapter** 进程接入——plant-07 = SPOT·A、
 plant-12 = X30·HB、campus-east = SPOT·CE + X30·CE + GS·F2×2（gosuncn 一对驱动两台）。
 演示环境 sim+adapter 都跑；接真机时只部署 adapter。生产采用**单编排器 unit**
 `plantbot-integrations.service`：`ExecStart` 跑一个仓库外的 `plantbot-run-integrations.mjs`

@@ -4,7 +4,7 @@ Plantbot：多场站巡检机器人运营平台——**纯集成层**，机器�
 
 - `server/` — Fastify 5 平台：会话面 `/api/sites/:siteId/*`（RBAC）+ 开放面 `/api/integration/v1`（Bearer 场站 key）；node:sqlite 持久化；一个场站一个 `World` 实例（`server/src/world.ts`）
 - `web/` — Vite 7 + React 19 SPA（shadcn/ui 皮肤化为 Carbon 工业控制台 + R3F 3D）
-- `integrations/` — 三厂商 **simulator ⇄ adapter** 独立进程对（Spot·gRPC / 云深处 X30·TCP+XML / 高新兴 F2·REST+WS），经 profile 起 5 对 10 进程
+- `integrations/` — 三厂商 **adapter**（Spot·gRPC / 云深处 X30·TCP+XML / 高新兴 F2·REST+WS），经 profile 起五个 adapter 进程。**simulator 层已剥离到独立仓库 [plantbotsimulator](https://github.com/supcon-international/plantbotsimulator)**（三家仿真机器人 + 自带 RTSP 视频）——adapter 指向它=仿真,指向真机=生产
 - `sdk/` — adapter SDK 双形态：TypeScript `@plantbot/adapter-sdk`（workspace 包，零依赖；`integrations/shared` 是薄 re-export——SDK 源码即内置 adapter 用的客户端，不会漂移）+ Node-RED `node-red-contrib-plantbot`（config/robot/orders/event 四节点 + 示例 flow，凭证存 Node-RED credential store）
 
 ## 命令
@@ -12,7 +12,7 @@ Plantbot：多场站巡检机器人运营平台——**纯集成层**，机器�
 ```bash
 pnpm install              # 要求 Node ≥ 22.22（react-router 8 / vite 8 要求;平台用内建 node:sqlite）
 pnpm run setup            # 必须带 run（裸 `pnpm setup` 是 pnpm 内置命令）；下载素材+X30/Spot URDF+go2rtc(bin/)
-pnpm dev                  # server :8787（PB_DEMO=1 + PB_DEV_KEYS=1 + 固定 SESSION_SECRET + MEDIA_RELAY→:1984）+ web :5173 + go2rtc 中继 + 五对 sim/adapter
+pnpm dev                  # server :8787（PB_DEMO=1 + PB_DEV_KEYS=1 + 固定 SESSION_SECRET + MEDIA_RELAY→:1984）+ web :5173 + go2rtc 中继 + 五个 adapter（+仿真机器人若 plantbotsimulator 在侧）
 pnpm dev:core             # 仅 server + web（不起集成层）
 WEB_BASE=/robots/ pnpm build   # 生产构建（见下）；本地根路径构建用 pnpm build
 cd server && node_modules/.bin/tsc --noEmit         # 服务端类型检查（无独立 build）
@@ -54,7 +54,7 @@ cd integrations && pnpm test                        # 全行为 e2e（起真平�
 
 - **三层架构** simulator ⇄ adapter ⇄ platform（设计与厂商映射见 `docs/adapter-sim-architecture.md`）：sim 按官方协议还原机器人/厂商云的 server 面，adapter 面向官方协议写 client、北向翻译到 `/api/integration/v1`（对真机即插）。三家刻意异构：Spot = 机直连 gRPC 会话（59 个官方 proto vendored，auth→timesync→lease→estop→power 全套闸）、X30 = 裸 TCP `EB90` 帧+XML（robotserver_sdk）、F2 = 厂商云 REST `.action`+WS 推送。
 - **接入型号只有三种**（`ROBOT_CATALOG` in `fleet.ts` = 有 adapter 的型号）：Spot / Jueying X30 / GS Patrol F2，向导也只列这三种。场站机队分布：plant-07 = SPOT·A；plant-12 = X30·HB；campus-east = SPOT·CE + X30·CE + GS·F2×2（三厂商一屏协同）。X30/Spot 有官方 URDF 孪生（Spot 为白色系材质 SPOT_BODY/LIMB_MAT、压平 URDF 在 repo 内、网格 setup 下载；X30 钢灰），GS·F2 用 silhouette。
-- **多实例编排**：spot/deeprobotics 用 `SPOT_PROFILE`/`DR_PROFILE`（plant07|campus / plant12|campus）选身份+通道+场站 key，同一份代码起两实例；`pnpm dev` 经 `integrations/scripts/dev-all.mjs` 拉起 10 进程。e2e 模式见 `integrations/test/harness.ts`：临时端口 + `PB_DATA_DIR` 起真平台，`standUpVendor` 一站式厂商 fixture。
+- **多实例编排**：spot/deeprobotics 用 `SPOT_PROFILE`/`DR_PROFILE`（plant07|campus / plant12|campus）选身份+通道+场站 key，同一份代码起两实例；`pnpm dev` 经 `integrations/scripts/dev-all.mjs` 拉起五个 adapter，并在 `../plantbotsimulator`（或 `PLANTBOT_SIM_DIR`）存在时连仿真机器人一起拉起（否则只跑 adapter，机器人 OFFLINE=生产形态）。e2e 模式见 `integrations/test/harness.ts`：临时端口 + `PB_DATA_DIR` 起真平台，`standUpVendor` 一站式厂商 fixture；sim 从 sibling 解析（`simsAvailable()` 缺失即 skip 厂商行为套件，平台/SSO 套件照跑）。
 - **两种接入模式**（向导 FLEET→CONNECT ROBOT 第一步选）：**托管连接器**——`server/src/connectors.ts` supervisor 把 `integrations/` 的官方 adapter 作为**受监督子进程**代跑（崩溃退避重启、200 行日志环缓、boot 自动恢复、平台退出级联回收），北向走回环集成 API + 每次 boot 重签的内部密钥（明文只在内存）；身份经 `PB_SERIAL/PB_CALLSIGN/PB_DOCK_X|Z/PB_STREAMS`（bridge.ts `customProfileFromEnv`）注入，rtsp:// 流原样进 factsheet。**外部 adapter**——场站 key + 北向 API，跨网/任意型号。
 - **真机坐标系**：dr/spot adapter 的 `toWorld/toMap` 经 `worldTransformFromEnv()`（bridge.ts，`PB_TF_SCALE/THETA/TX/TZ`，CALIB 页解出）做厂商 SLAM 系→世界系相似变换，默认恒等（demo 的 sim 原点即世界原点）；connector 表单有对应可选字段。
 - **开放数据面**：同一把场站 key 可只读 GET fleet（机队+遥测）/ events（过滤）/ missions / schedules / channels（脱敏）/ robots/:serial/readings——World 的 `telemetry()` 是 tick 的纯读版，**GET 端点禁止调 tick**（有调度副作用）。**OpenAPI 双规范都是事实源**：集成面 `docs/openapi.yaml`（`GET /api/integration/v1/openapi.json`）+ 会话面全量 `docs/openapi-platform.yaml`（`GET /api/openapi.json`），boot 时解析、免鉴权 serve——**改任一面的 API 必须同步对应 yaml**。`GET /site` 含 metric 注册表，`GET /maps`（集成面）回底图+标定变换。adapter 秘钥播种 `PB_SEED_KEYS`/`PB_DEV_KEYS`、订单七类（goto/mission/announce/pause/resume/abort/ptz）与 `dock:true` 语义、证据快照服务见 `docs/integration.md`。

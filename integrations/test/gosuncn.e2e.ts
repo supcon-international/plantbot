@@ -4,7 +4,7 @@
 
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { standUpVendor, waitFor, api, integration, fleetRobot, sampleTelemetry, assertArrives, assertOfflineRecovers, type VendorStack } from './harness.js'
+import { standUpVendor, waitFor, api, integration, fleetRobot, sampleTelemetry, assertArrives, assertOfflineRecovers, simsAvailable, type VendorStack } from './harness.js'
 
 const P = 18801
 const SIM = 19001
@@ -16,7 +16,10 @@ const RID1 = 'ext-gscn-f2-2024-0117'
 let vs: VendorStack
 let stack: VendorStack['stack']
 
+const SKIP = !simsAvailable() // plantbotsimulator sibling not checked out → skip vendor-behaviour suite
+
 before(async () => {
+  if (SKIP) return
   vs = await standUpVendor({
     port: P,
     site: SITE,
@@ -33,9 +36,9 @@ before(async () => {
   stack = vs.stack
 })
 
-after(() => vs.stop())
+after(() => vs?.stop())
 
-test('注册：两台 F2 以正确等级出现', { timeout: 30_000 }, async () => {
+test('注册：两台 F2 以正确等级出现', { skip: SKIP, timeout: 30_000 }, async () => {
   const r1 = await fleetRobot(stack, SITE, SN1)
   const r2 = await waitFor(() => fleetRobot(stack, SITE, 'GSCN-F2-2024-0118'), 20_000, 'unit2')
   assert.equal(r1.integrationLevel, 'dispatchable')
@@ -44,7 +47,7 @@ test('注册：两台 F2 以正确等级出现', { timeout: 30_000 }, async () =
   assert.ok(r1.payloads.some((p: any) => p.stream === 'gs1-rear'), 'rear channel registered')
 })
 
-test('遥测：位姿在界内流动，巡逻中出现运动', { timeout: 40_000 }, async () => {
+test('遥测：位姿在界内流动，巡逻中出现运动', { skip: SKIP, timeout: 40_000 }, async () => {
   const frames = await waitFor(async () => {
     const f = await sampleTelemetry(stack.base, SITE, RID1, 8000)
     return f.length >= 4 ? f : null
@@ -58,7 +61,7 @@ test('遥测：位姿在界内流动，巡逻中出现运动', { timeout: 40_000
   assert.ok(moved || posDelta > 0.3, 'robot patrols (speed or displacement observed)')
 })
 
-test('事件桥：厂商告警映射为平台事件，带快照与置信度', { timeout: 70_000 }, async () => {
+test('事件桥：厂商告警映射为平台事件，带快照与置信度', { skip: SKIP, timeout: 70_000 }, async () => {
   const ev = await waitFor(async () => {
     const { body } = await api(stack, 'GET', `/api/sites/${SITE}/events?limit=120`)
     return body?.events?.find(
@@ -70,7 +73,7 @@ test('事件桥：厂商告警映射为平台事件，带快照与置信度', { 
   assert.match(ev.detail, /GoRobot #\d+/, 'vendor alarm id kept in detail')
 })
 
-test('读数：环境三件套进 metric 时序', { timeout: 40_000 }, async () => {
+test('读数：环境三件套进 metric 时序', { skip: SKIP, timeout: 40_000 }, async () => {
   await waitFor(async () => {
     const { body } = await api(stack, 'GET', `/api/sites/${SITE}/robots/${RID1}/readings`)
     const s = JSON.stringify(body)
@@ -78,7 +81,7 @@ test('读数：环境三件套进 metric 时序', { timeout: 40_000 }, async () 
   }, 35_000, 'ambient readings')
 })
 
-test('goto 闭环：tap-to-dispatch → navigateToPoint → 到点', { timeout: 90_000 }, async () => {
+test('goto 闭环：tap-to-dispatch → navigateToPoint → 到点', { skip: SKIP, timeout: 90_000 }, async () => {
   const target = { x: -12, z: 7.6 }
   const r = await api(stack, 'POST', `/api/sites/${SITE}/robots/${RID1}/goto`, target)
   assert.equal(r.status, 200)
@@ -87,7 +90,7 @@ test('goto 闭环：tap-to-dispatch → navigateToPoint → 到点', { timeout: 
   assert.equal(st.body.ordersPending, 0, 'order queue drained')
 })
 
-test('dock 语义：平台 dock 命令 → 厂商一键充电 → charging', { timeout: 120_000 }, async () => {
+test('dock 语义：平台 dock 命令 → 厂商一键充电 → charging', { skip: SKIP, timeout: 120_000 }, async () => {
   const r = await api(stack, 'POST', `/api/sites/${SITE}/robots/${RID1}/commands`, { type: 'dock' })
   assert.equal(r.body.command.accepted, true)
   await waitFor(async () => {
@@ -96,7 +99,7 @@ test('dock 语义：平台 dock 命令 → 厂商一键充电 → charging', { t
   }, 100_000, 'charging mode reached')
 })
 
-test('mission：显式指派 → 逐点巡查 → done；abort 生效', { timeout: 180_000 }, async () => {
+test('mission：显式指派 → 逐点巡查 → done；abort 生效', { skip: SKIP, timeout: 180_000 }, async () => {
   // 指派两点任务
   const m1 = await api(stack, 'POST', `/api/sites/${SITE}/missions`, {
     name: 'e2e patrol short',
@@ -134,12 +137,12 @@ test('mission：显式指派 → 逐点巡查 → done；abort 生效', { timeou
   assert.equal(aborted.status, 'aborted')
 })
 
-test('announce：喊话命令被接受并转发厂商', { timeout: 20_000 }, async () => {
+test('announce：喊话命令被接受并转发厂商', { skip: SKIP, timeout: 20_000 }, async () => {
   const r = await api(stack, 'POST', `/api/sites/${SITE}/robots/${RID1}/commands`, { type: 'announce', text: '前方巡逻，请注意安全' })
   assert.equal(r.body.command.accepted, true)
 })
 
-test('线协议怪癖：Basic 登录闸 / 手动模式前置 / 10s 流地址', { timeout: 30_000 }, async () => {
+test('线协议怪癖：Basic 登录闸 / 手动模式前置 / 10s 流地址', { skip: SKIP, timeout: 30_000 }, async () => {
   const base = `http://127.0.0.1:${SIM}`
   // 1) 缺 Basic admin:admin → 拒
   const noBasic = await fetch(`${base}/robotservice/auth/login`, { method: 'POST', body: new FormData() })
@@ -168,6 +171,6 @@ test('线协议怪癖：Basic 登录闸 / 手动模式前置 / 10s 流地址', {
   assert.notEqual(v1.data.url, v2.data.url, 'each getVideoUrl mints a fresh session url')
 })
 
-test('掉线→恢复：sim 重启后 20s 判 OFFLINE、随后自动回归', { timeout: 120_000 }, async () => {
+test('掉线→恢复：sim 重启后 20s 判 OFFLINE、随后自动回归', { skip: SKIP, timeout: 120_000 }, async () => {
   await assertOfflineRecovers(vs, SITE, RID1, { recoverMs: 60_000 })
 })
