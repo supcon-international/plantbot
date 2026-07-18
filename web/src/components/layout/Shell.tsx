@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import {
+  BookOpen,
   Bot,
   Building2,
   Cctv,
@@ -39,6 +40,7 @@ const NAV_ADMIN = [
   ...NAV,
   { to: '/integrations', key: 'nav.integrations', icon: Plug },
   { to: '/sites', key: 'nav.sites', icon: Building2 },
+  { to: '/docs', key: 'nav.docs', icon: BookOpen },
 ]
 
 /** Tier0 mark (docs.tier0.app favicon) — inlined so subpath deploys need no asset lookup */
@@ -213,20 +215,48 @@ function RouteStage({ routeKey }: { routeKey: string }) {
   )
 }
 
-/** iframe embedding: ?embed=1 strips the chrome (side rail / top bar / mobile
- *  nav) so a host webapp can frame a single page; sticky per tab-session so
- *  in-app navigation keeps the embedded shape. ?embed=0 exits. */
-function useEmbedded(): boolean {
+/** iframe embedding: ?embed=1 drops the full app chrome (brand / utilities /
+ *  side rail) so a host webapp can frame Plantbot without a competing header —
+ *  but keeps a compact module-nav strip so users can still move between
+ *  modules. Sticky per tab-session; ?embed=0 exits.
+ *
+ *  ?embednav=top|bottom|hidden controls where that strip sits, so a host that
+ *  already owns the top edge can push it to the bottom (or hide it and drive
+ *  navigation itself via the URL). Default: a slim top strip. */
+type EmbedNavPos = 'top' | 'bottom' | 'hidden'
+function useEmbedState(): { embedded: boolean; navPos: EmbedNavPos } {
   return useMemo(() => {
-    const q = new URLSearchParams(window.location.search).get('embed')
-    try {
-      if (q === '1') sessionStorage.setItem('pb-embed', '1')
-      if (q === '0') sessionStorage.removeItem('pb-embed')
-      return sessionStorage.getItem('pb-embed') === '1'
-    } catch {
-      return q === '1' // sandboxed iframe without storage — honor the URL alone
+    const q = new URLSearchParams(window.location.search)
+    const read = (key: string, storeKey: string): string | null => {
+      const v = q.get(key)
+      try {
+        if (v !== null) {
+          if (v === '0' || v === 'off') sessionStorage.removeItem(storeKey)
+          else sessionStorage.setItem(storeKey, v)
+        }
+        return sessionStorage.getItem(storeKey)
+      } catch {
+        return v // sandboxed iframe without storage — honor the URL alone
+      }
     }
+    const embedFlag = read('embed', 'pb-embed')
+    const navRaw = read('embednav', 'pb-embednav')
+    const navPos: EmbedNavPos = navRaw === 'bottom' ? 'bottom' : navRaw === 'hidden' ? 'hidden' : 'top'
+    return { embedded: embedFlag === '1', navPos }
   }, [])
+}
+
+/** compact module switcher for embed mode — icons + labels, no brand/utilities;
+ *  reads as this widget's own tabs, not a second app header */
+function EmbedNav({ nav, critCount, pos }: { nav: typeof NAV_ADMIN; critCount: number; pos: 'top' | 'bottom' }) {
+  const t = useT()
+  return (
+    <nav className={`embed-nav ${pos === 'bottom' ? 'is-bottom' : 'is-top'}`}>
+      {nav.map((n) => (
+        <NavItem key={n.to} to={n.to} label={t(n.key)} icon={n.icon} badge={n.to === '/events' ? critCount : 0} />
+      ))}
+    </nav>
+  )
 }
 
 /** production empty state — a fresh (non-demo) deployment has no sites yet */
@@ -254,7 +284,7 @@ function NoSitesHero() {
 
 export function Shell() {
   const location = useLocation()
-  const embedded = useEmbedded()
+  const { embedded, navPos } = useEmbedState()
   const lang = useLang((s) => s.lang)
   const t = useT()
   const isAdmin = useCan('admin')
@@ -280,6 +310,7 @@ export function Shell() {
     if (path === '/map') return { title: site?.name ?? t('nav.map') }
     if (path === '/events') return { title: t('ev.center') }
     if (path === '/integrations') return { title: t('integ.title') }
+    if (path === '/docs') return { title: t('docs.title') }
     if (path === '/login') return { title: t('login.title') }
     if (path === '/sites') return { title: t('nav.sitesTitle') }
     if (path.startsWith('/sites/')) return { title: t('sb.title') }
@@ -304,13 +335,15 @@ export function Shell() {
   const emptyPlatform =
     sitesLoaded && sites.length === 0 && location.pathname !== '/sites' && location.pathname !== '/login'
 
-  // embedded (iframe) shape: content only — same standalone-main layout the
-  // PB_PUBLIC_VIEW gate uses; the host app owns navigation and chrome
+  // embedded (iframe) shape: a compact module-nav strip + content, no app
+  // chrome. The host owns brand / auth / utilities; we keep just enough to
+  // navigate between modules. Strip position is host-configurable (embednav).
   if (embedded) {
     return (
-      <div className="app-shell">
+      <div className={`app-shell embed-shell embed-nav-${navPos}`}>
         <Toaster />
-        <main className="app-main col-span-full row-span-full">
+        {navPos !== 'hidden' && <EmbedNav nav={nav} critCount={critCount} pos={navPos} />}
+        <main className="app-main embed-main">
           {emptyPlatform ? <NoSitesHero /> : <RouteStage routeKey={`${location.pathname}${location.search}`} />}
         </main>
       </div>

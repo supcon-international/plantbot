@@ -54,6 +54,10 @@ const D: Record<string, [string, string]> = {
   'login.failed': ['Invalid credentials', '用户名或密码错误'],
   'login.gated': ['This deployment requires sign-in to view.', '该部署要求登录后访问。'],
   'nav.sites': ['SITES', '场站'],
+  'nav.docs': ['DOCS', '文档'],
+  'docs.title': ['API & Integration', 'API 与集成'],
+  'docs.sub': ['Connect robots, embed the console, drive Plantbot from your systems', '接入机器人、嵌入控制台、从你的系统驱动 Plantbot'],
+  'docs.apiRef': ['API reference', 'API 参考'],
   'nav.sitesTitle': ['Sites & accounts', '场站与账户'],
 
   // ---------- site builder ----------

@@ -12,6 +12,7 @@ import { Login } from './pages/Login'
 import { Integrations } from './pages/Integrations'
 import { Sites } from './pages/Sites'
 import { SiteBuilder } from './pages/SiteBuilder'
+import { Docs } from './pages/Docs'
 
 export function App() {
   return (
@@ -27,6 +28,7 @@ export function App() {
           <Route path="events" element={<Events />} />
           <Route path="login" element={<Login />} />
           <Route path="integrations" element={<Integrations />} />
+          <Route path="docs" element={<Docs />} />
           <Route path="sites" element={<Sites />} />
           <Route path="sites/:siteId" element={<SiteBuilder />} />
         </Route>

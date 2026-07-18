@@ -367,6 +367,34 @@ textarea:focus-visible {
 .mobile-nav .nav-item-signal { inset: -1px 0 auto; width: 0; height: 2px; transition: width 130ms ease; }
 .mobile-nav .nav-item.is-active .nav-item-signal { width: 100%; }
 
+/* --- embed (iframe) mode: compact module strip, no app chrome --- */
+.embed-shell { display: flex; flex-direction: column; }
+.embed-nav-bottom { flex-direction: column-reverse; }
+.embed-nav {
+  display: flex;
+  flex: none;
+  gap: 4px;
+  align-items: stretch;
+  overflow-x: auto;
+  height: 46px;
+  padding: 6px 8px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-line);
+}
+.embed-nav.is-bottom { border-bottom: 0; border-top: 1px solid var(--color-line); }
+.embed-nav .nav-item {
+  flex: 0 0 auto;
+  flex-direction: row;
+  gap: 6px;
+  min-height: 0;
+  padding: 0 12px;
+  border: 1px solid transparent;
+}
+.embed-nav .nav-item-label { display: block; flex: none; font-size: 10.5px; letter-spacing: 0.12em; }
+.embed-nav .nav-item-signal { inset: auto 0 -6px; width: 0; height: 2px; transition: width 130ms ease; }
+.embed-nav .nav-item.is-active .nav-item-signal { width: 100%; }
+.embed-main { padding-top: 0; padding-bottom: 0; margin-left: 0; flex: 1 1 auto; min-height: 0; }
+
 .route-signal {
   position: absolute;
   inset: 0 0 auto;
