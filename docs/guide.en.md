@@ -14,7 +14,7 @@ Eight entries on the left rail, one job each:
 | **LIVE** | What do the cameras see? — robot onboard cameras plus fixed cameras, focus view or wall; admins add, edit and remove fixed cameras right here |
 | **TASKS** | How are the patrols going? — running, queued and historical missions, step by step, with what was captured at each stop |
 | **FLEET** | How are the robots doing? — battery, speed, current job for every unit, with 3D models; the "connect a robot" wizard lives here too |
-| **MAP** | What does the plant look like? — the full working map, switchable to a photorealistic 3D scan |
+| **MAP** | What does the plant look like? — the full working map: base layer, zones, waypoints and live robot positions |
 | **EVENTS** | What happened? — an alarm board split by severity, every entry with snapshot evidence; acknowledge, resolve or dismiss |
 | **INTEG** | How do external systems plug in? — managed connectors, API keys, the event vocabulary and map upload, all on one page |
 | **SITES** | Which plants are on the platform? — create sites, draw them (Site Builder), manage user accounts |
@@ -68,7 +68,9 @@ Everything important on the platform can be read over HTTP with the same site ke
 - the video channel list
 - sensor readings (query a metric over a time range)
 
-The full interface definition is a standard **OpenAPI 3.0 document**: [openapi.yaml](openapi.yaml) in the repo, and served live by a running platform (`GET /api/integration/v1/openapi.json`, no auth). Drop it into any OpenAPI tool (Swagger UI, Postman, Apifox) to browse and try every endpoint.
+The full interface definition comes as two standard **OpenAPI 3.0 documents**: the integration face [openapi.yaml](openapi.yaml) (robot reporting + read-only data) and the session face [openapi-platform.yaml](openapi-platform.yaml) covering every console operation. A running platform serves both live (`GET /api/integration/v1/openapi.json` and `GET /api/openapi.json`, no auth). Drop them into any OpenAPI tool (Swagger UI, Postman, Apifox) to browse and try.
+
+Want Plantbot **inside your own system**? Pages embed chrome-less in an iframe (`?embed=1&site=…`) and sign-in can delegate to your identity provider (OIDC/OAuth2 SSO) — see the "Embedding & SSO" section of [integration.md](integration.md).
 
 Fields that contain video source addresses (with embedded credentials) never leave through these APIs — playback goes through viewing sessions, evidence frames through the snapshot endpoint.
 

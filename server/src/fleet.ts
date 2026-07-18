@@ -222,7 +222,7 @@ export interface CommandRecord {
 
 export interface MapAsset {
   id: string
-  kind: 'occupancy' | 'splat' | 'aerial'
+  kind: 'occupancy' | 'aerial'
   name: string
   /** starts with '/' → server URL (PUB applied); else web-relative (client prepends BASE) */
   url: string

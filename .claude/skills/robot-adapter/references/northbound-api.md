@@ -18,7 +18,7 @@ Write side (adapter → platform):
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/site` | Site factsheet: bounds, waypoints, zones, event-type vocabulary |
+| GET | `/site` | Site factsheet: bounds, waypoints, zones, event-type vocabulary, reading-metric registry (`metrics`) |
 | POST | `/robots` | Register/update robot (factsheet, idempotent by `serial`) |
 | DELETE | `/robots/:serial` | Deregister (rarely needed — going silent just shows OFFLINE) |
 | POST | `/robots/:serial/state` | ~1 Hz state report; doubles as heartbeat (>20 s → OFFLINE); response carries `ordersPending` |
@@ -39,6 +39,7 @@ Read side (same key, for BI / self-verification / third-party systems; **read-on
 | GET | `/schedules` | Schedules + templates |
 | GET | `/channels` | Video channels (source URLs redacted) |
 | GET | `/robots/:serial/readings?metric&since&limit` | Reading time series (limit ≤ 1000) |
+| GET | `/maps` | Map inventory + calibration transforms (similarity params for pixel/vendor/WGS84 → world) |
 | GET | `/openapi.json` | This API's OpenAPI 3.0 document (no auth) |
 
 ## Factsheet (POST /robots)

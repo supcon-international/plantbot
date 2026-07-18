@@ -72,8 +72,6 @@ export interface SiteDef {
   missionSeeds: SeedMissionDef[]
   /** minutes-ago offsets for the seeded event history */
   eventSeedMins: number[]
-  /** 3DGS scan of the yard, if one exists — listed as a first-class map asset */
-  splat?: { name: string; url: string }
   /** site-specific event vocabulary, registered at boot (integration systems can post these) */
   eventTypeSeeds?: { id: string; label: string; severity: Severity; detail?: string; category?: EventCategory }[]
   /** demo calibration transforms (e.g. the wgs84 anchor) — stored, editable in the calibration UI */
@@ -276,7 +274,6 @@ const plant07: SiteDef = {
     },
   ],
   eventSeedMins: [3, 7, 12, 19, 26, 34, 47, 58, 73, 95, 121, 148, 176, 204],
-  splat: { name: 'Warehouse 3DGS scan', url: 'assets/scenes/plant_yard.splat' },
   transformSeeds: [
     {
       id: 'wgs84-anchor',

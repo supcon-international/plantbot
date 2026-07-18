@@ -28,7 +28,7 @@
 
 ```
 Site (World)
-├─ Map[]            occupancy | splat | aerial     ←— integration: 地图上传
+├─ Map[]            occupancy | aerial             ←— integration: 地图上传
 │   └─ Transform[]  mapFrame ↔ world ↔ wgs84       (标定即资源)
 ├─ Waypoint[] / Zone[]                              (site 级,非机器人私产)
 ├─ Robot[]  adapter: sim | external
@@ -185,14 +185,14 @@ interface MissionRun {             // “执行” —— 即现有 Mission,改�
 
 ### 2.5 建图(Map + Transform)
 
-现状:site 单张 occupancy(ROS 约定 origin/resolution)+ splat 场景写死前端;已优于 GoRobot
+现状:site 单张 occupancy(ROS 约定 origin/resolution);已优于 GoRobot
 (坐标只有 world 一个出口,UI 从不翻转)。
 
 目标:多地图 + 显式变换:
 
 ```ts
 interface MapAsset {
-  id: string; kind: 'occupancy' | 'splat' | 'aerial'
+  id: string; kind: 'occupancy' | 'aerial'
   name: string; url: string                       // 完整可访问 url(带 PUB 前缀)
   occupancy?: { resolution: number; origin: [number, number, number]; w: number; h: number }
 }
@@ -203,11 +203,11 @@ interface Transform {                              // 标定即资源
 }
 ```
 
-- `GET /api/sites/:s/maps` 列出全部底图(occupancy/splat/aerial),UI 图层选择器数据源;
+- `GET /api/sites/:s/maps` 列出全部底图(occupancy/aerial),UI 图层数据源;
   现有 integration 地图上传自动登记为 `kind:'occupancy'` 的 MapAsset + 一条 identity Transform。
 - 厂商激光图(GoRobot mapName 像素系)接入:adapter 上传图 + 标定 Transform,
   此后该厂商机器人上报的像素坐标由平台换算成 world 再入库——**换算只发生一次、在边界上**。
-- splat 场景从前端硬编码挪进 maps 清单(url + 初始相机位),为多场景切换留位。
+- ~~splat 场景~~ 3DGS 场景层已于 2026-07 整体移除(演示负担,不属产品核心)。
 
 ### 2.6 控制(Command 语义化)
 
@@ -249,8 +249,8 @@ type Command =
 6. Schedule 层(once/interval/weekly)+ auto 指派;创建即生效,无「下发」步骤。
 
 **✅ P2 — 平台侧已落地,adapter 参考实现待真机**
-7. `GET /maps` 清单(occupancy/splat)+ Transform 资源(像素→world、world→wgs84 演示锚点);
-   splat 从前端硬编码迁入 SiteDef,无扫描站点自动降级 ops 图层。
+7. `GET /maps` 清单 + Transform 资源(像素→world、world→wgs84 演示锚点)。
+   (3DGS/splat 场景层曾落地,2026-07 按产品决定整体移除。)
 8. integration v1 扩展:`POST /robots/:serial/readings` 批量上报、events 接受
    evidence/category/runId。
 
@@ -264,7 +264,26 @@ type Command =
    `POST /integration/v1/snapshot` 证据抓帧服务、`PB_SEED_KEYS`/`PB_DEV_KEYS` 秘钥播种、
    `PB_DATA_DIR` 测试隔离、排程可钉死外部机器人。
 
-## 4. 明确不做
+## 4. 集成面重审（2026-07-18,面向「被集成 / iframe 嵌入」）
+
+以「宿主 webapp 嵌入 Plantbot + 宿主后端消费数据」为镜头把六域重走了一遍:
+
+| 域 | 南向(上报) | 北向只读(Bearer key) | 结论 / 本次修补 |
+| --- | --- | --- | --- |
+| 视频流 | factsheet `streams[]` 收 rtsp:// ✓ | `GET /channels`(脱敏) ✓,播放走会话租约 | 完整;证据帧走 `POST /snapshot` |
+| 读数 | `POST /readings`(payloadId/quality 亦收) ✓ | `GET /robots/:serial/readings` ✓ | **缺口已补**:注册表原本只能靠被拒写发现 → `GET /site` 增 `metrics` 注册表;yaml 补 payloadId/quality 字段 |
+| 事件 | `POST /events`(词表受控/evidence/runId) ✓ | `GET /events`(since/lifecycle/category) ✓ | 生命周期写操作(ack/resolve)留在会话面——iframe 内的用户操作,天然带 RBAC |
+| 任务 | 订单拉取/回执 ✓ | `GET /missions` `/schedules` ✓ | 派发与干预留在会话面(operator RBAC),key 不扩写权 |
+| 建图 | `POST /maps` ✓ | **缺口已补**:上传后读不回 → 新增 `GET /maps`(含 **transforms** 相似变换参数,外部系统自行换算坐标用) | |
+| 控制 | 七类订单 ✓ | 命令审计仅会话面 | — |
+
+配套动作:登录体系接入 **OIDC SSO**(Authorization Code+PKCE,JIT 开号,`OIDC_*` env);会话 cookie 支持
+`PB_COOKIE_SAMESITE=none`(跨站 iframe);前端 `?embed=1` 无壳模式 + `?site=` 钉站;会话面全量 OpenAPI
+(`docs/openapi-platform.yaml`)与集成面 v1 并列。**明确不做**(记录在案):webhook 事件推送——第三方轮询
+GET + 嵌入页 WS 已覆盖当前形态,真实需求出现再按 topic 订阅设计;Bearer key 不获得写操作(事件处置/任务
+派发仍走会话 RBAC)——key 泄露的爆炸半径必须停留在「读 + 机器人自报」。
+
+## 5. 明确不做
 
 - **iframe 嵌入集成**(token in URL):Plantbot 是 API-first,第三方要 UI 自己拿数据画。
 - **每设备类型一个模块**(电梯/空开/消防柜管理页):非机器人设备一律走 integration API 的

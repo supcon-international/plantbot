@@ -205,7 +205,6 @@ export interface SiteRow {
   operator: string
   bounds: { x: [number, number]; z: [number, number] }
   dockWp: string
-  splat?: { name: string; url: string }
   buildings: Building[]
   /** built-in demo underlay meta (static web asset) — uploads override it */
   mapMeta?: import('./fleet.js').SiteMapMeta
@@ -219,7 +218,6 @@ const rowToSite = (r: Record<string, unknown>): SiteRow => ({
   operator: r.operator as string,
   bounds: JSON.parse(r.bounds as string),
   dockWp: r.dock_wp as string,
-  splat: r.splat ? JSON.parse(r.splat as string) : undefined,
   buildings: JSON.parse(r.buildings as string),
   mapMeta: r.map_meta ? JSON.parse(r.map_meta as string) : undefined,
   demo: !!r.demo,
@@ -236,9 +234,9 @@ export function getSiteRow(id: string): SiteRow | null {
 }
 
 export function createSiteRow(s: Omit<SiteRow, 'createdAt'>): void {
-  db.prepare('INSERT INTO sites VALUES (?,?,?,?,?,?,?,?,?,?)').run(
+  db.prepare('INSERT INTO sites VALUES (?,?,?,?,?,?,?,?,?)').run(
     s.id, s.name, s.operator, JSON.stringify(s.bounds), s.dockWp,
-    s.splat ? JSON.stringify(s.splat) : null, JSON.stringify(s.buildings),
+    JSON.stringify(s.buildings),
     s.mapMeta ? JSON.stringify(s.mapMeta) : null, s.demo ? 1 : 0, Date.now())
 }
 

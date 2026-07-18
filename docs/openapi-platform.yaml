@@ -1,0 +1,1026 @@
+openapi: 3.0.3
+info:
+  title: Plantbot Platform API (session face)
+  version: "1.0"
+  description: |
+    The complete browser/session-facing API — everything the Plantbot console
+    itself uses, documented for host webapps that embed Plantbot (iframe) or
+    drive it on behalf of signed-in users.
+
+    **Auth**: HMAC-signed session cookie `pb_sess`, obtained via
+    `POST /api/auth/login` (password) or the OIDC SSO flow
+    (`GET /api/auth/oidc/login` → IdP → callback). Roles are
+    `viewer < operator < admin`, granted per site (or `*` platform-wide).
+    Anonymous requests carry the viewer role unless the deployment sets
+    `PB_PUBLIC_VIEW=0`. For cross-site iframes set `PB_COOKIE_SAMESITE=none`
+    (HTTPS required).
+
+    **Realtime**: `GET /ws?site=<siteId>` (WebSocket) pushes `hello`,
+    `telemetry`, `event`, `lifecycle`, `readings`, `geo`, `fleet`, `command`
+    frames — the same data plane the console renders.
+
+    The machine-to-machine integration face (`/api/integration/v1`, Bearer
+    site key) is a separate spec: `docs/openapi.yaml`, served live at
+    `GET /api/integration/v1/openapi.json`.
+servers:
+  - url: /
+tags:
+  - { name: auth, description: "sessions, OIDC SSO" }
+  - { name: platform, description: "sites & users (platform admin)" }
+  - { name: site, description: "per-site model — geometry, cameras, maps, transforms" }
+  - { name: fleet, description: "robots, telemetry, commands" }
+  - { name: missions, description: "templates, schedules, runs" }
+  - { name: events, description: "event stream, lifecycle, rules, vocabulary" }
+  - { name: media, description: "channels, stream sessions, snapshots" }
+  - { name: integrations, description: "API keys, managed connectors" }
+
+security:
+  - cookieAuth: []
+
+paths:
+  /api/auth/login:
+    post:
+      tags: [auth]
+      security: []
+      summary: Password sign-in
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string }
+      responses:
+        "200":
+          description: Session cookie issued (Set-Cookie pb_sess)
+          content: { application/json: { schema: { type: object, properties: { user: { $ref: "#/components/schemas/User" } } } } }
+        "401": { description: invalid credentials }
+        "429": { description: throttled — 5 failures / 15 min per ip+user }
+
+  /api/auth/logout:
+    post:
+      tags: [auth]
+      summary: Sign out (clears the session cookie)
+      operationId: logout
+      responses:
+        "200": { description: ok }
+
+  /api/auth/oidc/login:
+    get:
+      tags: [auth]
+      security: []
+      summary: Begin OIDC SSO (Authorization Code + PKCE)
+      description: 302 to the configured IdP. Enabled when the deployment sets OIDC_ISSUER + OIDC_CLIENT_ID.
+      operationId: oidcLogin
+      parameters:
+        - { name: next, in: query, description: "in-app path to land on after sign-in (default /)", schema: { type: string } }
+      responses:
+        "302": { description: redirect to the IdP authorization endpoint }
+        "404": { description: SSO not configured }
+        "502": { description: IdP discovery failed }
+
+  /api/auth/oidc/callback:
+    get:
+      tags: [auth]
+      security: []
+      summary: OIDC redirect URI
+      description: Validates state, exchanges the code, verifies the ID token against the IdP JWKS, JIT-provisions the user and issues the pb_sess session.
+      operationId: oidcCallback
+      parameters:
+        - { name: code, in: query, schema: { type: string } }
+        - { name: state, in: query, schema: { type: string } }
+      responses:
+        "302": { description: session issued — redirect into the SPA }
+        "400": { description: state mismatch }
+        "401": { description: token exchange / validation failed }
+
+  /api/auth/me:
+    get:
+      tags: [auth]
+      security: []
+      summary: Who am I — session, SSO availability, site roles
+      operationId: me
+      responses:
+        "200":
+          description: Session context
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: "#/components/schemas/User", nullable: true }
+                  publicView: { type: boolean, description: anonymous browsing allowed }
+                  demo: { type: boolean }
+                  sso:
+                    type: object
+                    nullable: true
+                    properties: { label: { type: string } }
+                  sites:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        name: { type: string }
+                        operator: { type: string }
+                        role: { $ref: "#/components/schemas/Role" }
+
+  /api/health:
+    get:
+      tags: [platform]
+      security: []
+      summary: Liveness + relay status
+      operationId: health
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  ts: { type: integer }
+                  demo: { type: boolean }
+                  relay: { type: boolean, description: MEDIA_RELAY configured }
+                  relayOnline: { type: boolean, description: go2rtc actually answering probes }
+                  sites: { type: array, items: { type: string } }
+
+  /api/users:
+    get:
+      tags: [platform]
+      summary: List users (platform admin)
+      operationId: listUsers
+      responses:
+        "200": { description: users, content: { application/json: { schema: { type: object, properties: { users: { type: array, items: { $ref: "#/components/schemas/User" } } } } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [platform]
+      summary: Create user (platform admin)
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password, roles]
+              properties:
+                username: { type: string }
+                displayName: { type: string }
+                password: { type: string }
+                roles: { $ref: "#/components/schemas/RoleMap" }
+      responses:
+        "200": { description: created }
+        "400": { description: invalid / duplicate username }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/users/{username}:
+    parameters: [{ name: username, in: path, required: true, schema: { type: string } }]
+    patch:
+      tags: [platform]
+      summary: Update user (display name / roles / password)
+      operationId: updateUser
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName: { type: string }
+                password: { type: string }
+                roles: { $ref: "#/components/schemas/RoleMap" }
+      responses:
+        "200": { description: updated }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [platform]
+      summary: Delete user
+      operationId: deleteUser
+      responses:
+        "200": { description: deleted }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/sites:
+    get:
+      tags: [platform]
+      security: []
+      summary: List sites
+      operationId: listSites
+      responses:
+        "200":
+          description: sites with the caller's role on each
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sites:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        name: { type: string }
+                        operator: { type: string }
+                        role: { $ref: "#/components/schemas/Role" }
+    post:
+      tags: [platform]
+      summary: Create a site (starts its World immediately)
+      operationId: createSite
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                id: { type: string, description: slug — derived from name when omitted }
+                name: { type: string }
+                operator: { type: string }
+                bounds: { $ref: "#/components/schemas/Bounds" }
+      responses:
+        "200": { description: created + World started }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { description: id exists }
+
+  /api/sites/{siteId}/meta:
+    parameters: [{ $ref: "#/components/parameters/siteId" }]
+    patch:
+      tags: [site]
+      summary: Rename / rebound a site (admin)
+      operationId: patchSite
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                operator: { type: string }
+                bounds: { $ref: "#/components/schemas/Bounds" }
+      responses:
+        "200": { description: updated (WS `site` frame broadcast) }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/sites/{siteId}:
+    parameters: [{ $ref: "#/components/parameters/siteId" }]
+    delete:
+      tags: [site]
+      summary: Delete a site (stops World, connectors, WS room; cascades rows)
+      operationId: deleteSite
+      responses:
+        "200": { description: deleted }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/sites/{siteId}/geometry:
+    parameters: [{ $ref: "#/components/parameters/siteId" }]
+    put:
+      tags: [site]
+      summary: Replace site geometry (Site Builder save — live effect, WS `geo` frame)
+      operationId: putGeometry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                waypoints: { type: array, items: { $ref: "#/components/schemas/Waypoint" } }
+                zones: { type: array, items: { $ref: "#/components/schemas/Zone" } }
+                cameras: { type: array, items: { $ref: "#/components/schemas/Camera" } }
+                dockWp: { type: string }
+                bounds: { $ref: "#/components/schemas/Bounds" }
+      responses:
+        "200": { description: applied }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/sites/{siteId}/cameras:
+    parameters: [{ $ref: "#/components/parameters/siteId" }]
+    post:
+      tags: [site]
+      summary: Add a fixed RTSP camera (admin)
+      operationId: addCamera
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                place: { type: string }
+                rtsp: { type: string, description: "rtsp:// source (may embed credentials — admin-only on read-back)" }
+      responses:
+        "200": { description: created (response carries no rtsp plaintext) }
+        "400": { description: rtsp:// required when set }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/sites/{siteId}/cameras/{camId}:
+    parameters:
+      - { $ref: "#/components/parameters/siteId" }
+      - { name: camId, in: path, required: true, schema: { type: string } }
+    patch:
+      tags: [site]
+      summary: Edit a camera in place (admin — server-side mutation protects rtsp secrets)
+      operationId: patchCamera
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                place: { type: string }
+                rtsp: { type: string, description: empty string clears the source }
+      responses:
+        "200": { description: updated }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [site]
+      summary: Remove a camera (admin)
+      operationId: deleteCamera
+      responses:
+        "200": { description: removed }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/sites/{siteId}/map:
+    parameters: [{ $ref: "#/components/parameters/siteId" }]
+    post:
+      tags: [site]
+      summary: Upload the occupancy base map (admin, ROS map_server convention)
+      operationId: uploadSiteMap
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resolution, origin, image]
+              properties:
+                name: { type: string }
+                resolution: { type: number, description: meters/pixel }
+                origin: { type: array, items: { type: number }, description: "world [x,z] of the top-left pixel" }
+                image: { type: string, description: "PNG data URL, ≤ 8 MB" }
+      responses:
+        "200": { description: stored + broadcast }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/sites/{siteId}/map-image:
+    parameters: [{ $ref: "#/components/parameters/siteId" }]
+    get:
+      tags: [site]
+      security: []
+      summary: The uploaded occupancy PNG
+      operationId: siteMapImage
+      responses:
+        "200": { description: PNG, content: { image/png: {} } }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/sites/{siteId}/transforms:
+    parameters: [{ $ref: "#/components/parameters/siteId" }]
+    get:
+      tags: [site]
+      summary: Stored calibration transforms
+      operationId: listTransforms
+      responses:
+        "200": { description: transforms, content: { application/json: { schema: { type: object, properties: { transforms: { type: array, items: { $ref: "#/components/schemas/FrameTransform" } } } } } } }
+    post:
+      tags: [site]
+      summary: Save a calibration transform (admin — CALIB page)
+      operationId: saveTransform
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/FrameTransform" } } }
+      responses:
+        "200": { description: saved }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/sites/{siteId}/transforms/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/siteId" }
+      - { name: id, in: path, required: true, schema: { type: string } }
+    delete:
+      tags: [site]
+      summary: Delete a transform (admin)
+      operationId: deleteTransform
+      responses:
+        "200": { description: deleted }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/sites/{siteId}/maps:
+    parameters: [{ $ref: "#/components/parameters/siteId" }]
+    get:
+      tags: [site]
+      summary: Map inventory + transforms (occupancy underlay, calibration params)
+      operationId: siteMaps
+      responses:
+        "200":
+          description: maps + transforms
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  maps: { type: array, items: { $ref: "#/components/schemas/MapAsset" } }
+                  transforms: { type: array, items: { $ref: "#/components/schemas/FrameTransform" } }
+
+  /api/sites/{siteId}/fleet:
+    parameters: [{ $ref: "#/components/parameters/siteId" }]
+    get:
+      tags: [fleet]
+      summary: Site snapshot — robots, cameras, geometry (rtsp plaintext only for admins)
+      operationId: siteFleet
+      responses:
+        "200":
+          description: fleet snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  site: { $ref: "#/components/schemas/SiteInfo" }
+                  robots: { type: array, items: { $ref: "#/components/schemas/Robot" } }
+                  cameras: { type: array, items: { $ref: "#/components/schemas/Camera" } }
+                  waypoints: { type: array, items: { $ref: "#/components/schemas/Waypoint" } }
+                  zones: { type: array, items: { $ref: "#/components/schemas/Zone" } }
+                  buildings: { type: array, items: { type: object, additionalProperties: true } }
+                  dockWp: { type: string }
+
+  /api/sites/{siteId}/catalog:
+    parameters: [{ $ref: "#/components/parameters/siteId" }]
+    get:
+      tags: [fleet]
+      summary: Robot onboarding catalog (models with a vendor adapter)
+      operationId: catalog
+      responses:
+        "200": { description: models, content: { application/json: { schema: { type: object, properties: { models: { type: array, items: { type: object, additionalProperties: true } } } } } } }
+
+  /api/sites/{siteId}/external-robots/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/siteId" }
+      - { $ref: "#/components/parameters/robotId" }
+    delete:
+      tags: [fleet]
+      summary: Deregister an external robot (admin)
+      operationId: removeExternal
+      responses:
+        "200": { description: removed }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/sites/{siteId}/robots/{id}/goto:
+    parameters:
+      - { $ref: "#/components/parameters/siteId" }
+      - { $ref: "#/components/parameters/robotId" }
+    post:
+      tags: [fleet]
+      summary: Tap-to-dispatch (operator) — world-frame target
+      operationId: goto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [x, z]
+              properties:
+                x: { type: number }
+                z: { type: number }
+      responses:
+        "200": { description: goto order queued }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { description: unknown robot or state-only unit }
+
+  /api/sites/{siteId}/robots/{id}/commands:
+    parameters:
+      - { $ref: "#/components/parameters/siteId" }
+      - { $ref: "#/components/parameters/robotId" }
+    post:
+      tags: [fleet]
+      summary: Semantic command (operator) — dock/pause/resume/abort/announce/ptz…
+      operationId: command
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/Command" } } }
+      responses:
+        "200": { description: command record (accepted or refused with reason) }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    get:
+      tags: [fleet]
+      summary: Command audit for one robot
+      operationId: commandLog
+      responses:
+        "200": { description: recent command records }
+
+  /api/sites/{siteId}/robots/{id}/readings:
+    parameters:
+      - { $ref: "#/components/parameters/siteId" }
+      - { $ref: "#/components/parameters/robotId" }
+      - { name: metric, in: query, schema: { type: string } }
+    get:
+      tags: [fleet]
+      summary: Payload reading time series
+      operationId: robotReadings
+      responses:
+        "200": { description: readings }
+
+  /api/sites/{siteId}/metrics:
+    parameters: [{ $ref: "#/components/parameters/siteId" }]
+    get:
+      tags: [fleet]
+      summary: Reading-metric registry
+      operationId: metricRegistry
+      responses:
+        "200": { description: metric definitions, content: { application/json: { schema: { type: object, properties: { metrics: { type: array, items: { $ref: "#/components/schemas/MetricDef" } } } } } } }
+
+  /api/sites/{siteId}/missions:
+    parameters: [{ $ref: "#/components/parameters/siteId" }]
+    get:
+      tags: [missions]
+      summary: Mission runs (live + history)
+      operationId: listMissions
+      responses:
+        "200": { description: missions, content: { application/json: { schema: { type: object, properties: { missions: { type: array, items: { $ref: "#/components/schemas/Mission" } } } } } } }
+    post:
+      tags: [missions]
+      summary: Create + queue a mission (operator)
+      operationId: createMission
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, steps]
+              properties:
+                name: { type: string }
+                priority: { type: integer, enum: [1, 2, 3] }
+                requestedRobot: { type: string, description: 'robot id or "auto"' }
+                recurring: { type: boolean }
+                steps: { type: array, items: { $ref: "#/components/schemas/MissionStep" } }
+      responses:
+        "200": { description: queued }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/sites/{siteId}/missions/{id}/pause:
+    parameters: [{ $ref: "#/components/parameters/siteId" }, { $ref: "#/components/parameters/id" }]
+    post: { tags: [missions], summary: Pause a running mission (operator), operationId: pauseMission, responses: { "200": { description: ok }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } } }
+  /api/sites/{siteId}/missions/{id}/resume:
+    parameters: [{ $ref: "#/components/parameters/siteId" }, { $ref: "#/components/parameters/id" }]
+    post: { tags: [missions], summary: Resume a paused mission (operator), operationId: resumeMission, responses: { "200": { description: ok }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } } }
+  /api/sites/{siteId}/missions/{id}/abort:
+    parameters: [{ $ref: "#/components/parameters/siteId" }, { $ref: "#/components/parameters/id" }]
+    post: { tags: [missions], summary: Abort a mission (operator), operationId: abortMission, responses: { "200": { description: ok }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } } }
+
+  /api/sites/{siteId}/mission-templates:
+    parameters: [{ $ref: "#/components/parameters/siteId" }]
+    get:
+      tags: [missions]
+      summary: Route templates
+      operationId: listTemplates
+      responses: { "200": { description: templates } }
+    post:
+      tags: [missions]
+      summary: Create a template (operator)
+      operationId: createTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, steps]
+              properties:
+                name: { type: string }
+                steps: { type: array, items: { $ref: "#/components/schemas/MissionStep" } }
+                requires: { type: array, items: { type: string }, description: payload capability requirements }
+      responses: { "200": { description: created }, "403": { $ref: "#/components/responses/Forbidden" } }
+  /api/sites/{siteId}/mission-templates/{id}:
+    parameters: [{ $ref: "#/components/parameters/siteId" }, { $ref: "#/components/parameters/id" }]
+    delete: { tags: [missions], summary: Delete a template (operator), operationId: deleteTemplate, responses: { "200": { description: deleted }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } } }
+
+  /api/sites/{siteId}/schedules:
+    parameters: [{ $ref: "#/components/parameters/siteId" }]
+    get:
+      tags: [missions]
+      summary: Schedules (creation takes effect immediately — no publish step)
+      operationId: listSchedules
+      responses: { "200": { description: schedules } }
+    post:
+      tags: [missions]
+      summary: Create a schedule (operator)
+      operationId: createSchedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [templateId, cadence]
+              properties:
+                templateId: { type: string }
+                cadence: { type: object, additionalProperties: true, description: "{kind: once|interval|weekly, …}" }
+                assign: { type: object, additionalProperties: true, description: "{kind: auto} or {kind: robot, robotId}" }
+                enabled: { type: boolean }
+      responses: { "200": { description: created — live immediately }, "403": { $ref: "#/components/responses/Forbidden" } }
+  /api/sites/{siteId}/schedules/{id}:
+    parameters: [{ $ref: "#/components/parameters/siteId" }, { $ref: "#/components/parameters/id" }]
+    patch:
+      tags: [missions]
+      summary: Patch a schedule (enable/disable, cadence, assign)
+      operationId: patchSchedule
+      requestBody: { content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+      responses: { "200": { description: updated }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } }
+    delete: { tags: [missions], summary: Delete a schedule, operationId: deleteSchedule, responses: { "200": { description: deleted }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } } }
+
+  /api/sites/{siteId}/events:
+    parameters:
+      - { $ref: "#/components/parameters/siteId" }
+      - { name: limit, in: query, schema: { type: integer, default: 120 } }
+    get:
+      tags: [events]
+      summary: Event stream (newest first)
+      operationId: siteEvents
+      responses:
+        "200": { description: events, content: { application/json: { schema: { type: object, properties: { events: { type: array, items: { $ref: "#/components/schemas/Event" } } } } } } }
+
+  /api/sites/{siteId}/events/{id}/ack:
+    parameters: [{ $ref: "#/components/parameters/siteId" }, { $ref: "#/components/parameters/id" }]
+    post: { tags: [events], summary: Acknowledge (operator), operationId: ackEvent, responses: { "200": { description: ok }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } } }
+  /api/sites/{siteId}/events/{id}/resolve:
+    parameters: [{ $ref: "#/components/parameters/siteId" }, { $ref: "#/components/parameters/id" }]
+    post: { tags: [events], summary: Resolve (operator), operationId: resolveEvent, responses: { "200": { description: ok }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } } }
+  /api/sites/{siteId}/events/{id}/dismiss:
+    parameters: [{ $ref: "#/components/parameters/siteId" }, { $ref: "#/components/parameters/id" }]
+    post: { tags: [events], summary: Dismiss — evidence retained for export (operator), operationId: dismissEvent, responses: { "200": { description: ok }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } } }
+
+  /api/sites/{siteId}/events/export:
+    parameters:
+      - { $ref: "#/components/parameters/siteId" }
+      - { name: lifecycle, in: query, schema: { type: string, enum: [new, acked, resolved, dismissed] } }
+    get:
+      tags: [events]
+      summary: Export events (e.g. dismissed → negative training samples)
+      operationId: exportEvents
+      responses: { "200": { description: export payload } }
+
+  /api/sites/{siteId}/rules:
+    parameters: [{ $ref: "#/components/parameters/siteId" }]
+    get: { tags: [events], summary: Detectors (rules), operationId: listRules, responses: { "200": { description: rules } } }
+    post:
+      tags: [events]
+      summary: Create a detector (admin) — CV rule or metric threshold
+      operationId: createRule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                model: { type: string, description: event-type id }
+                source: { type: string, description: stream key }
+                zone: { type: string }
+                threshold: { type: number }
+                severity: { type: string, enum: [critical, high, info] }
+                robotId: { type: string }
+                metric: { type: string, description: threshold detectors }
+                op: { type: string, enum: [">", "<"] }
+                bound: { type: number }
+      responses: { "200": { description: created }, "403": { $ref: "#/components/responses/Forbidden" } }
+  /api/sites/{siteId}/rules/{id}:
+    parameters: [{ $ref: "#/components/parameters/siteId" }, { $ref: "#/components/parameters/id" }]
+    patch:
+      tags: [events]
+      summary: Patch a detector (enable/threshold/severity/bound)
+      operationId: patchRule
+      requestBody: { content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+      responses: { "200": { description: updated }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } }
+    delete: { tags: [events], summary: Delete a detector (admin), operationId: deleteRule, responses: { "200": { description: deleted }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } } }
+
+  /api/sites/{siteId}/event-types:
+    parameters: [{ $ref: "#/components/parameters/siteId" }]
+    get: { tags: [events], summary: Event vocabulary, operationId: listEventTypes, responses: { "200": { description: types } } }
+    post:
+      tags: [events]
+      summary: Register a custom event type (admin)
+      operationId: createEventType
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, label]
+              properties:
+                id: { type: string }
+                label: { type: string }
+                severity: { type: string, enum: [critical, high, info] }
+                detail: { type: string }
+                category: { type: string, enum: [security, fire, env, equipment, robot-fault] }
+      responses: { "200": { description: registered }, "403": { $ref: "#/components/responses/Forbidden" } }
+  /api/sites/{siteId}/event-types/{id}:
+    parameters: [{ $ref: "#/components/parameters/siteId" }, { $ref: "#/components/parameters/id" }]
+    delete: { tags: [events], summary: Delete a custom type, operationId: deleteEventType, responses: { "200": { description: deleted }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } } }
+
+  /api/sites/{siteId}/channels:
+    parameters: [{ $ref: "#/components/parameters/siteId" }]
+    get:
+      tags: [media]
+      summary: Video channels (source URLs redacted)
+      operationId: siteChannels
+      responses: { "200": { description: channels, content: { application/json: { schema: { type: object, properties: { channels: { type: array, items: { $ref: "#/components/schemas/Channel" } } } } } } } }
+
+  /api/sites/{siteId}/robots/{id}/channels:
+    parameters: [{ $ref: "#/components/parameters/siteId" }, { $ref: "#/components/parameters/robotId" }]
+    get:
+      tags: [media]
+      summary: One robot's channels
+      operationId: robotChannels
+      responses: { "200": { description: channels } }
+
+  /api/sites/{siteId}/channels/{chId}/sessions:
+    parameters: [{ $ref: "#/components/parameters/siteId" }, { name: chId, in: path, required: true, schema: { type: string } }]
+    post:
+      tags: [media]
+      summary: Open a playback lease (file → static url · rtsp → go2rtc MSE name)
+      operationId: openStreamSession
+      responses:
+        "200": { description: session, content: { application/json: { schema: { type: object, properties: { session: { $ref: "#/components/schemas/StreamSession" } } } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/sites/{siteId}/stream-sessions/{sid}/renew:
+    parameters: [{ $ref: "#/components/parameters/siteId" }, { name: sid, in: path, required: true, schema: { type: string } }]
+    post: { tags: [media], summary: Renew a lease (+120 s), operationId: renewStreamSession, responses: { "200": { description: renewed }, "404": { $ref: "#/components/responses/NotFound" } } }
+  /api/sites/{siteId}/stream-sessions/{sid}:
+    parameters: [{ $ref: "#/components/parameters/siteId" }, { name: sid, in: path, required: true, schema: { type: string } }]
+    delete: { tags: [media], summary: Close a lease, operationId: closeStreamSession, responses: { "200": { description: closed } } }
+
+  /api/sites/{siteId}/channels/{chId}/snapshot:
+    parameters: [{ $ref: "#/components/parameters/siteId" }, { name: chId, in: path, required: true, schema: { type: string } }]
+    get:
+      tags: [media]
+      summary: Live snapshot JPEG (ffmpeg — file seek or direct RTSP grab)
+      operationId: channelSnapshot
+      responses:
+        "200": { description: JPEG, content: { image/jpeg: {} } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { description: snapshot unavailable }
+
+  /api/snapshots/{file}:
+    parameters: [{ name: file, in: path, required: true, schema: { type: string } }]
+    get:
+      tags: [media]
+      security: []
+      summary: Stored evidence snapshot
+      operationId: snapshotFile
+      responses:
+        "200": { description: JPEG, content: { image/jpeg: {} } }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/sites/{siteId}/api-keys:
+    parameters: [{ $ref: "#/components/parameters/siteId" }]
+    get: { tags: [integrations], summary: List integration keys (admin — prefixes only), operationId: listApiKeys, responses: { "200": { description: keys }, "403": { $ref: "#/components/responses/Forbidden" } } }
+    post:
+      tags: [integrations]
+      summary: Issue a site key (admin) — plaintext returned exactly once
+      operationId: createApiKey
+      requestBody: { content: { application/json: { schema: { type: object, properties: { label: { type: string } } } } } }
+      responses: { "200": { description: "key (plaintext once)" }, "403": { $ref: "#/components/responses/Forbidden" } }
+  /api/sites/{siteId}/api-keys/{id}:
+    parameters: [{ $ref: "#/components/parameters/siteId" }, { $ref: "#/components/parameters/id" }]
+    delete: { tags: [integrations], summary: Revoke a key (admin), operationId: deleteApiKey, responses: { "200": { description: revoked }, "403": { $ref: "#/components/responses/Forbidden" } } }
+
+  /api/sites/{siteId}/integrations:
+    parameters: [{ $ref: "#/components/parameters/siteId" }]
+    get:
+      tags: [integrations]
+      summary: Integration console summary (admin)
+      operationId: integrationsSummary
+      responses: { "200": { description: keys + event types + endpoints overview }, "403": { $ref: "#/components/responses/Forbidden" } }
+
+  /api/sites/{siteId}/connectors:
+    parameters: [{ $ref: "#/components/parameters/siteId" }]
+    get:
+      tags: [integrations]
+      summary: Managed connectors + vendor catalog (admin)
+      operationId: listConnectors
+      responses: { "200": { description: connectors + catalog }, "403": { $ref: "#/components/responses/Forbidden" } }
+    post:
+      tags: [integrations]
+      summary: Create + start a managed connector (admin)
+      operationId: createConnector
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [vendor, config]
+              properties:
+                vendor: { type: string, enum: [spot, deeprobotics, gosuncn] }
+                name: { type: string }
+                config: { type: object, additionalProperties: true, description: "vendor form fields + serial/callsign + streams[]" }
+      responses: { "200": { description: created — supervised child process spawned }, "400": { description: invalid config }, "403": { $ref: "#/components/responses/Forbidden" } }
+  /api/sites/{siteId}/connectors/{id}:
+    parameters: [{ $ref: "#/components/parameters/siteId" }, { $ref: "#/components/parameters/id" }]
+    patch:
+      tags: [integrations]
+      summary: Update connector config (admin — restarts the child)
+      operationId: patchConnector
+      requestBody: { content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+      responses: { "200": { description: updated }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } }
+    delete: { tags: [integrations], summary: Delete a connector (stops the child), operationId: deleteConnector, responses: { "200": { description: deleted }, "403": { $ref: "#/components/responses/Forbidden" } } }
+  /api/sites/{siteId}/connectors/{id}/{action}:
+    parameters:
+      - { $ref: "#/components/parameters/siteId" }
+      - { $ref: "#/components/parameters/id" }
+      - { name: action, in: path, required: true, schema: { type: string, enum: [start, stop, restart] } }
+    post: { tags: [integrations], summary: Connector lifecycle (admin), operationId: connectorAction, responses: { "200": { description: applied }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } } }
+  /api/sites/{siteId}/connectors/{id}/logs:
+    parameters: [{ $ref: "#/components/parameters/siteId" }, { $ref: "#/components/parameters/id" }]
+    get: { tags: [integrations], summary: "Connector log ring (last 200 lines, admin)", operationId: connectorLogs, responses: { "200": { description: log lines }, "403": { $ref: "#/components/responses/Forbidden" } } }
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: pb_sess
+      description: HMAC-signed session cookie from /api/auth/login or the OIDC flow
+
+  parameters:
+    siteId: { name: siteId, in: path, required: true, schema: { type: string, example: plant-07 } }
+    robotId: { name: id, in: path, required: true, schema: { type: string, example: ext-bd-91250107 } }
+    id: { name: id, in: path, required: true, schema: { type: string } }
+
+  responses:
+    Forbidden: { description: requires a higher role on this site }
+    NotFound: { description: not found }
+
+  schemas:
+    Role: { type: string, enum: [viewer, operator, admin] }
+    RoleMap:
+      type: object
+      description: "siteId (or '*') → role"
+      additionalProperties: { $ref: "#/components/schemas/Role" }
+    User:
+      type: object
+      properties:
+        username: { type: string }
+        displayName: { type: string }
+        roles: { $ref: "#/components/schemas/RoleMap" }
+    Bounds:
+      type: object
+      properties:
+        x: { type: array, items: { type: number }, minItems: 2, maxItems: 2 }
+        z: { type: array, items: { type: number }, minItems: 2, maxItems: 2 }
+    SiteInfo:
+      type: object
+      additionalProperties: true
+      properties:
+        id: { type: string }
+        name: { type: string }
+        operator: { type: string }
+        bounds: { $ref: "#/components/schemas/Bounds" }
+    Waypoint:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        x: { type: number }
+        z: { type: number }
+        kind: { type: string }
+    Zone:
+      type: object
+      additionalProperties: true
+      properties:
+        id: { type: string }
+        name: { type: string }
+    Camera:
+      type: object
+      description: rtsp field present only for site admins
+      properties:
+        id: { type: string }
+        name: { type: string }
+        place: { type: string }
+        stream: { type: string }
+        live: { type: boolean }
+        rtsp: { type: string }
+    Robot:
+      type: object
+      additionalProperties: true
+      properties:
+        id: { type: string }
+        serial: { type: string }
+        callsign: { type: string }
+        model: { type: string }
+        family: { type: string, enum: [quadruped, ugv] }
+        adapter: { type: string, enum: [sim, external] }
+        integrationLevel: { type: string, enum: [state-only, dispatchable] }
+    MissionStep:
+      type: object
+      required: [waypointId]
+      properties:
+        waypointId: { type: string }
+        actions:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: string }
+              durationS: { type: number }
+    Mission:
+      type: object
+      additionalProperties: true
+      properties:
+        id: { type: string }
+        name: { type: string }
+        status: { type: string, enum: [queued, active, done, failed, aborted] }
+        robotId: { type: string }
+        progress: { type: number }
+        steps: { type: array, items: { $ref: "#/components/schemas/MissionStep" } }
+    Event:
+      type: object
+      additionalProperties: true
+      properties:
+        id: { type: string }
+        ts: { type: integer }
+        type: { type: string }
+        label: { type: string }
+        severity: { type: string, enum: [critical, high, info] }
+        category: { type: string, enum: [security, fire, env, equipment, robot-fault] }
+        lifecycle: { type: string, enum: [new, acked, resolved, dismissed] }
+        x: { type: number }
+        z: { type: number }
+    Channel:
+      type: object
+      additionalProperties: true
+      properties:
+        id: { type: string }
+        role: { type: string }
+        label: { type: string }
+        codec: { type: string }
+        streamKey: { type: string }
+        source:
+          type: object
+          properties:
+            kind: { type: string, enum: [file, rtsp, hls] }
+            url: { type: string, description: 'redacted (empty) for rtsp on non-admin surfaces' }
+    StreamSession:
+      type: object
+      properties:
+        id: { type: string }
+        channelId: { type: string }
+        url: { type: string, description: file path (file) or go2rtc stream name (mse) }
+        protocol: { type: string, enum: [file, mse, hls] }
+        relayOnline: { type: boolean }
+        createdAt: { type: integer }
+        expiresAt: { type: integer, nullable: true }
+    Command:
+      type: object
+      required: [type]
+      additionalProperties: true
+      properties:
+        type: { type: string, enum: [goto, dock, pause, resume, abort, announce, ptz, velocity] }
+    MetricDef:
+      type: object
+      properties:
+        id: { type: string }
+        label: { type: string }
+        unit: { type: string }
+        kind: { type: string }
+    MapAsset:
+      type: object
+      additionalProperties: true
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [occupancy, aerial] }
+        name: { type: string }
+        url: { type: string }
+    FrameTransform:
+      type: object
+      additionalProperties: true
+      properties:
+        id: { type: string }
+        from: { type: string }
+        to: { type: string }
+        kind: { type: string, enum: [similarity] }
+        params:
+          type: object
+          properties:
+            s: { type: number }
+            thetaRad: { type: number }
+            t: { type: array, items: { type: number } }

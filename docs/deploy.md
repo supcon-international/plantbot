@@ -46,6 +46,9 @@ Environment=PUBLIC_BASE=/robots       # 下发给客户端的 URL 前缀
 # Environment=PB_DEMO=1               # 仅演示实例开
 Environment=PB_PUBLIC_VIEW=0          # 关匿名浏览：所有页面登录后可见（公开 demo 才设 1/不设）
 # Environment=MEDIA_RELAY=http://127.0.0.1:1984   # 接真 RTSP 摄像头/机器人流时指向 go2rtc
+# —— 被集成 / iframe 嵌入 ——
+# Environment=OIDC_ISSUER=https://idp.example.com  # + OIDC_CLIENT_ID(/SECRET) 即启用 SSO 登录
+# Environment=PB_COOKIE_SAMESITE=none              # 跨站 iframe 需要(强制 Secure,须 HTTPS)
 Restart=on-failure
 ```
 
@@ -114,7 +117,7 @@ WEB_BASE=/robots/ pnpm build      # 前端：nginx 直接吃 dist，无需重启
 sudo systemctl restart plantbot   # 服务端变更时（任务/事件/规则等已持久,重启即恢复）
 ```
 
-缓存行为：打包产物带 hash（改名即新 URL，无需 purge）；`index.html` no-cache（构建即生效）；`/robots/media/*.mp4` 会被 Cloudflare 边缘缓存（省源站流量）。改了**同名**静态文件（如 URDF/splat）才需要 CF purge 或换文件名。
+缓存行为：打包产物带 hash（改名即新 URL，无需 purge）；`index.html` no-cache（构建即生效）；`/robots/media/*.mp4` 会被 Cloudflare 边缘缓存（省源站流量）。改了**同名**静态文件（如 URDF 网格）才需要 CF purge 或换文件名。
 
 ## 陷阱备忘（都踩过）
 
@@ -127,3 +130,6 @@ sudo systemctl restart plantbot   # 服务端变更时（任务/事件/规则等
 - 摄像头 rtsp:// 地址内嵌凭证,平台**只对该站 admin 回传明文**（Site Builder 编辑用）;
   viewer/匿名的 fleet/channels/WS 载荷一律剥掉 URL（播放走会话租约,快照走服务端 ffmpeg,都不需要它）。
 - CORS 已整体移除:一切同源（dev 走 vite 代理,生产走 nginx）。跨域调用只有 Bearer 的集成 API。
+- **iframe 嵌入**:宿主页 `<iframe src=…/live?embed=1&site=…>`;平台侧 `PB_COOKIE_SAMESITE=none` + HTTPS,
+  nginx 对 `/robots/` location 加 `add_header Content-Security-Policy "frame-ancestors 'self' https://宿主域";`
+  (不设则任何站点都能嵌)。SSO 建议由宿主在顶层窗口完成(IdP 普遍拒绝被 iframe),iframe 内即已带会话。

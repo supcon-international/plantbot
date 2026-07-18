@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
-import { LogIn } from 'lucide-react'
+import { KeyRound, LogIn } from 'lucide-react'
 import { useAuth } from '../lib/store'
+import { BASE } from '../lib/base'
 import { useT } from '../lib/i18n'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -13,6 +14,7 @@ import { Label } from '@/components/ui/label'
 export function Login({ gate = false }: { gate?: boolean }) {
   const login = useAuth((s) => s.login)
   const demo = useAuth((s) => s.demo)
+  const sso = useAuth((s) => s.me?.sso ?? null)
   const t = useT()
   const nav = useNavigate()
   const [username, setUsername] = useState('')
@@ -81,6 +83,26 @@ export function Login({ gate = false }: { gate?: boolean }) {
             >
               {t('login.go')}
             </Button>
+            {sso && (
+              <>
+                <div className="flex items-center gap-3">
+                  <span className="h-px flex-1 bg-line" />
+                  <span className="mono text-[10px] tracking-[0.14em] text-ink-3">{t('login.or')}</span>
+                  <span className="h-px flex-1 bg-line" />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    // top-level redirect into the OIDC flow; come back to the SPA root
+                    window.location.href = `${BASE}api/auth/oidc/login?next=/`
+                  }}
+                  className="mono h-auto w-full py-2.5 text-[12px] normal-case tracking-[0.12em]"
+                >
+                  <KeyRound size={13} /> {t('login.sso')} · {sso.label}
+                </Button>
+              </>
+            )}
             {demo && <p className="mono text-[10.5px] leading-relaxed text-ink-3/80">{t('login.hint')}</p>}
           </form>
         </CardContent>

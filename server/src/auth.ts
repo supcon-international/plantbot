@@ -12,23 +12,31 @@ const TTL_MS = 7 * 24 * 3600_000
 
 export const PUBLIC_VIEW = process.env.PB_PUBLIC_VIEW !== '0'
 
+// iframe embedding: a cross-site host page only sends our session cookie when
+// it is SameSite=None (which mandates Secure → HTTPS deploys only). Default
+// stays Lax for standalone deployments. PB_COOKIE_SAMESITE=none|lax|strict.
+const SAMESITE = (() => {
+  const v = (process.env.PB_COOKIE_SAMESITE ?? 'lax').toLowerCase()
+  return v === 'none' ? 'None' : v === 'strict' ? 'Strict' : 'Lax'
+})()
+
 const b64u = (b: Buffer | string) => Buffer.from(b).toString('base64url')
 const sign = (payload: string) => createHmac('sha256', SECRET).update(payload).digest('base64url')
 
 const secure = (req: FastifyRequest) =>
-  req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : ''
+  SAMESITE === 'None' || req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : ''
 
 export function issueSession(req: FastifyRequest, reply: FastifyReply, username: string) {
   const payload = b64u(JSON.stringify({ u: username, exp: Date.now() + TTL_MS }))
   const token = `${payload}.${sign(payload)}`
   reply.header(
     'set-cookie',
-    `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${Math.floor(TTL_MS / 1000)}${secure(req)}`,
+    `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=${SAMESITE}; Max-Age=${Math.floor(TTL_MS / 1000)}${secure(req)}`,
   )
 }
 
 export function clearSession(reply: FastifyReply) {
-  reply.header('set-cookie', `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`)
+  reply.header('set-cookie', `${COOKIE}=; Path=/; HttpOnly; SameSite=${SAMESITE}; Max-Age=0${SAMESITE === 'None' ? '; Secure' : ''}`)
 }
 
 export function readSession(cookieHeader: string | undefined): UserRec | null {

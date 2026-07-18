@@ -6,6 +6,15 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["dev"],
       "port": 5173
+    },
+    {
+      "name": "dev-sso",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "OIDC_ISSUER=http://127.0.0.1:8976 OIDC_CLIENT_ID=plantbot-dev OIDC_ADMIN_USERS=boss@corp.com OIDC_REDIRECT_URL=http://localhost:5173/api/auth/oidc/callback pnpm dev"
+      ],
+      "port": 5173
     }
   ]
 }

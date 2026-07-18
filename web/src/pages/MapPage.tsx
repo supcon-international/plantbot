@@ -1,44 +1,12 @@
-import { Suspense, lazy, useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router'
-import { Crosshair, ArrowUpRight, Map as MapIcon, Box } from 'lucide-react'
+import { ArrowUpRight } from 'lucide-react'
 import { useApp } from '../lib/store'
 import { useT, useAgo } from '../lib/i18n'
-const SceneMap = lazy(() => import('../three/SceneMap').then((m) => ({ default: m.SceneMap })))
 import { OpsMap, type MapSel } from '../components/OpsMap'
 import { BatteryBar, SevTag, Panel, ModeChip } from '../components/ui'
-import { Toggle } from '@/components/ui/toggle'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
-function LoaderChip() {
-  const [ready, setReady] = useState(false)
-  useEffect(() => {
-    const done = () => setReady(true)
-    window.addEventListener('aegis:splat-ready', done)
-    const t = setTimeout(done, 25000)
-    return () => {
-      window.removeEventListener('aegis:splat-ready', done)
-      clearTimeout(t)
-    }
-  }, [])
-  if (ready) return null
-  return <LoaderChipInner />
-}
-
-function LoaderChipInner() {
-  const t = useT()
-  return (
-    <div className="pointer-events-none absolute bottom-16 left-1/2 z-10 -translate-x-1/2 md:bottom-auto md:top-3">
-      <div className="panel flex items-center gap-2 px-3 py-1.5">
-        <span className="live-dot" />
-        <span className="mono whitespace-nowrap text-[11px] tracking-[0.1em] text-ink-2">
-          {t('map.streaming')}
-        </span>
-      </div>
-    </div>
-  )
-}
-
-function SelectionCard({ sel, onFollow, follow, mode3d }: { sel: MapSel; onFollow: () => void; follow: boolean; mode3d: boolean }) {
+function SelectionCard({ sel }: { sel: MapSel }) {
   const robots = useApp((s) => s.robots)
   const telemetry = useApp((s) => s.telemetry)
   const events = useApp((s) => s.events)
@@ -62,25 +30,12 @@ function SelectionCard({ sel, onFollow, follow, mode3d }: { sel: MapSel; onFollo
             <span className="mono text-[13px] font-medium tracking-[0.05em] text-ink">{r.callsign}</span>
             <ModeChip mode={tel?.mode} />
           </div>
-          <div className="flex items-center gap-1.5">
-            {mode3d && (
-              <Toggle
-                pressed={follow}
-                onPressedChange={onFollow}
-                variant="outline"
-                size="sm"
-                className="mono h-auto gap-1 border-line-2 px-1.5 py-1 text-[10px] normal-case tracking-[0.1em] data-[state=on]:border-(--signal) data-[state=on]:bg-(--signal) data-[state=on]:text-[#080808]"
-              >
-                <Crosshair size={11} /> {t('c.follow')}
-              </Toggle>
-            )}
-            <Link
-              to={`/robots/${r.id}`}
-              className="mono flex items-center gap-1 border border-line-2 px-1.5 py-1 text-[10px] tracking-[0.1em] text-ink-3 transition-colors hover:text-ink-2"
-            >
-              {t('c.detail')} <ArrowUpRight size={10} />
-            </Link>
-          </div>
+          <Link
+            to={`/robots/${r.id}`}
+            className="mono flex items-center gap-1 border border-line-2 px-1.5 py-1 text-[10px] tracking-[0.1em] text-ink-3 transition-colors hover:text-ink-2"
+          >
+            {t('c.detail')} <ArrowUpRight size={10} />
+          </Link>
         </div>
         {m && (
           <div className="mt-2.5 flex items-center gap-2 border-t border-line/70 pt-2.5">
@@ -150,42 +105,16 @@ function SelectionCard({ sel, onFollow, follow, mode3d }: { sel: MapSel; onFollo
 export function MapPage() {
   const robots = useApp((s) => s.robots)
   const site = useApp((s) => s.site)
-  const maps = useApp((s) => s.maps)
-  const t = useT()
   const [sel, setSel] = useState<MapSel>(() => {
     const id = new URLSearchParams(location.search).get('sel')
     return id ? { kind: 'robot', id } : null
   })
-  const [follow, setFollow] = useState(false)
-  const [mode, setMode] = useState<'ops' | 'splat'>(() =>
-    new URLSearchParams(location.search).get('mode') === 'splat' ? 'splat' : 'ops',
-  )
-  const ready = !!useApp((s) => s.site)
-  const splatAsset = maps.find((m) => m.kind === 'splat')
-  // a site without a 3DGS scan only offers the ops layer (don't flash before hello lands)
-  const effMode = splatAsset ? mode : ready ? 'ops' : mode
 
   return (
     <div className="relative h-full min-h-[420px]">
       <div className="absolute inset-0">
-        {effMode === 'splat' ? (
-          <Suspense fallback={<div className="skeleton h-full w-full opacity-20" />}>
-            <SceneMap
-            selection={sel}
-            onSelect={(s) => {
-              setSel(s)
-              if (!s) setFollow(false)
-            }}
-            follow={follow}
-            quality="high"
-            />
-          </Suspense>
-        ) : (
-          <OpsMap selection={sel} onSelect={setSel} heightClass="h-full" className="border-0 bg-transparent" />
-        )}
+        <OpsMap selection={sel} onSelect={setSel} heightClass="h-full" className="border-0 bg-transparent" />
       </div>
-
-      {effMode === 'splat' && <LoaderChip />}
 
       {/* top-left: site + fleet chips */}
       <div className="pointer-events-none absolute left-3 top-3 z-10 space-y-2">
@@ -209,44 +138,10 @@ export function MapPage() {
         </div>
       </div>
 
-      {/* top-right: layer switch — the map inventory drives what's offered */}
-      <ToggleGroup
-        type="single"
-        value={effMode}
-        onValueChange={(v) => v && setMode(v as 'ops' | 'splat')}
-        className="absolute right-3 top-3 z-10 h-auto bg-bg/70 backdrop-blur"
-      >
-        {(
-          [
-            ['ops', MapIcon, t('map.opsMap'), true],
-            ['splat', Box, t('map.3dScan'), !!splatAsset || !ready],
-          ] as const
-        ).map(([m, Icon, label, avail]) => (
-          <ToggleGroupItem
-            key={m}
-            value={m}
-            disabled={!avail}
-            title={avail ? undefined : t('map.noScan')}
-            className="gap-1.5 bg-transparent px-2.5 py-1.5 data-[state=on]:bg-surface-2 data-[state=on]:text-ink"
-          >
-            <Icon size={12} strokeWidth={1.5} />
-            <span className="mono text-[10.5px] tracking-[0.1em]">{label}</span>
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
-
       {/* bottom: selection card */}
       <div className="pointer-events-none absolute inset-x-3 bottom-3 z-10 flex justify-center md:justify-start">
-        <SelectionCard sel={sel} follow={follow} onFollow={() => setFollow((f) => !f)} mode3d={effMode === 'splat'} />
+        <SelectionCard sel={sel} />
       </div>
-
-      {effMode === 'splat' && splatAsset && (
-        <div className="pointer-events-none absolute bottom-1 right-2 z-10">
-          <span className="mono text-[9.5px] text-ink-3/70">
-            {splatAsset.name} · SKANOSFERA (Gliwice) · superspl.at · leveled
-          </span>
-        </div>
-      )}
     </div>
   )
 }

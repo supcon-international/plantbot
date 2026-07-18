@@ -48,7 +48,7 @@ Key 与场站一一绑定——同一套端点,不同 Key 自动落到各自场�
 
 | Method | Path | 说明 |
 | --- | --- | --- |
-| GET | `/api/integration/v1/site` | 场站 factsheet:边界、航点、区域、事件类型词表 |
+| GET | `/api/integration/v1/site` | 场站 factsheet:边界、航点、区域、事件类型词表、metric 注册表 |
 | POST | `/api/integration/v1/robots` | 注册/更新外部机器人(factsheet) |
 | DELETE | `/api/integration/v1/robots/:serial` | 注销 |
 | POST | `/api/integration/v1/robots/:serial/state` | 状态上报(兼作心跳;>20s 无上报判 offline) |
@@ -58,6 +58,7 @@ Key 与场站一一绑定——同一套端点,不同 Key 自动落到各自场�
 | POST | `/api/integration/v1/robots/:serial/readings` | 批量上报 payload 读数(稳定信封) |
 | POST | `/api/integration/v1/snapshot` | 证据抓帧:`{stream}` → `{url}`,平台从已登记帧源出快照托管 |
 | POST | `/api/integration/v1/maps` | 上传占据栅格地图(ROS 约定) |
+| GET | `/api/integration/v1/maps` | 底图清单 + 标定变换(像素/厂商/WGS84 → 世界系的相似参数) |
 
 ## 1. 注册机器人(factsheet)
 
@@ -158,7 +159,7 @@ curl -X POST $BASE/api/integration/v1/robots/ACME-0007/readings \
 ```
 
 读数出现在机器人详情页 Payload Telemetry 时序里;站点侧 threshold 检测器(`kind:'threshold'`,
-`metric/op/bound`)可基于它们自动产生事件。metric 注册表见 `GET /api/sites/:siteId/metrics`。
+`metric/op/bound`)可基于它们自动产生事件。metric 注册表可从 `GET /site` 响应的 `metrics` 或本端点响应的 `metrics` 直接发现。
 
 ## 5. 地图上传(ROS map_server 约定)
 
@@ -225,6 +226,23 @@ cd ~/.node-red && npm i <repo>/sdk/node-red-contrib-plantbot   # 重启 Node-RED
 `plantbot-orders`(订单泵:输出每单一条 msg、`msg.topic`=kind,用 switch 节点路由——那就是你的能力矩阵;输入 `{orderId,status,note}` 回报) /
 `plantbot-event`(事件上报,`snapshotStream` 自动经平台证据服务抓帧)。
 示例流 `examples/minimal-adapter-flow.json`:inject 1Hz → function(读你的机器人) → robot → orders → switch(kind) → 执行 → 回报。
+
+## 嵌入与 SSO（把 Plantbot 装进你的 webapp）
+
+平台为「被宿主 webapp 集成」准备了三件套:
+
+1. **iframe 嵌入**:`<iframe src="https://host/robots/live?embed=1&site=plant-07">` ——
+   `embed=1` 隐藏导航壳(仅内容区,宿主掌握路由),`site=` 钉定场站;两者对本 tab 会话粘滞。
+   跨站 iframe 要让会话 cookie 可用:平台侧设 `PB_COOKIE_SAMESITE=none`(强制 Secure,须 HTTPS),
+   并在 nginx 给 SPA 加 `Content-Security-Policy: frame-ancestors 'self' https://your-host.example`。
+2. **OIDC / OAuth 2.0 SSO**(Authorization Code + PKCE,零依赖实现):设
+   `OIDC_ISSUER` + `OIDC_CLIENT_ID`(机密客户端另设 `OIDC_CLIENT_SECRET`)登录页即出现 SSO 入口;
+   首次登录 JIT 建号(`OIDC_DEFAULT_ROLE`,默认 viewer;`OIDC_ADMIN_USERS` 邮箱清单直接开 `'*'` admin),
+   之后角色由平台 admin 在用户面板管理。回调地址 `<origin><PUBLIC_BASE>/api/auth/oidc/callback`
+   (或 `OIDC_REDIRECT_URL` 显式指定)。本地联调可用仓库自带 mock IdP:`npx tsx integrations/test/mock-idp.ts`。
+3. **会话面全量 OpenAPI**:除本文的集成面 v1 之外,浏览器/会话面(auth/SSO、场站与用户管理、任务派发、
+   事件处置、播放租约、连接器…)完整规范在 [openapi-platform.yaml](openapi-platform.yaml),
+   运行中的平台在线提供 `GET /api/openapi.json`(免鉴权)——宿主前端/BFF 代用户驱动平台时按此对接。
 
 ## Agent Skill（给 code agent 的接入向导）
 

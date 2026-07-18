@@ -213,6 +213,22 @@ function RouteStage({ routeKey }: { routeKey: string }) {
   )
 }
 
+/** iframe embedding: ?embed=1 strips the chrome (side rail / top bar / mobile
+ *  nav) so a host webapp can frame a single page; sticky per tab-session so
+ *  in-app navigation keeps the embedded shape. ?embed=0 exits. */
+function useEmbedded(): boolean {
+  return useMemo(() => {
+    const q = new URLSearchParams(window.location.search).get('embed')
+    try {
+      if (q === '1') sessionStorage.setItem('pb-embed', '1')
+      if (q === '0') sessionStorage.removeItem('pb-embed')
+      return sessionStorage.getItem('pb-embed') === '1'
+    } catch {
+      return q === '1' // sandboxed iframe without storage — honor the URL alone
+    }
+  }, [])
+}
+
 /** production empty state — a fresh (non-demo) deployment has no sites yet */
 function NoSitesHero() {
   const t = useT()
@@ -238,6 +254,7 @@ function NoSitesHero() {
 
 export function Shell() {
   const location = useLocation()
+  const embedded = useEmbedded()
   const lang = useLang((s) => s.lang)
   const t = useT()
   const isAdmin = useCan('admin')
@@ -286,6 +303,19 @@ export function Shell() {
 
   const emptyPlatform =
     sitesLoaded && sites.length === 0 && location.pathname !== '/sites' && location.pathname !== '/login'
+
+  // embedded (iframe) shape: content only — same standalone-main layout the
+  // PB_PUBLIC_VIEW gate uses; the host app owns navigation and chrome
+  if (embedded) {
+    return (
+      <div className="app-shell">
+        <Toaster />
+        <main className="app-main col-span-full row-span-full">
+          {emptyPlatform ? <NoSitesHero /> : <RouteStage routeKey={`${location.pathname}${location.search}`} />}
+        </main>
+      </div>
+    )
+  }
 
   return (
     <div className="app-shell">

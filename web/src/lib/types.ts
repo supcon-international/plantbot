@@ -109,6 +109,8 @@ export interface SiteSummary {
 
 export interface Me {
   user: { username: string; displayName: string; roles: Record<string, Role> } | null
+  /** OIDC SSO availability (server-side OIDC_ISSUER config) — null when off */
+  sso?: { label: string } | null
   sites: SiteSummary[]
 }
 
@@ -356,7 +358,7 @@ export interface Schedule {
 
 export interface MapAsset {
   id: string
-  kind: 'occupancy' | 'splat' | 'aerial'
+  kind: 'occupancy' | 'aerial'
   name: string
   url: string
   occupancy?: { resolution: number; origin: [number, number]; width: number; height: number }

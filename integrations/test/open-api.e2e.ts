@@ -17,9 +17,22 @@ test('open API：openapi.json / 只读数据面 / readings 往返 / 鉴权 / 相
     assert.equal(spec.openapi, '3.0.3')
     assert.ok(Object.keys(spec.paths).length >= 15, 'spec covers the surface')
 
+    // -- the session-face (platform) spec is served too
+    const platSpec = await (await fetch(`${stack.base}/api/openapi.json`)).json()
+    assert.equal(platSpec.openapi, '3.0.3')
+    assert.ok(Object.keys(platSpec.paths).length >= 40, 'platform spec covers the console surface')
+
     // -- everything else refuses without a key
     const noKey = await fetch(`${stack.base}/api/integration/v1/fleet`)
     assert.equal(noKey.status, 401)
+
+    // -- site factsheet carries the metric registry + maps expose transforms
+    const site = await integration(stack.base, KEY, 'GET', '/site')
+    assert.ok(Array.isArray(site.body.metrics) && site.body.metrics.length > 0, '/site lists the metric registry')
+    assert.ok(site.body.metrics.some((m: any) => m.id && m.unit !== undefined))
+    const maps = await integration(stack.base, KEY, 'GET', '/maps')
+    assert.equal(maps.status, 200)
+    assert.ok(Array.isArray(maps.body.maps) && Array.isArray(maps.body.transforms), '/maps returns inventory + transforms')
 
     // -- fleet: robots + the same telemetry frame the console renders
     const fleet = await integration(stack.base, KEY, 'GET', '/fleet')

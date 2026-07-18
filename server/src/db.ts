@@ -30,7 +30,7 @@ db.exec('PRAGMA foreign_keys = ON')
 
 // ---------- schema ----------
 
-const SCHEMA_VERSION = 2
+const SCHEMA_VERSION = 3
 
 function migrate() {
   const v = (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
@@ -59,7 +59,6 @@ function migrate() {
       operator   TEXT NOT NULL,
       bounds     TEXT NOT NULL,            -- json {x:[..],z:[..]}
       dock_wp    TEXT NOT NULL DEFAULT '',
-      splat      TEXT,                     -- json {name,url} | null
       buildings  TEXT NOT NULL DEFAULT '[]',
       map_meta   TEXT,                     -- json SiteMapMeta for built-in demo underlays;
                                            -- uploaded occupancy maps live in site_maps
@@ -155,6 +154,11 @@ function migrate() {
       PRIMARY KEY (site_id, id)
     );
   `)
+  // v3: the 3DGS scene layer is retired — drop sites.splat where it exists
+  // (fresh DBs are created without it; the CREATE above is IF NOT EXISTS)
+  const hasSplat =
+    (db.prepare(`SELECT COUNT(*) AS n FROM pragma_table_info('sites') WHERE name='splat'`).get() as { n: number }).n > 0
+  if (hasSplat) db.exec('ALTER TABLE sites DROP COLUMN splat')
   db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`)
 }
 migrate()

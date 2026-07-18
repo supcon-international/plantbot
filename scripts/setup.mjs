@@ -6,10 +6,8 @@
  *    Spot (RAI Institute spot_description visual meshes, MIT; the flattened
  *    spot.urdf lives in-repo) — GS F2 renders as a silhouette
  *                                                      → web/public/assets/robots/
- *  - SKANOSFERA warehouse 3DGS scan (superspl.at), merged from SOG
- *    chunks and leveled by scripts/level_splat.py      → web/public/assets/scenes/
  * Everything is skipped if already present.
- * Host requirements: node ≥ 22.22, ffmpeg on PATH, python3 with numpy.
+ * Host requirements: node ≥ 22.22, ffmpeg on PATH.
  *   (unzip is used to unpack the go2rtc mac/win zip; present by default.)
  */
 import { mkdirSync, existsSync, writeFileSync, statSync } from 'node:fs'
@@ -52,12 +50,6 @@ function preflight() {
     execSync('ffmpeg -version', { stdio: 'ignore' })
   } catch {
     console.error('✗ ffmpeg not found on PATH — install it (macOS: brew install ffmpeg) and rerun.')
-    process.exit(1)
-  }
-  try {
-    execSync('python3 -c "import numpy"', { stdio: 'ignore' })
-  } catch {
-    console.error('✗ python3 with numpy is required for the splat pipeline — `pip3 install numpy` and rerun.')
     process.exit(1)
   }
 }
@@ -144,37 +136,6 @@ async function relayBinary() {
   }
 }
 
-// ---------- gaussian splat scene ----------
-async function splatScene() {
-  const dest = join(ROOT, 'web', 'public', 'assets', 'scenes', 'plant_yard.splat')
-  if (existsSync(dest) && statSync(dest).size > 1e6) return console.log('  ✓ plant_yard.splat (cached)')
-  mkdirSync(dirname(dest), { recursive: true })
-  // SKANOSFERA "Hala Magazynowa" warehouse scan, published on superspl.at
-  // (scene 3eedaa2b). We pull the LOD-2 SOG chunks, merge them to a 3DGS ply
-  // with @playcanvas/splat-transform, then level/center/scale via level_splat.
-  const work = join(ROOT, 'server', 'media', 'hala')
-  const base = 'https://d28zzqy0iyovbz.cloudfront.net/3eedaa2b/v1'
-  const chunks = ['2_0', '2_1', '2_2', '2_3', '2_4']
-  const files = ['meta.json', 'means_l.webp', 'means_u.webp', 'scales.webp', 'quats.webp', 'sh0.webp']
-  for (const c of chunks) {
-    mkdirSync(join(work, c), { recursive: true })
-    for (const f of files) {
-      const p = join(work, c, f)
-      if (!existsSync(p) || statSync(p).size < 200) await download(`${base}/${c}/${f}`, p, `${c}/${f}`)
-    }
-  }
-  const ply = join(work, 'hala.ply')
-  if (!existsSync(ply) || statSync(ply).size < 1e8) {
-    console.log('  ⇄ merging SOG chunks (splat-transform) …')
-    execSync(`npx --yes @playcanvas/splat-transform ${chunks.map((c) => join(work, c, 'meta.json')).join(' ')} "${ply}"`, {
-      stdio: 'inherit',
-    })
-  }
-  console.log('  ⟲ leveling & baking (scripts/level_splat.py) …')
-  execSync(`python3 "${join(ROOT, 'scripts', 'level_splat.py')}" "${ply}" "${dest}" --span 38 --ymax 6.5`, { stdio: 'inherit' })
-}
-
-
 // Mixkit clips ship with long GOPs; re-encode to keyint 15 so stream
 // switching starts in <1 s. Requires ffmpeg (the relay needs it anyway).
 const FFMPEG = process.env.FFMPEG_BIN ?? 'ffmpeg'
@@ -217,7 +178,7 @@ async function filteredFeed(name, srcName, vf) {
   console.log('done')
 }
 
-console.log('[1/4] camera footage (Mixkit free license + Commons)')
+console.log('[1/3] camera footage (Mixkit free license + Commons)')
 for (const [name, url] of Object.entries(FOOTAGE)) await footage(name, url)
 await stagingFeed()
 await filteredFeed('thermal.mp4', 'smokestack.mp4', 'format=gray,format=gbrp,pseudocolor=preset=inferno,scale=960:-2')
@@ -231,15 +192,12 @@ await filteredFeed('ogi.mp4', 'pumpjack.mp4', 'format=gray,eq=contrast=1.55:brig
   }
 }
 
-console.log('[2/4] URDF twins — X30 (DeepRoboticsLab) + Spot (RAI spot_description)')
+console.log('[2/3] URDF twins — X30 (DeepRoboticsLab) + Spot (RAI spot_description)')
 for (const [rel, url] of Object.entries(ROBOT_FILES)) {
   await download(url, join(ROOT, 'web', 'public', 'assets', 'robots', rel), rel)
 }
 
-console.log('[3/4] gaussian splat scene (huggingface cakewalk/splat-data)')
-await splatScene()
-
-console.log('[4/4] media relay (go2rtc — RTSP → MSE for live playback)')
+console.log('[3/3] media relay (go2rtc — RTSP → MSE for live playback)')
 await relayBinary()
 
 console.log('\nAll assets ready. Run: pnpm dev')

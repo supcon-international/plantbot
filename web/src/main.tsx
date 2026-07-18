@@ -9,7 +9,16 @@ import '@fontsource/ibm-plex-mono/500.css'
 import './styles/app.css'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
-import { startRealtime } from './lib/store'
+import { startRealtime, useSite } from './lib/store'
+
+// iframe embedding: the host pins the site via ?site=<id> — apply before the
+// realtime socket connects so the first WS room is already the right one
+try {
+  const pinned = new URLSearchParams(window.location.search).get('site')
+  if (pinned) useSite.getState().setSite(pinned)
+} catch {
+  /* sandboxed iframe without storage access — persisted default applies */
+}
 
 startRealtime()
 

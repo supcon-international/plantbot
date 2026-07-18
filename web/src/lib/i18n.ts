@@ -48,6 +48,8 @@ const D: Record<string, [string, string]> = {
   'login.user': ['Username', '用户名'],
   'login.pass': ['Password', '密码'],
   'login.go': ['SIGN IN', '登 录'],
+  'login.or': ['OR', '或'],
+  'login.sso': ['CONTINUE WITH', '单点登录'],
   'login.hint': ['demo accounts admin / operator / viewer · password “plantbot”', '演示账户 admin / operator / viewer,密码 “plantbot”'],
   'login.failed': ['Invalid credentials', '用户名或密码错误'],
   'login.gated': ['This deployment requires sign-in to view.', '该部署要求登录后访问。'],
@@ -221,7 +223,6 @@ const D: Record<string, [string, string]> = {
   'c.noData': ['no data', '无数据'],
   'c.send': ['send', '派遣'],
   'c.detail': ['DETAIL', '详情'],
-  'c.follow': ['FOLLOW', '跟随'],
   'c.abort': ['ABORT', '中止'],
   'c.units': ['units', '台'],
   'c.tasked': ['tasked', '执行中'],
@@ -494,11 +495,7 @@ const D: Record<string, [string, string]> = {
   'map.lg.nav': ['Route node', '路径节点'],
   'map.lg.dock': ['Charge dock', '充电桩'],
   'map.lg.alarm': ['Alarm', '告警'],
-  'map.opsMap': ['OPS MAP', '作业地图'],
-  'map.3dScan': ['3D SCAN', '3D 扫描'],
-  'map.noScan': ['No 3DGS scan registered for this site', '该场站未登记 3DGS 扫描'],
   'map.lg.checkpoint': ['checkpoint', '检查点'],
-  'map.streaming': ['STREAMING GAUSSIAN SPLATS', '高斯泼溅加载中'],
   'map.wpDispatch': ['select a unit above to dispatch', '在上方选择机器人以派遣'],
 
   // ---------- events ----------

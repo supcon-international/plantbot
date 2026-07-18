@@ -26,6 +26,7 @@ import {
   resumeConnectors, stopSiteConnectors, shutdownConnectors,
 } from './connectors.js'
 import { requestUser, requireRole, issueSession, clearSession, login, loginThrottled, publicUser, PUBLIC_VIEW } from './auth.js'
+import { oidcLogin, oidcCallback, oidcEnabled, oidcLabel } from './oidc.js'
 import { ROBOT_CATALOG, METRIC_DEFS, type Command, type Waypoint, type Zone, type SiteCamera } from './fleet.js'
 import { relayConfigured, relayOnline, startRelayHealth } from './media.js'
 import type { DetectionRule, DetectionEvent, Mission, AdapterOrder } from './world.js'
@@ -46,7 +47,7 @@ if (DEMO && listSiteRows().length === 0) {
   for (const def of DEMO_SITES) {
     createSiteRow({
       id: def.id, name: def.name, operator: def.operator, bounds: def.bounds,
-      dockWp: def.dockWp, splat: def.splat, buildings: def.buildings, mapMeta: def.map ?? undefined, demo: true,
+      dockWp: def.dockWp, buildings: def.buildings, mapMeta: def.map ?? undefined, demo: true,
     })
     saveGeometry(def.id, { waypoints: def.waypoints, zones: def.zones, cameras: def.cameras })
     for (const t of def.eventTypeSeeds ?? []) saveEventType(def.id, t)
@@ -73,7 +74,6 @@ function buildRuntime(row: SiteRow): SiteRuntime {
     operator: row.operator,
     bounds: row.bounds,
     dockWp: row.dockWp,
-    splat: row.splat,
     buildings: row.buildings,
     map: uploaded
       ? {
@@ -142,7 +142,7 @@ if (!PUBLIC_VIEW) {
   app.addHook('onRequest', async (req, reply) => {
     const url = req.url
     if (!url.startsWith('/api/')) return
-    if (url.startsWith('/api/auth/') || url.startsWith('/api/health') || url.startsWith('/api/integration/')) return
+    if (url.startsWith('/api/auth/') || url.startsWith('/api/health') || url.startsWith('/api/integration/') || url.startsWith('/api/openapi.json')) return
     if (requestUser(req)) return
     return reply.code(401).send({ error: 'sign in required', gated: true })
   })
@@ -236,12 +236,17 @@ app.post('/api/auth/logout', async (_req, reply) => {
   return { ok: true }
 })
 
+// OIDC SSO (enabled by OIDC_ISSUER + OIDC_CLIENT_ID — see server/src/oidc.ts)
+app.get('/api/auth/oidc/login', oidcLogin)
+app.get('/api/auth/oidc/callback', oidcCallback)
+
 app.get('/api/auth/me', async (req) => {
   const u = requestUser(req)
   return {
     user: publicUser(u),
     publicView: PUBLIC_VIEW,
     demo: DEMO,
+    sso: oidcEnabled() ? { label: oidcLabel() } : null,
     sites: listSiteRows().map((s) => ({ id: s.id, name: s.name, operator: s.operator, role: roleFor(u, s.id) })),
   }
 })
@@ -995,24 +1000,39 @@ app.post(`${S}/robots/:id/goto`, { preHandler: requireRole('operator') }, async 
 
 const I = '/api/integration/v1'
 
-// machine-readable spec of everything under this prefix (docs/openapi.yaml
-// is the source of truth; parsed once at boot). No auth — it's documentation.
-const OPENAPI_DOC: unknown = (() => {
+// machine-readable specs (docs/*.yaml are the source of truth; parsed once at
+// boot). No auth — they're documentation. Two faces, two documents:
+//   GET /api/integration/v1/openapi.json — Bearer-key integration face
+//   GET /api/openapi.json                — session face (embedding hosts)
+const loadSpec = (file: string, title: string): unknown => {
   try {
-    const raw = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'docs', 'openapi.yaml'), 'utf8')
+    const raw = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'docs', file), 'utf8')
     return YAML.parse(raw)
   } catch (e) {
-    console.error('[api] openapi.yaml missing/invalid:', (e as Error).message)
-    return { openapi: '3.0.3', info: { title: 'Plantbot Open Integration API', version: 'unavailable' }, paths: {} }
+    console.error(`[api] ${file} missing/invalid:`, (e as Error).message)
+    return { openapi: '3.0.3', info: { title, version: 'unavailable' }, paths: {} }
   }
-})()
+}
+const OPENAPI_DOC = loadSpec('openapi.yaml', 'Plantbot Open Integration API')
+const PLATFORM_OPENAPI_DOC = loadSpec('openapi-platform.yaml', 'Plantbot Platform API')
 
 app.get(`${I}/openapi.json`, async () => OPENAPI_DOC)
+app.get('/api/openapi.json', async () => PLATFORM_OPENAPI_DOC)
 
 app.get(`${I}/site`, async (req, reply) => {
   const w = integrationSite(req, reply)
   if (!w) return
-  return { site: w.site, waypoints: w.waypoints, zones: w.zones, eventTypes: w.eventTypes }
+  // metrics = the reading registry — adapters discover valid metric ids here
+  // instead of learning them from a rejected POST /readings
+  return { site: w.site, waypoints: w.waypoints, zones: w.zones, eventTypes: w.eventTypes, metrics: METRIC_DEFS }
+})
+
+app.get(`${I}/maps`, async (req, reply) => {
+  const w = integrationSite(req, reply)
+  if (!w) return
+  // transforms included: external systems converting vendor/pixel/WGS84
+  // coordinates use the same similarity params the CALIB page solved
+  return w.maps()
 })
 
 // -- open read API: the platform's operational data for third-party systems

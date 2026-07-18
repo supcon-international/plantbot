@@ -51,7 +51,6 @@ export interface SiteRuntime {
   bounds: { x: [number, number]; z: [number, number] }
   map: SiteMapMeta | null
   dockWp: string
-  splat?: { name: string; url: string }
   buildings: Building[]
   waypoints: Waypoint[]
   zones: Zone[]
@@ -290,7 +289,6 @@ export class World {
   zones: Zone[]
   buildings: Building[]
   dockWp: string
-  splat?: { name: string; url: string }
   /** calibration transforms (stored) — merged with the occupancy-derived one in maps() */
   transforms: FrameTransform[] = []
   nav = new Map<string, NavState>()
@@ -339,7 +337,6 @@ export class World {
     this.zones = rt.zones
     this.buildings = rt.buildings
     this.dockWp = rt.dockWp
-    this.splat = rt.splat
     this.transforms = rt.transforms
     this.wpById = new Map(rt.waypoints.map((w) => [w.id, w]))
     this.eventTypes = [
@@ -1316,8 +1313,6 @@ export class World {
         note: 'p_world = px · resolution + origin (top-left anchored, x→east, z→south)',
       })
     }
-    if (this.splat)
-      maps.push({ id: 'splat', kind: 'splat', name: this.splat.name, url: this.splat.url })
     // stored calibration transforms (calibration UI / demo seeds) sit alongside
     // the occupancy-derived one
     transforms.push(...this.transforms)

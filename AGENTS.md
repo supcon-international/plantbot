@@ -11,7 +11,7 @@ Plantbot：多场站巡检机器人运营平台——**纯集成层**，机器�
 
 ```bash
 pnpm install              # 要求 Node ≥ 22.22（react-router 8 / vite 8 要求;平台用内建 node:sqlite）
-pnpm run setup            # 必须带 run（裸 `pnpm setup` 是 pnpm 内置命令）；下载素材+X30/Spot URDF+splat+go2rtc(bin/)
+pnpm run setup            # 必须带 run（裸 `pnpm setup` 是 pnpm 内置命令）；下载素材+X30/Spot URDF+go2rtc(bin/)
 pnpm dev                  # server :8787（PB_DEMO=1 + PB_DEV_KEYS=1 + 固定 SESSION_SECRET + MEDIA_RELAY→:1984）+ web :5173 + go2rtc 中继 + 五对 sim/adapter
 pnpm dev:core             # 仅 server + web（不起集成层）
 WEB_BASE=/robots/ pnpm build   # 生产构建（见下）；本地根路径构建用 pnpm build
@@ -41,11 +41,11 @@ cd integrations && pnpm test                        # 全行为 e2e（起真平�
 ## 持久层与生产开关
 
 - **SQLite**（`server/data/plantbot.db`，node:sqlite/WAL；`server/src/db.ts` + `config.ts` store 层）：用户 / API key（sha256 哈希，明文只在创建响应出现一次）/ 场站建模（sites/waypoints/zones/cameras/transforms/底图）/ 外部机注册 / 规则 / 模板 / 排程 / 任务 / 事件 / 订单 / 命令审计 / 读数（7d 滚动）。World 内存为热路径读模型，mutator 写穿（`Persist` 钩子），启动水合（`hydrate`+seq 恢复+僵尸 run 收尸）；**acked 未完结订单在重启时重新入队**——adapter 可能收到重复单，需容忍。旧 config.json 首启自动导入。e2e 用 `PB_DATA_DIR` 隔离。
-- **开关**：`PB_DEMO=1` = 演示模式（首启导入三演示站 plant-07 / plant-12 / campus-east 种子——含绑定摄像头与机器人流的规则、钉死外部机器人的排程——并跑随机事件生成器；不设 = 空库生产，事件只来自集成上报+阈值检测器）；`PB_PUBLIC_VIEW=0` = 关匿名浏览（全站登录门禁+WS 拒连）；`MEDIA_RELAY=http://…:1984` = go2rtc 中继（RTSP→MSE）。CORS 已整体移除（dev 走 vite 代理，生产同源 nginx）。
+- **开关**：`PB_DEMO=1` = 演示模式（首启导入三演示站 plant-07 / plant-12 / campus-east 种子——含绑定摄像头与机器人流的规则、钉死外部机器人的排程——并跑随机事件生成器；不设 = 空库生产，事件只来自集成上报+阈值检测器）；`PB_PUBLIC_VIEW=0` = 关匿名浏览（全站登录门禁+WS 拒连）；`MEDIA_RELAY=http://…:1984` = go2rtc 中继（RTSP→MSE）；`OIDC_ISSUER`+`OIDC_CLIENT_ID`(±`OIDC_CLIENT_SECRET`/`OIDC_DEFAULT_ROLE`/`OIDC_ADMIN_USERS`) = 启用 SSO；`PB_COOKIE_SAMESITE=none` = 跨站 iframe cookie（强制 Secure）。CORS 已整体移除（dev 走 vite 代理，生产同源 nginx）。
 
 ## 权限与凭证红线
 
-- 角色 `viewer < operator < admin` × 场站授权；匿名 = viewer 只读（可被 PB_PUBLIC_VIEW=0 关闭）。无 `:siteId` 的平台路由（sites/users）只有 `'*'` admin 可过（前端 `roleFor/useRole` 有 `'*'` 通配兜底，空平台的平台 admin 才能建首站）。种子账户 `admin/operator/viewer`（默认密码 `plantbot`，生产用 `PB_*_PASSWORD` 环境变量覆盖；登录 5 次/15 分钟限速）。
+- 角色 `viewer < operator < admin` × 场站授权；匿名 = viewer 只读（可被 PB_PUBLIC_VIEW=0 关闭）。无 `:siteId` 的平台路由（sites/users）只有 `'*'` admin 可过（前端 `roleFor/useRole` 有 `'*'` 通配兜底，空平台的平台 admin 才能建首站）。种子账户 `admin/operator/viewer`（默认密码 `plantbot`，生产用 `PB_*_PASSWORD` 环境变量覆盖；登录 5 次/15 分钟限速）。**OIDC SSO**（`server/src/oidc.ts`，零依赖授权码+PKCE）：JIT 建号（`OIDC_DEFAULT_ROLE` 默认 viewer，`OIDC_ADMIN_USERS` 清单开 `'*'` admin，仅创建时生效），SSO 用户本地密码为随机值；mock IdP 在 `integrations/test/mock-idp.ts`。
 - **rtsp:// URL 内嵌凭证，只对该站 admin 回传**：对外的 fleet/channels/WS/开放 API 载荷一律经 `publicCameras()/publicChannels()/publicRobots()` 剥除；connector config 含机器人凭证，只走 admin 路由。
 
 ## 集成层
@@ -57,18 +57,19 @@ cd integrations && pnpm test                        # 全行为 e2e（起真平�
 - **多实例编排**：spot/deeprobotics 用 `SPOT_PROFILE`/`DR_PROFILE`（plant07|campus / plant12|campus）选身份+通道+场站 key，同一份代码起两实例；`pnpm dev` 经 `integrations/scripts/dev-all.mjs` 拉起 10 进程。e2e 模式见 `integrations/test/harness.ts`：临时端口 + `PB_DATA_DIR` 起真平台，`standUpVendor` 一站式厂商 fixture。
 - **两种接入模式**（向导 FLEET→CONNECT ROBOT 第一步选）：**托管连接器**——`server/src/connectors.ts` supervisor 把 `integrations/` 的官方 adapter 作为**受监督子进程**代跑（崩溃退避重启、200 行日志环缓、boot 自动恢复、平台退出级联回收），北向走回环集成 API + 每次 boot 重签的内部密钥（明文只在内存）；身份经 `PB_SERIAL/PB_CALLSIGN/PB_DOCK_X|Z/PB_STREAMS`（bridge.ts `customProfileFromEnv`）注入，rtsp:// 流原样进 factsheet。**外部 adapter**——场站 key + 北向 API，跨网/任意型号。
 - **真机坐标系**：dr/spot adapter 的 `toWorld/toMap` 经 `worldTransformFromEnv()`（bridge.ts，`PB_TF_SCALE/THETA/TX/TZ`，CALIB 页解出）做厂商 SLAM 系→世界系相似变换，默认恒等（demo 的 sim 原点即世界原点）；connector 表单有对应可选字段。
-- **开放数据面**：同一把场站 key 可只读 GET fleet（机队+遥测）/ events（过滤）/ missions / schedules / channels（脱敏）/ robots/:serial/readings——World 的 `telemetry()` 是 tick 的纯读版，**GET 端点禁止调 tick**（有调度副作用）。**OpenAPI `docs/openapi.yaml` 是唯一事实源**（swagger-parser 校验过，server boot 时解析并在 `GET /api/integration/v1/openapi.json` 免鉴权 serve）——**改集成 API 必须同步该 yaml**。adapter 秘钥播种 `PB_SEED_KEYS`/`PB_DEV_KEYS`、订单七类（goto/mission/announce/pause/resume/abort/ptz）与 `dock:true` 语义、证据快照服务见 `docs/integration.md`。
+- **开放数据面**：同一把场站 key 可只读 GET fleet（机队+遥测）/ events（过滤）/ missions / schedules / channels（脱敏）/ robots/:serial/readings——World 的 `telemetry()` 是 tick 的纯读版，**GET 端点禁止调 tick**（有调度副作用）。**OpenAPI 双规范都是事实源**：集成面 `docs/openapi.yaml`（`GET /api/integration/v1/openapi.json`）+ 会话面全量 `docs/openapi-platform.yaml`（`GET /api/openapi.json`），boot 时解析、免鉴权 serve——**改任一面的 API 必须同步对应 yaml**。`GET /site` 含 metric 注册表，`GET /maps`（集成面）回底图+标定变换。adapter 秘钥播种 `PB_SEED_KEYS`/`PB_DEV_KEYS`、订单七类（goto/mission/announce/pause/resume/abort/ptz）与 `dock:true` 语义、证据快照服务见 `docs/integration.md`。
 
 ## 前端约定
 
-- **组件基座 = shadcn/ui**（Tailwind v4，`web/src/components/ui/*`，别名 `@/`），已**皮肤化为 Carbon 工业控制台**：直角（`--radius:0`）、硬偏移阴影、IBM Plex Condensed、酸绿 signal。shadcn 语义变量（`--background`/`--primary`…）在 `app.css` 里**派生自 Carbon 令牌**（`--color-*`），改设计只动 Carbon 令牌，双主题自动翻。写页面用 `Button`(variant utility/signal/outline/ghost)/`Dialog`/`Select`/`Tabs|ToggleGroup`(段控)/`Table`/`Input`/`Switch`/`Slider`/`Progress`/`Badge`，不要手搓原生 `<button>/<select>`。`components/ui.tsx` 的 `Panel/PanelHead/Modal/SevTag/ModeChip` 是包在 shadcn 之上的领域封装。Toast 走 sonner（`lib/notify.tsx` 渲染 Carbon 卡片）。**坑：`.panel` 类带 `position:relative`，别加到需要 `fixed` 的元素（Dialog 已规避）；React 必须单副本（19.2.7），重复副本会触发 Invalid hook call。**
+- **组件基座 = shadcn/ui**（Tailwind v4，`web/src/components/ui/*`，别名 `@/`），已**皮肤化为 Carbon 工业控制台**：直角（`--radius:0`）、硬偏移阴影、IBM Plex Condensed、酸绿 signal。shadcn 语义变量（`--background`/`--primary`…）在 `app.css` 里**派生自 Carbon 令牌**（`--color-*`），改设计只动 Carbon 令牌，双主题自动翻。写页面用 `Button`(variant utility/signal/outline/ghost)/`Dialog`/`Select`/`Tabs|ToggleGroup`(段控)/`Table`/`Input`/`Switch`/`Slider`/`Progress`/`Badge`，不要手搓原生 `<button>/<select>`。`components/ui.tsx` 的 `Panel/PanelHead/Modal/SevTag/ModeChip` 是包在 shadcn 之上的领域封装。Toast 走 sonner（`lib/notify.tsx` 渲染 Carbon 卡片）。**iframe 嵌入**：`?embed=1` 无壳模式（Shell 只渲染内容区，tab 会话粘滞，`?embed=0` 退出）+ `?site=` 钉场站（main.tsx 在 WS 连接前应用）。**坑：`.panel` 类带 `position:relative`，别加到需要 `fixed` 的元素（Dialog 已规避）；React 必须单副本（19.2.7），重复副本会触发 Invalid hook call。**
 
 ## 文档地图（改动时的同步义务）
 
 | 文档 | 是什么 | 何时同步 |
 | --- | --- | --- |
 | `docs/guide.zh.md` / `guide.en.md` | 新读者双语指南（功能模块/场站中心/两种接入） | 改产品形态 |
-| `docs/integration.md` + `docs/openapi.yaml` | 集成 API 文字版 + 机器可读唯一事实源 | 改集成 API（yaml 必须同步） |
+| `docs/integration.md` + `docs/openapi.yaml` | 集成 API 文字版（含嵌入与 SSO 节）+ 集成面机器可读事实源 | 改集成 API（yaml 必须同步） |
+| `docs/openapi-platform.yaml` | 会话面全量 OpenAPI（auth/SSO/场站/任务/事件/媒体/连接器） | 改会话面 API |
 | `docs/adapter-sim-architecture.md` | 三层架构、厂商映射、进程拓扑、e2e 面 | 改集成层结构 / 新增厂商 |
 | `docs/vendors/*` | 三厂商逐字段协议参考 | 动 sim/adapter **前必读** |
 | `docs/platform-model.md` | 六域模型设计+落地状态（输入调研：`gorobot-study.md`） | 动六域 |

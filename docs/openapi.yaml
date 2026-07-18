@@ -52,7 +52,7 @@ paths:
     get:
       tags: [site]
       summary: Site factsheet
-      description: Bounds, waypoints, zones and the event-type vocabulary of the site the key is scoped to.
+      description: Bounds, waypoints, zones, the event-type vocabulary and the reading-metric registry of the site the key is scoped to.
       operationId: getSite
       responses:
         "200":
@@ -72,6 +72,10 @@ paths:
                   eventTypes:
                     type: array
                     items: { $ref: "#/components/schemas/EventType" }
+                  metrics:
+                    type: array
+                    description: The reading-metric registry — only these ids are accepted by POST /robots/{serial}/readings
+                    items: { $ref: "#/components/schemas/MetricDef" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
   /robots:
@@ -242,7 +246,7 @@ paths:
     post:
       tags: [readings]
       summary: Upload payload readings (batch)
-      description: Only metrics present in the site registry are accepted (see the sites API `/metrics`).
+      description: Only metrics present in the site registry are accepted — discover the registry via GET /site (`metrics`) or from this endpoint's response.
       operationId: uploadReadings
       parameters: [{ $ref: "#/components/parameters/serial" }]
       requestBody:
@@ -262,6 +266,8 @@ paths:
                       metric: { type: string, example: ch4.ppm }
                       value: { type: number, example: 2.4 }
                       ts: { type: integer, description: "epoch ms, defaults to now" }
+                      payloadId: { type: string, description: optional payload/sensor package id }
+                      quality: { type: string, enum: [ok, degraded, stale] }
       responses:
         "200":
           description: Ingest summary
@@ -330,6 +336,26 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
 
   /maps:
+    get:
+      tags: [read]
+      summary: Map inventory + coordinate transforms
+      description: Every base layer of the site plus the calibration transforms (similarity params) for converting pixel/vendor/WGS84 coordinates to the world frame.
+      operationId: listMaps
+      responses:
+        "200":
+          description: Maps and transforms
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  maps:
+                    type: array
+                    items: { $ref: "#/components/schemas/MapAsset" }
+                  transforms:
+                    type: array
+                    items: { $ref: "#/components/schemas/FrameTransform" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
     post:
       tags: [media]
       summary: Upload an occupancy map (ROS map_server convention)
@@ -568,6 +594,59 @@ components:
         label: { type: string }
         severity: { type: string, enum: [critical, high, info] }
         category: { type: string, enum: [security, fire, env, equipment, robot-fault] }
+
+    MetricDef:
+      type: object
+      description: One entry of the site's reading-metric registry
+      properties:
+        id: { type: string, example: ch4.ppm }
+        label: { type: string }
+        unit: { type: string, example: ppm }
+        kind: { type: string, enum: [gauge, counter, enum] }
+        nominal:
+          type: array
+          description: normal band [lo, hi] for UI bands / threshold hints
+          items: { type: number }
+          minItems: 2
+          maxItems: 2
+
+    MapAsset:
+      type: object
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [occupancy, aerial] }
+        name: { type: string }
+        url: { type: string, description: absolute or platform-relative image URL }
+        occupancy:
+          type: object
+          description: present on occupancy grids (ROS map_server convention)
+          properties:
+            resolution: { type: number, description: meters per pixel }
+            origin:
+              type: array
+              items: { type: number }
+            w: { type: integer }
+            h: { type: integer }
+
+    FrameTransform:
+      type: object
+      description: "similarity transform between frames: p_to = s·R(θ)·p_from + t"
+      properties:
+        id: { type: string }
+        from: { type: string, example: "map:plant-07" }
+        to: { type: string, example: world }
+        kind: { type: string, enum: [similarity] }
+        params:
+          type: object
+          properties:
+            s: { type: number }
+            thetaRad: { type: number }
+            t:
+              type: array
+              items: { type: number }
+              minItems: 2
+              maxItems: 2
+        note: { type: string }
 
     Factsheet:
       type: object

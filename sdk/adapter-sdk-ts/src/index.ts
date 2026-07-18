@@ -86,6 +86,8 @@ export interface SiteFactsheet {
   waypoints: { id: string; label: string; x: number; z: number; kind?: string }[]
   zones: unknown[]
   eventTypes: { id: string; label: string; severity: string }[]
+  /** the reading-metric registry — only these ids are accepted by readings() */
+  metrics?: { id: string; label: string; unit: string; kind?: string }[]
 }
 
 const consoleLog: Logger = {
@@ -196,6 +198,11 @@ export class PlantbotClient {
   /** ROS map_server-style occupancy upload (PNG data URL) */
   uploadMap(m: { name: string; resolution: number; origin: [number, number]; image: string }): Promise<unknown | null> {
     return this.call('POST', '/maps', m)
+  }
+
+  /** map inventory + calibration transforms (world/pixel/WGS84 similarity params) */
+  maps(): Promise<{ maps: unknown[]; transforms: unknown[] } | null> {
+    return this.call('GET', '/maps')
   }
 
   /** evidence-capture service: the platform grabs a frame from a registered

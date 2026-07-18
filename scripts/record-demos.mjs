@@ -209,30 +209,6 @@ await record(
   },
 )
 
-// ---------- 06 · 3D splat scan ----------
-await record(
-  '06-map-3d',
-  titleCard('MODULE 06', '3D Gaussian-Splat Scan', '高斯泼溅场景 · 实时位姿', 'Escaneo 3D gaussian splats'),
-  async (page) => {
-    await page.goto(`${BASE}/map?mode=splat`)
-    await page.waitForSelector('canvas')
-    await sleep(page, 12000)
-    const c = await page.locator('canvas').boundingBox()
-    if (c) {
-      const cx = c.x + c.width / 2
-      const cy = c.y + c.height / 2
-      await smoothDrag(page, { x: cx, y: cy }, { x: cx + 300, y: cy - 40 }, 30)
-      await sleep(page, 2000)
-      await smoothDrag(page, { x: cx, y: cy }, { x: cx - 200, y: cy + 60 }, 30)
-    }
-    await sleep(page, 2400)
-    await page.click('button:has-text("JY·X30-01")')
-    await sleep(page, 1500)
-    await page.locator('button').filter({ hasText: /FOLLOW|跟随|SEGUIR/i }).click().catch(() => {})
-    await sleep(page, 7000)
-  },
-)
-
 // ---------- 07 · events + rules ----------
 await record(
   '07-events',

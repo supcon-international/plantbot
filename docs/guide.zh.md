@@ -14,7 +14,7 @@ Plantbot 是一个**多场站巡检机器人运营平台**：把不同品牌的�
 | **LIVE 视频墙** | 各路画面现在什么样？——机器人机载相机 + 固定摄像头，一屏聚焦或九宫格；管理员可以直接在这里添加、编辑、删除固定摄像头 |
 | **TASKS 任务** | 巡检跑得怎么样？——进行中的任务、排队的任务、历史记录，每一步到没到、拍了什么 |
 | **FLEET 机队** | 机器人们状态如何？——每台的电量、速度、在忙什么，配 3D 模型；「接入机器人」向导也在这里 |
-| **MAP 地图** | 厂区长什么样？——完整的作业地图，可切换到三维实景（高斯泼溅扫描） |
+| **MAP 地图** | 厂区长什么样？——完整的作业地图：底图、区域、航点与机器人实时位置 |
 | **EVENTS 事件** | 出过什么事？——按严重程度分列的告警看板，每条带快照证据，可以确认、处理、驳回 |
 | **INTEG 集成** | 外部系统怎么接？——托管连接器、API 密钥、事件词表、地图上传都在这一页 |
 | **SITES 场站** | 有哪些场站？——建站、画图（Site Builder）、管理用户账号 |
@@ -68,7 +68,9 @@ Plantbot 反过来：**厂区的知识属于厂区，不属于某台机器人**�
 - 视频通道清单
 - 传感器读数（按指标查时间段）
 
-完整的接口定义是一份标准 **OpenAPI 3.0 文档**：仓库里的 [openapi.yaml](openapi.yaml)，运行中的平台也在线提供（`GET /api/integration/v1/openapi.json`，无需鉴权）。把它拖进任何 OpenAPI 工具（Swagger UI、Postman、Apifox）就能浏览和调试全部接口。
+完整的接口定义是标准 **OpenAPI 3.0 文档**，共两份：集成面 [openapi.yaml](openapi.yaml)（机器人上报 + 只读数据），和覆盖控制台全部操作的会话面 [openapi-platform.yaml](openapi-platform.yaml)。运行中的平台都在线提供（`GET /api/integration/v1/openapi.json` 与 `GET /api/openapi.json`，无需鉴权）。把它们拖进任何 OpenAPI 工具（Swagger UI、Postman、Apifox）就能浏览和调试。
+
+要把 Plantbot **嵌进你自己的系统**？页面支持 iframe 无壳嵌入（`?embed=1&site=…`），登录支持对接你的统一身份（OIDC/OAuth2 单点登录）——细节见 [integration.md](integration.md) 的「嵌入与 SSO」一节。
 
 含视频源地址（内嵌账号密码）的字段永远不会从这些接口流出——看视频走播放会话，取证据帧走快照接口。
 

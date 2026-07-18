@@ -97,9 +97,6 @@ importers:
       '@fontsource/ibm-plex-sans-condensed':
         specifier: ^5.2.8
         version: 5.2.8
-      '@mkkellogg/gaussian-splats-3d':
-        specifier: ^0.4.7
-        version: 0.4.7(three@0.185.1)
       '@react-three/drei':
         specifier: ^10.3.0
         version: 10.7.7(@react-three/fiber@9.6.1(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1))(@types/react@19.2.17)(@types/three@0.185.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1)
@@ -439,11 +436,6 @@ packages:
 
   '@mediapipe/tasks-vision@0.10.17':
     resolution: {integrity: sha512-CZWV/q6TTe8ta61cZXjfnnHsfWIdFhms03M9T7Cnd5y2mdpylJM0rF1qRq+wsQVRMLz1OYPVEBU9ph2Bx8cxrg==}
-
-  '@mkkellogg/gaussian-splats-3d@0.4.7':
-    resolution: {integrity: sha512-0vy9/i9sJLFH/v3WJZ4axCsqjkToe8UsV3xY7bvK5EUC0akiRsWZODoCiSzpxhTLNyzSKTsyQKozIFeNA5RWRA==}
-    peerDependencies:
-      three: '>=0.160.0'
 
   '@monogrid/gainmap-js@3.4.0':
     resolution: {integrity: sha512-2Z0FATFHaoYJ8b+Y4y4Hgfn3FRFwuU5zRrk+9dFWp4uGAdHGqVEdP7HP+gLA3X469KXHmfupJaUbKo1b/aDKIg==}
@@ -2716,10 +2708,6 @@ snapshots:
   '@lukeed/ms@2.0.2': {}
 
   '@mediapipe/tasks-vision@0.10.17': {}
-
-  '@mkkellogg/gaussian-splats-3d@0.4.7(three@0.185.1)':
-    dependencies:
-      three: 0.185.1
 
   '@monogrid/gainmap-js@3.4.0(three@0.185.1)':
     dependencies:
