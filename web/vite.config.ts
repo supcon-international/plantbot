@@ -1,12 +1,31 @@
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+
+// vite's dev server intercepts *.html for its SPA pipeline, so a static
+// public/*.html (the standalone Redoc page) 404s in dev even though the build
+// copies it into dist/ and nginx serves it in prod. Serve it directly in dev
+// so the /docs → Redoc link works everywhere.
+const servePublicHtml = (): Plugin => ({
+  name: 'serve-public-html',
+  configureServer(server) {
+    server.middlewares.use('/api-docs.html', (_req, res, next) => {
+      try {
+        res.setHeader('content-type', 'text/html')
+        res.end(readFileSync(fileURLToPath(new URL('./public/api-docs.html', import.meta.url))))
+      } catch {
+        next()
+      }
+    })
+  },
+})
 
 export default defineConfig({
   // sub-path deploys (e.g. m3rcyzzz.club/robots): WEB_BASE=/robots/ pnpm build
   base: process.env.WEB_BASE || '/',
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), servePublicHtml()],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
