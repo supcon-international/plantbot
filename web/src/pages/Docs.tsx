@@ -214,7 +214,17 @@ export function Docs() {
 
       {/* --- live API reference --- */}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-[15px] font-medium text-ink">{t('docs.apiRef')}</h2>
+        <div className="flex items-baseline gap-3">
+          <h2 className="text-[15px] font-medium text-ink">{t('docs.apiRef')}</h2>
+          <a
+            href={`${BASE}/api-docs.html`}
+            target="_blank"
+            rel="noreferrer"
+            className="mono flex items-center gap-1 text-[11px] tracking-[0.08em] text-ink-3 transition-colors hover:text-(--signal)"
+          >
+            {zh ? '完整交互文档 (Redoc)' : 'Full reference (Redoc)'} <ExternalLink size={11} />
+          </a>
+        </div>
         <ToggleGroup type="single" value={face} onValueChange={(v) => v && setFace(v as typeof face)}>
           <ToggleGroupItem value="integration" className="mono px-2.5 py-1.5 text-[10.5px] tracking-[0.08em]">
             {zh ? '集成面 (Bearer key)' : 'Integration (Bearer key)'}
