@@ -117,7 +117,7 @@ WEB_BASE=/robots/ pnpm build      # 前端：nginx 直接吃 dist，无需重启
 sudo systemctl restart plantbot   # 服务端变更时（任务/事件/规则等已持久,重启即恢复）
 ```
 
-缓存行为：打包产物带 hash（改名即新 URL，无需 purge）；`index.html` no-cache（构建即生效）；`/robots/media/*.mp4` 会被 Cloudflare 边缘缓存（省源站流量）。改了**同名**静态文件（如 URDF 网格）才需要 CF purge 或换文件名。
+缓存行为：打包产物带 hash（改名即新 URL，无需 purge）；`index.html` no-cache（构建即生效）；`/robots/media/*.mp4` 会被 Cloudflare 边缘缓存（省源站流量）。素材环路按出口带宽预算激进编码（setup.mjs 的 `VF`/`ENC`：640w·12fps·CRF30·≤450kbps）——**调整编码参数后同名 mp4 需 purge Cloudflare 边缘**,否则访客继续拿旧缓存。改了**同名**静态文件（如 URDF 网格）才需要 CF purge 或换文件名。
 
 ## 陷阱备忘（都踩过）
 

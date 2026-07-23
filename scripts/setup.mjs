@@ -136,18 +136,26 @@ async function relayBinary() {
   }
 }
 
-// Mixkit clips ship with long GOPs; re-encode to keyint 15 so stream
-// switching starts in <1 s. Requires ffmpeg (the relay needs it anyway).
+// Egress-budget encode: these loops are public-internet demo tiles, not
+// archival footage. 640w · 12 fps · CRF 30 with a hard 450 kbps cap keeps a
+// full LIVE wall in the hundreds-of-kbps range instead of tens of Mbps.
+// GOP stays at 1 s (g=12 @ 12 fps) so channel switching starts fast, and
+// +faststart puts moov first so playback begins before the file finishes.
+// Encode lands in a temp file and renames in, so a running server never
+// serves a half-written loop.
 const FFMPEG = process.env.FFMPEG_BIN ?? 'ffmpeg'
+const VF = "scale='min(640,iw)':-2,fps=12"
+const ENC =
+  '-c:v libx264 -crf 30 -maxrate 450k -bufsize 900k -preset slow -g 12 -keyint_min 12 -pix_fmt yuv420p -movflags +faststart -an'
 async function footage(name, url) {
   const dest = join(ROOT, 'server', 'media', name)
   if (existsSync(dest) && statSync(dest).size > 1e5) return console.log(`  ✓ ${name} (cached)`)
   const tmp = `${dest}.dl`
   await download(url, tmp, name)
   execSync(
-    `"${FFMPEG}" -y -loglevel error -i "${tmp}" -c:v libx264 -crf 20 -preset medium -g 15 -keyint_min 15 -pix_fmt yuv420p -an "${dest}" && rm "${tmp}"`,
+    `"${FFMPEG}" -y -loglevel error -i "${tmp}" -vf "${VF}" ${ENC} "${dest}.enc.mp4" && mv "${dest}.enc.mp4" "${dest}" && rm "${tmp}"`,
   )
-  console.log(`  ✓ ${name} transcoded (GOP 15)`)
+  console.log(`  ✓ ${name} transcoded (640w · 12fps · ≤450kbps)`)
 }
 
 async function stagingFeed() {
@@ -161,7 +169,7 @@ async function stagingFeed() {
   )
   // boomerang (forward + reversed) so the short clip loops seamlessly
   execSync(
-    `"${FFMPEG}" -y -loglevel error -i "${webm}" -filter_complex "[0:v]scale=1280:-2,split[a][b];[b]reverse[r];[a][r]concat=n=2:v=1[out]" -map "[out]" -c:v libx264 -crf 20 -preset medium -g 15 -pix_fmt yuv420p -an "${dest}" && rm "${webm}"`,
+    `"${FFMPEG}" -y -loglevel error -i "${webm}" -filter_complex "[0:v]${VF},split[a][b];[b]reverse[r];[a][r]concat=n=2:v=1[out]" -map "[out]" ${ENC} "${dest}.enc.mp4" && mv "${dest}.enc.mp4" "${dest}" && rm "${webm}"`,
   )
   console.log('  ✓ staging.mp4 transcoded (seamless loop)')
 }
@@ -173,7 +181,7 @@ async function filteredFeed(name, srcName, vf) {
   const src = join(ROOT, 'server', 'media', srcName)
   process.stdout.write(`  ⚙ rendering ${name} … `)
   execSync(
-    `"${FFMPEG}" -y -loglevel error -i "${src}" -vf "${vf}" -r 25 -c:v libx264 -crf 20 -preset medium -g 15 -pix_fmt yuv420p -an "${dest}"`,
+    `"${FFMPEG}" -y -loglevel error -i "${src}" -vf "${vf},${VF}" ${ENC} "${dest}.enc.mp4" && mv "${dest}.enc.mp4" "${dest}"`,
   )
   console.log('done')
 }
@@ -181,8 +189,8 @@ async function filteredFeed(name, srcName, vf) {
 console.log('[1/4] camera footage (Mixkit free license + Commons)')
 for (const [name, url] of Object.entries(FOOTAGE)) await footage(name, url)
 await stagingFeed()
-await filteredFeed('thermal.mp4', 'smokestack.mp4', 'format=gray,format=gbrp,pseudocolor=preset=inferno,scale=960:-2')
-await filteredFeed('ogi.mp4', 'pumpjack.mp4', 'format=gray,eq=contrast=1.55:brightness=-0.06,unsharp=5:5:0.8,noise=alls=5:allf=t,scale=960:-2')
+await filteredFeed('thermal.mp4', 'smokestack.mp4', 'format=gray,format=gbrp,pseudocolor=preset=inferno')
+await filteredFeed('ogi.mp4', 'pumpjack.mp4', 'format=gray,eq=contrast=1.55:brightness=-0.06,unsharp=5:5:0.8,noise=alls=5:allf=t')
 // the data-saver (.low.mp4) tier is retired — sweep any twins from old checkouts
 {
   const { readdirSync, unlinkSync } = await import('node:fs')

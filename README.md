@@ -11,7 +11,7 @@
 | 模块 | 说明 |
 |---|---|
 | **OPS** 总览 | 大字 KPI、**实时 3D 作业地图**（占据主区）、fleet strip、检测流（带快照）、任务进度与最近巡检结果——视频统一收在 LIVE 页 |
-| **LIVE** 视频墙 | 机器人机载相机 + 固定机位一屏聚焦或宫格;**RTSP-first**（生产源经 go2rtc 会话播放,demo 为本地零掉帧环路,含预渲染热成像 inferno 与 OGI/MWIR 通道）;admin 可在页内直接**增删改固定 RTSP 摄像头**;事件快照压缩到 640w |
+| **LIVE** 视频墙 | 机器人机载相机 + 固定机位一屏聚焦或宫格;**RTSP-first**（生产源经 go2rtc 会话播放,demo 为本地零掉帧环路,含预渲染热成像 inferno 与 OGI/MWIR 通道——环路按公网出口带宽预算激进编码(640w·12fps·≤450kbps,整面视频墙数百 kbps 级)）;admin 可在页内直接**增删改固定 RTSP 摄像头**;事件快照压缩到 640w |
 | **TASKS** 任务 | Mission = 航点 + 动作序列（拍照/热扫/OGI/气体采样/声学/读表）。创建向导在地图上点选航点、每站配动作；**调度器按优先级/电量/距离自动派单**（VDA5050 式整单交给 adapter）；路径由机器人端 Nav 栈计算，操作员只管目标点。步骤时间线 + 巡检结果记录（真实快照） |
 | **FLEET** 机器人 | 全部经三层集成架构接入的外部机器人（波士顿动力 Spot / 云深处 X30 四足 + 高新兴 GS Patrol F2 轮式）分组管理；接入向导只列有 adaptor 的三种型号；**传感器覆盖矩阵**（optical/thermal/OGI/gas/acoustic/LiDAR × 机型）；X30 与 Spot 带官方 URDF 数字孪生（walk/trot 步态动画），GS·F2 用 silhouette；payload 3D 标注联动 |
 | **MAP** 地图 | **OPS MAP** 作业地图：SLAM OccupancyGrid 栅格底图 → 主题化 canvas 渲染 + waypoint/zone/实时位姿/规划路径矢量层，点击航点即可 teleop 派遣 |
