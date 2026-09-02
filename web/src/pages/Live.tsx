@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
-import { Grid2X2, Focus, Pencil, Plus, Radio, Trash2, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Grid2X2, Focus, Pencil, Plus, Radio, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useApp, useCan, useSite, api } from '../lib/store'
 import { useT } from '../lib/i18n'
@@ -21,6 +21,11 @@ interface Feed {
   live: boolean
   robotId?: string
 }
+
+// Chrome/VideoToolbox can intermittently reject the third simultaneous MSE
+// decoder during wall-page remounts. Two tiles keeps every channel reachable
+// while making repeated page changes reliable on ordinary demo laptops.
+const WALL_PAGE_SIZE = 2
 
 const ROLE_ORIGIN: Record<Channel['role'], string> = {
   front: 'onboard · front',
@@ -135,6 +140,16 @@ function PlayerOverlay({ feed, session }: { feed: Feed; session: StreamSession |
 function FeedTile({ feed }: { feed: Feed }) {
   const session = useSession(feed.channelId)
   const t = useT()
+  // RTSP channels need the server-issued relay name. Starting VideoRTC with
+  // the raw stream key and replacing it a moment later races the old socket's
+  // close callback against the new socket, leaving a blank player.
+  if (feed.live && !session)
+    return (
+      <>
+        <div className="skeleton h-full w-full bg-black" />
+        <PlayerOverlay feed={feed} session={null} />
+      </>
+    )
   if (session?.protocol === 'mse' && session.relayOnline === false)
     return (
       <>
@@ -156,6 +171,24 @@ function FeedTile({ feed }: { feed: Feed }) {
   )
 }
 
+function WallFeedTile({ feed, order }: { feed: Feed; order: number }) {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    // Avoid a burst of simultaneous decoder initialisation on lower-powered
+    // clients; the focused feed stays mounted separately during mode changes.
+    const timer = setTimeout(() => setMounted(true), 500 + order * 500)
+    return () => clearTimeout(timer)
+  }, [feed.channelId, order])
+
+  if (mounted) return <FeedTile feed={feed} />
+  return (
+    <>
+      <div className="skeleton h-full w-full bg-black" />
+      <PlayerOverlay feed={feed} session={null} />
+    </>
+  )
+}
+
 export function Live() {
   const feeds = useFeeds()
   const t = useT()
@@ -163,12 +196,27 @@ export function Live() {
   const siteId = useSite((s) => s.siteId)
   const [params, setParams] = useSearchParams()
   const [mode, setMode] = useState<'focus' | 'grid'>('focus')
+  const [wallPage, setWallPage] = useState(0)
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<{ id: string; name: string; rtsp: string; place: string } | null>(null)
   const active = params.get('src') ?? feeds[0]?.stream
   const feed = feeds.find((f) => f.stream === active) ?? feeds[0]
+  const wallPages = Math.max(1, Math.ceil(feeds.length / WALL_PAGE_SIZE))
+  const visibleWallFeeds = feeds.slice(wallPage * WALL_PAGE_SIZE, (wallPage + 1) * WALL_PAGE_SIZE)
+  const displayedFeeds = mode === 'focus' ? (feed ? [feed] : []) : visibleWallFeeds
+  useEffect(() => setWallPage(0), [siteId])
+  useEffect(() => setWallPage((page) => Math.min(page, wallPages - 1)), [wallPages])
   // fixed site cameras are editable; robot channels belong to their adapter
   const fixedCamId = feed?.channelId.startsWith('cam:') ? feed.channelId.slice(4) : null
+
+  const changeMode = (next: string) => {
+    if (next !== 'focus' && next !== 'grid') return
+    if (next === 'grid' && feed) {
+      const index = feeds.findIndex((item) => item.channelId === feed.channelId)
+      if (index >= 0) setWallPage(Math.floor(index / WALL_PAGE_SIZE))
+    }
+    setMode(next)
+  }
 
   const openEdit = async () => {
     if (!fixedCamId) return
@@ -229,7 +277,7 @@ export function Live() {
               <Plus size={12} /> {t('live.addCamera')}
             </Button>
           )}
-          <ToggleGroup type="single" value={mode} onValueChange={(v) => v && setMode(v as typeof mode)} className="hidden md:flex">
+          <ToggleGroup type="single" value={mode} onValueChange={changeMode} className="hidden md:flex">
             {(
               [
                 ['focus', Focus, t('live.focus')],
@@ -242,60 +290,87 @@ export function Live() {
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
+          {mode === 'grid' && wallPages > 1 && (
+            <div className="hidden items-center gap-1 md:flex">
+              <Button
+                variant="ghost"
+                size="iconSm"
+                aria-label={t('fl.wiz.back')}
+                disabled={wallPage === 0}
+                onClick={() => setWallPage((page) => Math.max(0, page - 1))}
+              >
+                <ChevronLeft size={14} />
+              </Button>
+              <span className="mono min-w-10 text-center text-[11px] text-ink-3">
+                {wallPage + 1} / {wallPages}
+              </span>
+              <Button
+                variant="ghost"
+                size="iconSm"
+                aria-label={t('fl.wiz.next')}
+                disabled={wallPage === wallPages - 1}
+                onClick={() => setWallPage((page) => Math.min(wallPages - 1, page + 1))}
+              >
+                <ChevronRight size={14} />
+              </Button>
+            </div>
+          )}
         </div>
       </div>
       {adding && <CameraModal onClose={() => setAdding(false)} />}
       {editing && <CameraModal edit={editing} onClose={() => setEditing(null)} />}
 
-      {mode === 'focus' ? (
-        <>
-          <Panel className="rise relative aspect-video max-h-[62vh] w-full overflow-hidden">
-            {feed && <FeedTile key={feed.channelId} feed={feed} />}
-          </Panel>
-
-          <div className="-mx-3 overflow-x-auto px-3 md:mx-0 md:px-0">
-            <div className="flex gap-2 md:grid md:grid-cols-7">
-              {feeds.map((f) => {
-                const sel = f.stream === feed?.stream
-                return (
-                  <button
-                    key={f.stream}
-                    onClick={() => setParams({ src: f.stream }, { replace: true })}
-                    className={`group relative aspect-video w-36 shrink-0 overflow-hidden border transition-colors md:w-auto ${
-                      sel ? 'border-accent' : 'border-line hover:border-line-2'
-                    }`}
-                  >
-                    <VideoThumb
-                      file={f.file}
-                      className="h-full w-full object-cover opacity-80 transition-opacity group-hover:opacity-100"
-                    />
-                    <span className="absolute inset-x-0 bottom-0 truncate bg-black/60 px-1.5 py-1 text-left">
-                      <span className="mono block truncate text-[10px] tracking-[0.06em] text-white/85">
-                        {f.name}
-                      </span>
-                    </span>
-                    {f.live && (
-                      <span className="absolute right-1 top-1 flex items-center gap-1 bg-black/60 px-1 py-0.5">
-                        <Radio size={9} className="text-ok" />
-                        <span className="mono text-[8px] text-ok">{t('live.live')}</span>
-                      </span>
-                    )}
-                    {sel && (
-                      <span className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-accent/60" />
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        </>
-      ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {feeds.map((f, i) => (
-            <Panel key={f.channelId} className={`rise rise-${(i % 5) + 1} relative aspect-video overflow-hidden`}>
-              <FeedTile feed={f} />
+      <div className={mode === 'focus' ? '' : 'grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3'}>
+        {displayedFeeds.map((item, index) => {
+          const keepFocusedPlayer = item.channelId === feed?.channelId
+          return (
+            <Panel
+              key={item.channelId}
+              className={
+                mode === 'focus'
+                  ? 'rise relative aspect-video max-h-[62vh] w-full overflow-hidden'
+                  : `rise rise-${(index % 5) + 1} relative aspect-video overflow-hidden`
+              }
+            >
+              {mode === 'focus' || keepFocusedPlayer ? <FeedTile feed={item} /> : <WallFeedTile feed={item} order={index} />}
             </Panel>
-          ))}
+          )
+        })}
+      </div>
+
+      {mode === 'focus' && (
+        <div className="-mx-3 overflow-x-auto px-3 md:mx-0 md:px-0">
+          <div className="flex gap-2 md:grid md:grid-cols-7">
+            {feeds.map((f) => {
+              const sel = f.stream === feed?.stream
+              return (
+                <button
+                  key={f.stream}
+                  onClick={() => setParams({ src: f.stream }, { replace: true })}
+                  className={`group relative aspect-video w-36 shrink-0 overflow-hidden border transition-colors md:w-auto ${
+                    sel ? 'border-accent' : 'border-line hover:border-line-2'
+                  }`}
+                >
+                  <VideoThumb
+                    file={f.file}
+                    className="h-full w-full object-cover opacity-80 transition-opacity group-hover:opacity-100"
+                  />
+                  <span className="absolute inset-x-0 bottom-0 truncate bg-black/60 px-1.5 py-1 text-left">
+                    <span className="mono block truncate text-[10px] tracking-[0.06em] text-white/85">
+                      {f.name}
+                    </span>
+                  </span>
+                  {f.live && (
+                    <span className="absolute right-1 top-1 flex items-center gap-1 bg-black/60 px-1 py-0.5">
+                      <Radio size={9} className="text-ok" />
+                      <span className="mono text-[8px] text-ok">{t('live.live')}</span>
+                    </span>
+                  )}
+                  {sel && <span className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-accent/60" />}
+                </button>
+              )
+            })}
+          </div>
         </div>
       )}
     </div>

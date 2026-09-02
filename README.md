@@ -20,7 +20,7 @@
 | **持久化 · SQLite** | 全部运行态入 `server/data/plantbot.db`（node:sqlite,零依赖）：任务历史/事件流/规则/排程/读数(7d)/订单/审计。重启不丢数据,孤儿任务由看门狗收尸;旧 config.json 自动迁移 |
 | **安全** | API key 哈希存储（明文仅创建时一次）、登录限速+锁定、CORS 全移除（严格同源）、`PB_PUBLIC_VIEW=0` 全站登录门禁、用户管理 UI（角色 × 场站矩阵）、`PB_DEMO` 开关隔离演示血浆 |
 | **Campus East 安防场景** | **三厂商三 adaptor 一屏协同**：波士顿动力 Spot（gRPC）+ 云深处 X30（robotserver TCP）+ 高新兴 GS Patrol F2 ×2（GoRobot 云），全部经三层集成架构接入,平台无原生机队。Checkpoint 停顿巡逻（大门→图书馆→食堂→宿舍）、周界夜巡（热成像）由排程钉给各外部机器人驱动;GS·F2 直报**可疑背包**事件;安防词表：跌倒 / 尾随 / 人员聚集 / 电动车占道,真实巡逻画面 |
-| **用户与角色** | 匿名即可浏览（公开演示保留）;登录升权。三档角色 × 场站授权矩阵（Orbit/InOrbit 式）：`viewer` 只读 / `operator` 建任务·派遣·ACK / `admin` 规则·开通·集成配置。演示账户 `admin / operator / viewer`,密码 `plantbot`（生产用 `PB_*_PASSWORD` 环境变量轮换） |
+| **用户与角色** | 匿名即可浏览（公开演示保留）;登录升权。三档角色 × 场站授权矩阵（Orbit/InOrbit 式）：`viewer` 只读 / `operator` 建任务·派遣·ACK / `admin` 规则·开通·集成配置。源码开发的演示账户 `admin / operator / viewer`,默认密码 `plantbot`；Docker 演示脚本会随机覆盖并写入 `.env.demo` |
 | **集成开放 API** | 语义对齐 **VDA 5050**（factsheet/state/order），接入级别学 **Open-RMF**（`state-only` / `dispatchable`），地图上传走 **ROS map_server** 约定（PNG+resolution+origin,上传即在 3D 地图渲染底图）;自定义事件类型注册 + ingest + 证据抓帧服务。场站级 API Key,admin 面板管理。详见 [docs/integration.md](docs/integration.md) |
 | **托管连接器 · 界面直连机器人** | INTEG 面板选厂商填**机器人地址/凭证/原生相机 rtsp://** 即接入——平台把官方 adapter 作为**受监督子进程**代跑（崩溃退避重启、日志面板、boot 自动恢复、退出级联回收）,北向走回环集成 API + 每次启动重签的内部密钥。机器人原生 RTSP 相机直接成为视频墙实时通道,含凭证 URL 只对 admin 回传;LIVE 页也可一键添加固定 RTSP 摄像头。跨网场景仍走外部 adapter + 场站 key（接入向导第一步选模式） |
 | **嵌入与 SSO** | 为「被宿主 webapp 集成」而生:**OIDC/OAuth2 单点登录**（授权码+PKCE,零依赖实现,JIT 开号+角色映射,`OIDC_*` 环境变量即启用）;**iframe 无壳嵌入**（`?embed=1` 隐藏导航壳、`?site=` 钉场站,`PB_COOKIE_SAMESITE=none` 支持跨站 cookie,CSP frame-ancestors 白名单）;**双 OpenAPI**（集成面 v1 + 会话面全量,均在线 serve） |
@@ -28,6 +28,26 @@
 | **三层集成架构** | **simulator ⇄ adapter ⇄ platform**（Open-RMF fleet-adapter 式）:`integrations/` 里三家厂商 adapter（simulator 层剥离到独立仓库 [plantbotsimulator](https://github.com/supcon-international/plantbotsimulator)，自带 RTSP 视频）,**忠实还原官方协议**——Boston Dynamics Spot（59 个官方 proto,gRPC 会话舞蹈 auth→timesync→lease→estop→power 全套闸）/ 云深处 X30（robotserver_sdk 裸 TCP `EB90` 帧+XML,1003 终态语义）/ 高新兴 GS F2（GoRobot 云 `.action` RPC + WS 增量推送 + md5 登录 + 10s 流地址）。adapter 对「真机 or sim」零感知,接真机即插;全行为 e2e 套件（`cd integrations && pnpm test`,起真平台+真 sim+真 adapter,含托管连接器生命周期与开放 API）。设计见 [docs/adapter-sim-architecture.md](docs/adapter-sim-architecture.md) |
 
 ## 快速开始
+
+### Linux 云服务器：一键完整演示（推荐）
+
+服务器需要 Git、Docker Engine 和 Docker Compose 2.17+；脚本会自动拉取独立的
+`plantbotsimulator`、生成随机账号/场站密钥、构建镜像，并在 6 台模拟机器人和 RTSP
+视频链路全部就绪后返回：
+
+```bash
+git clone https://github.com/supcon-international/plantbot.git && cd plantbot
+./scripts/demo-up.sh
+```
+
+`plantbotsimulator` 当前为独立私有仓库；干净服务器需先配置 HTTPS token，或按部署文档给
+脚本指定带 SSH deploy key 的仓库地址。
+
+默认入口是 `http://127.0.0.1:18080/robots/`，适合让服务器现有 nginx 或 Cloudflare
+tunnel 反代；对客户提供脚本输出的 `viewer` 账号，演示人员用 `operator`，不要外发
+`admin`。详细的公网接入、日志和重置命令见 [Docker 完整演示部署](docs/deploy.md#docker-完整演示一键部署)。
+
+### 本地源码开发
 
 前置依赖:**Node ≥ 22.22**(平台用内建 node:sqlite;react-router 8 / vite 8 要求 ≥ 22.22,推荐 Node 24 LTS)、**pnpm ≥ 9**、**ffmpeg**(素材转码与事件/RTSP 快照)。媒体中继 **go2rtc**(RTSP→MSE)由 `pnpm run setup` 自动下载进 `bin/`,`pnpm dev` 自动拉起并把 `MEDIA_RELAY` 指向它——RTSP 实时播放开箱即用,无需手工安装。
 
@@ -78,4 +98,3 @@ ffmpeg   快照抓帧：事件/任务快照直接从本地素材随机时间点�
 ```
 
 地图分层遵循行业惯例（InOrbit/Formant 同款）：机器人 SLAM 产出 OccupancyGrid（ROS map_server 三值规范，free=254/unknown=205/occupied=0），后端转 PNG 位图 + 元数据（resolution/origin），前端 canvas 做主题化渲染当底图；waypoint、zone、位姿、规划路径是独立矢量层随 WebSocket 实时更新。路径规划不暴露为可编辑对象——可编辑的只有 waypoint 和 action。
-
