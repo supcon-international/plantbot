@@ -76,7 +76,7 @@ test('mission：多航点 → 单次 1003 原生多点任务 → done；abort �
     const m = body.missions.find((x: any) => x.id === m1.body.mission.id)
     return m?.status === 'done' ? m : null
   }, 120_000, 'mission done')
-  assert.match(done.results.at(-1)?.note ?? '', /巡检任务执行完成|waypoints/)
+  assert.match(done.results.at(-1)?.note ?? '', /waypoints inspected|inspection task completed/)
 
   const m2 = await api(stack, 'POST', `/api/sites/${SITE}/missions`, {
     name: 'e2e berth long',
@@ -105,7 +105,7 @@ test('能力矩阵讲真话：announce/ptz 不受协议支持', { skip: SKIP, ti
 test('本体故障：定位丢失 → robot-fault 事件', { skip: SKIP, timeout: 90_000 }, async () => {
   const ev = await waitFor(async () => {
     const { body } = await api(stack, 'GET', `/api/sites/${SITE}/events?limit=120`)
-    return body?.events?.find((e: any) => e.source === 'integration' && e.category === 'robot-fault' && /定位丢失/.test(e.detail))
+    return body?.events?.find((e: any) => e.source === 'integration' && e.category === 'robot-fault' && /localization lost/.test(e.detail))
   }, 80_000, 'location-lost fault event')
   assert.equal(ev.type, 'fault')
 })

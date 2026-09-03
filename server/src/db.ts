@@ -30,7 +30,7 @@ db.exec('PRAGMA foreign_keys = ON')
 
 // ---------- schema ----------
 
-const SCHEMA_VERSION = 3
+const SCHEMA_VERSION = 4
 
 function migrate() {
   const v = (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
@@ -143,6 +143,7 @@ function migrate() {
       payload_id TEXT, quality TEXT, wp TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_readings ON readings (site_id, robot_id, metric, ts);
+    CREATE INDEX IF NOT EXISTS idx_readings_ts ON readings (ts);
     CREATE TABLE IF NOT EXISTS connectors (
       site_id    TEXT NOT NULL, id TEXT NOT NULL,
       vendor     TEXT NOT NULL,             -- spot | deeprobotics | gosuncn
@@ -229,8 +230,16 @@ export function sweepRetention() {
   db.prepare("DELETE FROM missions WHERE status IN ('done','failed','aborted') AND updated_at < ?").run(now - 90 * 86_400_000)
 }
 
+// SQLite has no nested BEGIN — a second BEGIN throws "cannot start a transaction
+// within a transaction". Guard depth so nested inTx() calls just run inside the
+// already-open transaction; only the outermost brackets BEGIN/COMMIT. A throw in
+// an inner call still propagates to the outer catch and rolls the whole thing back
+// (all-or-nothing), which is the semantics callers already expect.
+let txDepth = 0
 export function inTx<T>(fn: () => T): T {
+  if (txDepth > 0) return fn()
   db.prepare('BEGIN').run()
+  txDepth = 1
   try {
     const out = fn()
     db.prepare('COMMIT').run()
@@ -238,5 +247,7 @@ export function inTx<T>(fn: () => T): T {
   } catch (e) {
     db.prepare('ROLLBACK').run()
     throw e
+  } finally {
+    txDepth = 0
   }
 }

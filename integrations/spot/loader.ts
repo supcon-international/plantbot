@@ -40,10 +40,9 @@ export const ts = (ms = Date.now()) => ({ seconds: String(Math.floor(ms / 1000))
 export const tsToMs = (t?: { seconds?: string | number; nanos?: number }) =>
   t ? Number(t.seconds ?? 0) * 1000 + Math.round((t.nanos ?? 0) / 1e6) : 0
 
-export const U64_MASK = 0xffffffffffffffffn
-/** estop 挑战应答：uint64 按位取反（py: ctypes.c_ulonglong(~challenge).value） */
-export const estopResponse = (challenge: string | number | bigint) =>
-  ((~BigInt(challenge)) & U64_MASK).toString()
+// estop 挑战应答已抽到无副作用的 ./estop.ts（便于单测，避免加载 gRPC proto 闭包）；
+// 此处 re-export 保持既有 import 路径不变，单一事实源。
+export { U64_MASK, estopResponse } from './estop.js'
 
 /** 通用 ResponseHeader（CommonError CODE_OK=1） */
 export const okHeader = (reqHeader?: unknown) => ({

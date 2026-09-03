@@ -77,6 +77,7 @@ paths:
                     description: The reading-metric registry — only these ids are accepted by POST /robots/{serial}/readings
                     items: { $ref: "#/components/schemas/MetricDef" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /robots:
     post:
@@ -108,6 +109,7 @@ paths:
                       integrationLevel: { $ref: "#/components/schemas/IntegrationLevel" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /robots/{serial}:
     delete:
@@ -192,7 +194,15 @@ paths:
                 status: { type: string, enum: [done, failed] }
                 note: { type: string, example: 3 waypoints inspected }
       responses:
-        "200": { $ref: "#/components/responses/Ok" }
+        "200":
+          description: The settled order (a mission-kind order also completes/fails its run)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  order: { $ref: "#/components/schemas/Order" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
@@ -220,6 +230,7 @@ paths:
                   event: { $ref: "#/components/schemas/Event" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
     get:
       tags: [read]
       summary: Read the event stream
@@ -241,6 +252,7 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/Event" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /robots/{serial}/readings:
     post:
@@ -331,7 +343,7 @@ paths:
               schema:
                 type: object
                 properties:
-                  url: { type: string, example: /media/snapshots/EV-0042-1783.jpg }
+                  url: { type: string, example: /api/snapshots/plant-07_ADP-m3k1x9.jpg }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
@@ -356,6 +368,7 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/FrameTransform" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
     post:
       tags: [media]
       summary: Upload an occupancy map (ROS map_server convention)
@@ -393,6 +406,7 @@ paths:
                   map: { $ref: "#/components/schemas/SiteMap" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /fleet:
     get:
@@ -415,6 +429,7 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/Telemetry" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /missions:
     get:
@@ -422,8 +437,8 @@ paths:
       summary: Read mission runs
       operationId: listMissions
       parameters:
-        - { name: status, in: query, schema: { type: string, enum: [queued, active, paused, done, failed, aborted] } }
-        - { name: limit, in: query, schema: { type: integer, default: 100, maximum: 500 } }
+        - { name: status, in: query, schema: { type: string, enum: [queued, active, done, failed, aborted] } }
+        - { name: limit, in: query, schema: { type: integer, default: 100, minimum: 1, maximum: 500 } }
       responses:
         "200":
           description: Mission runs (oldest-first tail)
@@ -436,6 +451,7 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/Mission" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /schedules:
     get:
@@ -457,6 +473,7 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/MissionTemplate" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /channels:
     get:
@@ -476,6 +493,7 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/Channel" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /openapi.json:
     get:
@@ -527,7 +545,9 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
     NotFound:
-      description: Unknown resource
+      description: |
+        Not found — the key's site is valid but its World is not currently loaded
+        (`{ "error": "site not loaded" }`), or the referenced robot / order does not exist.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -592,7 +612,7 @@ components:
       properties:
         id: { type: string, example: valve-leak }
         label: { type: string }
-        severity: { type: string, enum: [critical, high, info] }
+        severity: { type: string, enum: [critical, high, info, low] }
         category: { type: string, enum: [security, fire, env, equipment, robot-fault] }
 
     MetricDef:
@@ -602,7 +622,8 @@ components:
         id: { type: string, example: ch4.ppm }
         label: { type: string }
         unit: { type: string, example: ppm }
-        kind: { type: string, enum: [gauge, counter, enum] }
+        kind: { type: string, description: "metric kind (gauge | counter today; union kept open for forward metric types)" }
+        decimals: { type: integer, description: display precision for the UI }
         nominal:
           type: array
           description: normal band [lo, hi] for UI bands / threshold hints
@@ -625,17 +646,16 @@ components:
             origin:
               type: array
               items: { type: number }
-            w: { type: integer }
-            h: { type: integer }
+            width: { type: integer }
+            height: { type: integer }
 
     FrameTransform:
       type: object
       description: "similarity transform between frames: p_to = s·R(θ)·p_from + t"
       properties:
-        id: { type: string }
-        from: { type: string, example: "map:plant-07" }
+        id: { type: string, description: "present on stored (calibration) transforms; the occupancy-derived map:occupancy→world transform has no id" }
+        from: { type: string, example: "map:occupancy" }
         to: { type: string, example: world }
-        kind: { type: string, enum: [similarity] }
         params:
           type: object
           properties:
@@ -685,6 +705,8 @@ components:
         heading: { type: number, description: radians }
         speed: { type: number, description: m/s }
         battery: { type: number, minimum: 0, maximum: 100 }
+        rssi: { type: number, description: "link quality in dBm — report only if the robot measures it" }
+        latencyMs: { type: number, description: "round-trip latency to the robot in ms (optional)" }
         mode: { type: string, enum: [idle, navigating, executing, teleop, charging] }
         errors:
           type: array
@@ -694,6 +716,7 @@ components:
       type: object
       properties:
         id: { type: string, example: OR-0002 }
+        robotId: { type: string, example: ext-acme-0007 }
         kind: { type: string, enum: [goto, mission, announce, pause, resume, abort, ptz] }
         payload:
           type: object
@@ -707,23 +730,14 @@ components:
             name: { type: string }
             steps:
               type: array
-              items:
-                type: object
-                properties:
-                  waypointId: { type: string }
-                  actions:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        type: { type: string }
-                        durationS: { type: number }
+              items: { $ref: "#/components/schemas/MissionStep" }
             channelId: { type: string, description: "ptz: target channel" }
             pan: { type: number }
             tilt: { type: number }
             zoom: { type: number }
         state: { type: string, enum: [pending, acked, done, failed] }
         createdAt: { type: integer, description: epoch ms }
+        updatedAt: { type: integer, description: epoch ms of the last state change }
 
     EventReport:
       type: object
@@ -732,7 +746,7 @@ components:
         type: { type: string, description: an event-type id from the site vocabulary }
         robotSerial: { type: string, description: attach to this robot's current position }
         detail: { type: string }
-        severity: { type: string, enum: [critical, high, info], description: defaults to the type's registered severity }
+        severity: { type: string, enum: [critical, high, info, low], description: defaults to the type's registered severity }
         x: { type: number }
         z: { type: number }
         snapshotUrl: { type: string }
@@ -760,7 +774,7 @@ components:
         ts: { type: integer, description: epoch ms }
         type: { type: string }
         label: { type: string }
-        severity: { type: string, enum: [critical, high, info] }
+        severity: { type: string, enum: [critical, high, info, low] }
         category: { type: string }
         lifecycle: { type: string, enum: [new, acked, resolved, dismissed] }
         x: { type: number }
@@ -805,35 +819,78 @@ components:
 
     Telemetry:
       type: object
+      description: the same per-robot telemetry frame the console renders (World.telemetry)
       properties:
         id: { type: string, description: robot id }
         x: { type: number }
         z: { type: number }
-        heading: { type: number }
-        speed: { type: number }
+        heading: { type: number, description: radians }
+        speed: { type: number, description: m/s }
         battery: { type: number }
+        rssi: { type: integer, nullable: true, description: "dBm as reported by the adapter; null when not reported or offline (the platform never fabricates link metrics)" }
+        latency: { type: integer, nullable: true, description: "ms as reported by the adapter; null when not reported or offline" }
         mode: { type: string, enum: [idle, navigating, executing, teleop, charging, offline] }
         odoKm: { type: number }
+        gait: { type: string, description: "derived from family + speed (stand/walk/trot/diff-drive/brake, — when offline)" }
+        joints:
+          type: array
+          description: joint temperatures — always empty (no vendor protocol exposes them)
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              c: { type: number }
+        payloadHealth:
+          type: object
+          description: payloadId → health flag
+          additionalProperties: { type: string, enum: [ok, warn] }
         missionId: { type: string, nullable: true }
         missionName: { type: string, nullable: true }
+        targetWp: { type: string, nullable: true }
+        path:
+          type: array
+          description: planned path points — always empty (path planning is on the robot's Nav stack)
+          items:
+            type: object
+            properties:
+              x: { type: number }
+              z: { type: number }
+        pathRemaining: { type: number }
 
-    Mission:
+    MissionStep:
       type: object
+      description: one route stop plus the actions performed there
       properties:
-        id: { type: string, example: M-112 }
-        name: { type: string }
-        status: { type: string, enum: [queued, active, paused, done, failed, aborted] }
-        priority: { type: string }
-        robotId: { type: string, nullable: true }
-        requestedRobot: { type: string, nullable: true }
-        progress: { type: number, minimum: 0, maximum: 1 }
-        currentStep: { type: integer }
-        steps:
+        waypointId: { type: string }
+        actions:
           type: array
           items:
             type: object
             properties:
-              waypointId: { type: string }
+              type:
+                type: string
+                enum: [capture_photo, thermal_scan, ogi_scan, gas_sample, acoustic_scan, gauge_read, wait]
+              durationS: { type: number }
+
+    Mission:
+      type: object
+      description: a mission IS the run (templates and schedules sit above it)
+      properties:
+        id: { type: string, example: M-112 }
+        name: { type: string }
+        priority: { type: integer, enum: [1, 2, 3], description: "1 = highest" }
+        status: { type: string, enum: [queued, active, done, failed, aborted] }
+        paused: { type: boolean, description: an active run can be paused/resumed without leaving the active state }
+        robotId: { type: string, nullable: true }
+        requestedRobot: { type: string, description: 'pinned robot id, or "auto"' }
+        recurring: { type: boolean }
+        progress: { type: number, minimum: 0, maximum: 1 }
+        currentStep: { type: integer }
+        steps:
+          type: array
+          items: { $ref: "#/components/schemas/MissionStep" }
+        templateId: { type: string, nullable: true }
+        scheduleId: { type: string, nullable: true }
         createdAt: { type: integer }
         startedAt: { type: integer, nullable: true }
         endedAt: { type: integer, nullable: true }
@@ -845,35 +902,62 @@ components:
               ts: { type: integer }
               stepIdx: { type: integer }
               waypointId: { type: string }
+              action: { type: string, description: the action this result records }
               ok: { type: boolean }
               note: { type: string }
+              snapshot: { type: string, description: hosted evidence JPEG URL, when captured }
 
     MissionTemplate:
       type: object
+      description: reusable route — site-level, never bound to one robot
       properties:
         id: { type: string, example: T-03 }
         name: { type: string }
-        priority: { type: string }
         steps:
           type: array
-          items:
-            type: object
-            properties:
-              waypointId: { type: string }
+          items: { $ref: "#/components/schemas/MissionStep" }
+        requires:
+          type: array
+          description: payload kinds a runner must carry (derived from steps at creation)
+          items: { type: string }
+        builtin: { type: boolean }
+        createdAt: { type: integer }
 
     Schedule:
       type: object
       properties:
-        id: { type: string, example: SC-002 }
+        id: { type: string, example: SC-02 }
         templateId: { type: string }
-        enabled: { type: boolean }
-        intervalMin: { type: number }
         assign:
           type: object
+          description: "auto → capability match; robot → pinned"
           properties:
             kind: { type: string, enum: [auto, robot] }
-            robotId: { type: string }
-        lastFiredAt: { type: integer, nullable: true }
+            robotId: { type: string, description: present when kind = robot }
+        cadence:
+          description: "once | interval | weekly — creation is activation, no separate deploy step"
+          oneOf:
+            - type: object
+              required: [kind]
+              properties:
+                kind: { type: string, enum: [once] }
+                at: { type: integer, description: epoch ms (optional — omitted fires as soon as due) }
+            - type: object
+              required: [kind, everyMin]
+              properties:
+                kind: { type: string, enum: [interval] }
+                everyMin: { type: number, description: positive minutes between runs }
+            - type: object
+              required: [kind, days, at]
+              properties:
+                kind: { type: string, enum: [weekly] }
+                days: { type: array, items: { type: integer, minimum: 0, maximum: 6 }, description: "0 = Sunday … 6 = Saturday" }
+                at: { type: string, description: "HH:MM local time" }
+        priority: { type: integer, enum: [1, 2, 3] }
+        enabled: { type: boolean }
+        lastRunAt: { type: integer, nullable: true }
+        nextRunAt: { type: integer, nullable: true }
+        runCount: { type: integer }
 
     Channel:
       type: object
@@ -889,6 +973,6 @@ components:
           type: object
           description: rtsp sources are redacted to kind-only
           properties:
-            kind: { type: string, enum: [file, rtsp, hls] }
+            kind: { type: string, enum: [file, rtsp, hls, webrtc] }
             file: { type: string, description: public demo-loop URL (file kind) }
             url: { type: string, description: always empty for rtsp }

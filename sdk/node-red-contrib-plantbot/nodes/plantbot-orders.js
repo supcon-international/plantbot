@@ -16,6 +16,19 @@ module.exports = function (RED) {
     const pb = site.client
     const serial = config.serial
     let pulling = false
+    // de-dupe by order.id (bounded ring) — the platform re-serves acked-but-
+    // unsettled orders (e.g. across a restart), so without this the same order
+    // would be emitted on every poll. Mirrors the TS SDK pump's dedup.
+    const seen = new Set()
+    const seenRing = []
+    const SEEN_CAP = 500
+    function firstSight(id) {
+      if (seen.has(id)) return false
+      seen.add(id)
+      seenRing.push(id)
+      if (seenRing.length > SEEN_CAP) seen.delete(seenRing.shift())
+      return true
+    }
 
     async function pull() {
       if (pulling) return
@@ -26,7 +39,7 @@ module.exports = function (RED) {
           node.status({ fill: 'yellow', shape: 'ring', text: `pull failed (${r.status || 'offline'})` })
           return
         }
-        const orders = r.data?.orders ?? []
+        const orders = (r.data?.orders ?? []).filter((o) => firstSight(o.id))
         if (orders.length) node.status({ fill: 'green', shape: 'dot', text: `${orders.length} order(s)` })
         for (const order of orders) node.send({ topic: order.kind, serial, payload: order })
       } finally {

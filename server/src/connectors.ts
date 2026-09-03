@@ -203,6 +203,9 @@ interface Proc {
   wantUp: boolean
   restarts: number
   backoffMs: number
+  /** operator-triggered restart in flight — keep the respawn fast (don't let the
+   *  exit handler reset backoff to the healthy-process default) */
+  manualRestart?: boolean
   startedAt?: number
   lastExit?: string
   logs: string[]
@@ -217,12 +220,26 @@ function pushLog(p: Proc, line: string) {
   if (p.logs.length > 200) p.logs.splice(0, p.logs.length - 200)
 }
 
+// only these are inherited from the platform's environment — everything else
+// (SESSION_SECRET, PB_*_PASSWORD, OIDC_CLIENT_SECRET, PB_SEED_KEYS, …) must never
+// leak into a vendor adapter child. Adapter-facing config is set explicitly below.
+const INHERIT_ENV = [
+  'PATH', 'HOME', 'TMPDIR', 'TMP', 'TEMP', 'LANG', 'LC_ALL', 'TZ',
+  'NODE_OPTIONS', 'NODE_EXTRA_CA_CERTS', 'SSL_CERT_FILE',
+  'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy', 'no_proxy',
+] as const
+
 function buildEnv(rec: ConnectorRec): Record<string, string> {
   const spec = VENDORS[rec.vendor]
   const cfg = rec.config
   const streams = Array.isArray(cfg.streams) ? (cfg.streams as { name: string; url: string; kind?: string }[]) : []
+  const inherited: Record<string, string> = {}
+  for (const k of INHERIT_ENV) {
+    const v = process.env[k]
+    if (v !== undefined) inherited[k] = v
+  }
   return {
-    ...(process.env as Record<string, string>),
+    ...inherited,
     PLANTBOT_BASE: `http://127.0.0.1:${API_PORT}`,
     PLANTBOT_KEY: managedKey(rec.siteId),
     STREAM_BASE: '/media',
@@ -261,8 +278,14 @@ function launch(rec: ConnectorRec) {
     p.lastExit = signal ? `signal ${signal}` : `code ${code}`
     pushLog(p, `■ exited (${p.lastExit})`)
     if (!p.wantUp) return
-    // ran long enough → treat as healthy before the crash, reset backoff
-    if (p.startedAt && Date.now() - p.startedAt > 60_000) p.backoffMs = 2000
+    if (p.manualRestart) {
+      // operator asked for this restart — keep it snappy regardless of uptime
+      p.manualRestart = false
+      p.backoffMs = 500
+    } else if (p.startedAt && Date.now() - p.startedAt > 60_000) {
+      // ran long enough → treat as healthy before the crash, reset backoff
+      p.backoffMs = 2000
+    }
     p.restarts++
     pushLog(p, `… respawn in ${p.backoffMs / 1000}s`)
     p.timer = setTimeout(() => {
@@ -292,7 +315,9 @@ export function stopConnector(siteId: string, id: string) {
 export function restartConnector(rec: ConnectorRec) {
   const p = procs.get(keyOf(rec))
   if (p?.child) {
-    // exit handler respawns with fresh config since wantUp stays true
+    // exit handler respawns with fresh config since wantUp stays true; the
+    // manualRestart flag keeps the respawn fast (see the exit handler)
+    p.manualRestart = true
     p.backoffMs = 500
     p.child.kill('SIGTERM')
     p.wantUp = true
@@ -341,11 +366,29 @@ export function stopSiteConnectors(siteId: string) {
   managedKeys.delete(siteId)
 }
 
-/** shutdown: kill children so they don't outlive the platform */
-export function shutdownConnectors() {
+/** shutdown: SIGTERM every child, then SIGKILL any that outlive a 2 s grace so a
+ *  wedged adapter can't outlive the platform. Resolves once all children are down
+ *  (or the grace elapses) — the caller awaits this before process.exit. */
+export function shutdownConnectors(): Promise<void> {
+  const pending: Promise<void>[] = []
   for (const p of procs.values()) {
     p.wantUp = false
-    if (p.timer) clearTimeout(p.timer)
-    p.child?.kill('SIGTERM')
+    if (p.timer) {
+      clearTimeout(p.timer)
+      p.timer = undefined
+    }
+    const child = p.child
+    if (!child) continue
+    pending.push(
+      new Promise<void>((resolve) => {
+        const kill = setTimeout(() => child.kill('SIGKILL'), 2000)
+        child.once('exit', () => {
+          clearTimeout(kill)
+          resolve()
+        })
+        child.kill('SIGTERM')
+      }),
+    )
   }
+  return Promise.all(pending).then(() => undefined)
 }

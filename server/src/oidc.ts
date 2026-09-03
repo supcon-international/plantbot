@@ -25,7 +25,7 @@
 import { createHash, createHmac, createPublicKey, randomBytes, verify as cryptoVerify, type KeyObject } from 'node:crypto'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { createUser, getUser, type Role } from './config.js'
-import { issueSession } from './auth.js'
+import { issueSession, safeStrEqual } from './auth.js'
 
 const ISSUER = (process.env.OIDC_ISSUER ?? '').replace(/\/$/, '')
 const CLIENT_ID = process.env.OIDC_CLIENT_ID ?? ''
@@ -145,7 +145,7 @@ function readStateCookie(req: FastifyRequest): OidcState | null {
   const m = /(?:^|;\s*)pb_oidc=([^;]+)/.exec(req.headers.cookie ?? '')
   if (!m) return null
   const [payload, mac] = m[1].split('.')
-  if (!payload || !mac || hmac(payload) !== mac) return null
+  if (!payload || !mac || !safeStrEqual(hmac(payload), mac)) return null
   try {
     const st = JSON.parse(Buffer.from(payload, 'base64url').toString()) as OidcState
     return Date.now() - st.ts < STATE_TTL_MS ? st : null
@@ -247,7 +247,9 @@ export async function oidcCallback(req: FastifyRequest, reply: FastifyReply) {
     const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud]
     if (!aud.includes(CLIENT_ID)) throw new Error('audience mismatch')
     if (claims.exp * 1000 < Date.now()) throw new Error('id_token expired')
-    if (claims.nonce && claims.nonce !== st.nonce) throw new Error('nonce mismatch')
+    // nonce is mandatory: we always send one on /login, so a token without it
+    // (or with the wrong one) is a replay/mix-up — reject rather than skip
+    if (!claims.nonce || claims.nonce !== st.nonce) throw new Error('nonce missing or mismatched')
 
     // JIT provisioning — same slug rule as createUser, so lookups stay stable
     const identity = (claims.email ?? claims.preferred_username ?? claims.sub).toLowerCase()

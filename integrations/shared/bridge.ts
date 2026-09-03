@@ -72,6 +72,33 @@ export function worldTransformFromEnv(): {
   }
 }
 
+/** south-bound reconnect backoff: exponential (1 s → cap 30 s), reset on a
+ *  successful connect. `next()` reports whether the delay changed from the last
+ *  step so callers log only on a new tier (no reconnect-storm log flood). */
+export function makeBackoff(opts?: { startMs?: number; capMs?: number; factor?: number }): {
+  next: () => { delay: number; changed: boolean }
+  reset: () => void
+} {
+  const start = opts?.startMs ?? 1000
+  const cap = opts?.capMs ?? 30_000
+  const factor = opts?.factor ?? 2
+  let cur = start
+  let last = 0
+  return {
+    next() {
+      const delay = cur
+      const changed = delay !== last
+      last = delay
+      cur = Math.min(cap, cur * factor)
+      return { delay, changed }
+    },
+    reset() {
+      cur = start
+      last = 0
+    },
+  }
+}
+
 /** managed-connector identity: when the platform supervises this adapter it
  *  passes the robot's identity via env instead of a built-in demo profile.
  *  PB_SERIAL is the switch; PB_STREAMS is a JSON array of

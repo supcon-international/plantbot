@@ -49,10 +49,13 @@ spot/deeprobotics 的 adapter 用 `SPOT_PROFILE`/`DR_PROFILE` 选身份(serial/c
   - Spot：**机直连 gRPC 会话模型**（auth JWT → time-sync → lease keep-alive → estop check-in → power → command）;
   - 云深处：**机直连裸 TCP**（16 字节二进制帧头 + XML 报文,请求/响应靠序列号配对）;
   - 高新兴：**厂商云 REST+WS**（adapter 连的是 GoRobot 云平台,不是机器人;告警/状态从云上转手）。
-- 北向客户端 = **`@plantbot/adapter-sdk`**（`sdk/adapter-sdk-ts`,对外发布的同一个包;
-  `integrations/shared/{plantbot,bridge}.ts` 只是薄 re-export,SDK 与内置 adapter 永不漂移）：
-  注册重试直到平台起来、state 兼心跳、ordersPending 提示拉单、传输错误永不 throw
-  （平台可以比 sim 晚启动、中途重启）。
+- 北向客户端 = **`@plantbot/adapter-sdk`**（`sdk/adapter-sdk-ts`,对外发布的同一个包,现为构建产物
+  `dist/`——`pnpm install` 自动构建;`integrations/shared/{plantbot,bridge}.ts` 只是薄 re-export,
+  SDK 与内置 adapter 永不漂移）：注册重试直到平台起来、state 兼心跳、ordersPending 提示拉单、
+  传输错误永不 throw（平台可以比 sim 晚启动、中途重启）。`pumpOrders` 按 `order.id` 去重(平台重启后
+  acked 单会重新入队,去重防止重复动作);`goto`/`mission` 运动类订单对同一 serial 串行执行,新运动类订单
+  到达时先过可选 `preempt(inflight, incoming)` 钩子再执行;`pause`/`resume`/`abort`/`announce`/`ptz`
+  干预类立即执行,不被运动队列阻塞。
 
 ### 秘钥交接（adapter onboarding）
 
@@ -69,7 +72,7 @@ spot/deeprobotics 的 adapter 用 `SPOT_PROFILE`/`DR_PROFILE` 选身份(serial/c
 | state | `RobotStateService.GetRobotState` 1 Hz | battery_states[].charge_percentage(DoubleValue)、kinematic_state.transforms_snapshot 的 odom→body SE3、velocity_of_body_in_odom |
 | orders: goto | `GraphNavService.NavigateToAnchor`(seed_tform_goal) | 世界米坐标直接进 seed frame;NavigationFeedback 轮询到 REACHED_GOAL 回 done |
 | orders: mission | NavigateToAnchor 逐点串行 + 步内 dwell | Autowalk 录制是真机流程,ad-hoc 任务用 anchor 导航是官方支持的普通做法 |
-| commands: velocity | `RobotCommandService` SE2VelocityCommand + end_time | 平台 400ms deadman ≈ Spot 命令 end_time 语义,天然对齐 |
+| commands: velocity | `RobotCommandService` SE2VelocityCommand + end_time | ⚠️ **平台侧未实现**(velocity 尚是设计目标,现有 Command 联合无此支);真接后平台 400ms deadman ≈ Spot 命令 end_time 语义,天然对齐 |
 | events | BehaviorFault / SystemFault / EstopState 变化沿 | fault→`robot-fault` 事件;估计不出的厂商侧 CV 事件 Spot 没有(裸机无 CV 栈) |
 | readings | robot_state 里的 battery temp/voltage、odom speed | 上报 batt.temp.c 等 metric |
 | channels | `ImageService.GetImage`(5 目鱼眼) | 快照证据用平台快照服务;实时流真机走 Spot CAM(WebRTC),demo 注册本地环路 |
@@ -100,12 +103,12 @@ TCP 段，坏帧会永久卡死官方接收端；无心跳无鉴权，保活/重
 | 平台域 | GoRobot 侧 | 说明 |
 | --- | --- | --- |
 | state | WS `RobotStatus`(**delta 推送**) + `findRobotStatus` 1 Hz 轮询兜底 | WS 机器人级推送一次只能盯一台(DeviceChange),多机接入靠 REST 轮询——厂商模型的真实摩擦 |
-| orders: goto | `navigateToPoint.action`(激光 px 坐标+mapName) | adapter 持有 px↔米标定(GoRobot 不暴露分辨率,标定责任在集成方——原样) |
+| orders: goto | **先 `changeControl`(carmode=1) 切手动** → `navigateToPoint.action`(激光 px 坐标+mapName) | 到点判定=最近逼近锁存(距目标最近点)或手动模式下 `taskType=standBy`;导航结束后保持手动驻留(不自动交还自动模式)。adapter 持有 px↔米标定(GoRobot 不暴露分辨率,标定责任在集成方——原样) |
 | orders: goto(dock) | `sendMQComandByUTF8` 一键充电 XML | 平台 dock 命令带 `dock:true` 语义,adapter 换充电指令 |
-| orders: mission | `navigateToPoint` 逐点 + 停顿 | GoRobot 的「路线」是预配置资产(手绘/组合上传),没有 ad-hoc imperative 接口——桥接即真实集成商做法 |
+| orders: mission | 逐点:每点 **changeControl(1) 前置 + `navigateToPoint`**,同上到点判定 + 手动驻留 | GoRobot 的「路线」是预配置资产(手绘/组合上传),没有 ad-hoc imperative 接口——桥接即真实集成商做法 |
 | orders: announce / pause / resume | `voiceSoundtextSet` / `pauseTask` / `resumeTask` | 直接映射 |
 | commands: ptz | 云台 XML(unCtrlValue 1/3/5/7…,200ms 重发语义留在 sim) | |
-| events | WS `AlarmInfo`(alarmType 码表→平台事件类型) + `AlarmRunInfo`(本体故障) | 315 陌生人→tailgating、1015 聚集→crowding、10012 遗留背包→unattended-bag…;picUrl 无 host,adapter 拼接 |
+| events | WS `AlarmInfo`(alarmType 码表→平台事件类型) + `AlarmRunInfo`(本体故障) | 315 陌生人→tailgating、1015 聚集→crowding、10012 遗留背包→unattended-bag…;picUrl 无 host,adapter 拼接;**AlarmInfo 无 x/y 时事件位置回落机器人当前位置** |
 | readings | findRobotStatus 温湿度/噪声/PM | amb.temp.c / amb.rh.pct / noise.db |
 | channels | `selectChannelList` + `getVideoUrl`(10 秒时效) | 通道表照搬;demo 流地址注册本地环路,10s 时效机制 sim 完整还原 |
 
@@ -113,12 +116,41 @@ TCP 段，坏帧会永久卡死官方接收端；无心跳无鉴权，保活/重
 md5 密码；token 2h 滑动过期；`selectLineInfo.action` 不带 `/robotservice` 前缀（文档原样）；命名漂移
 deviceId/robotSn/deviceCode 并存；激光地图 y 轴原点左下角；WS RobotStatus 只推变化字段。
 
+### 3.4 云深处官方接口分层与智巡平台 Station OpenAPI
+
+云深处对外有**两层**接口,当前 X30 adapter 只接了底层：
+
+- **底层 = `robotserver_sdk`**(本仓库 adapter 接的这一层):最底层的**导航面**(EB90 TCP + XML,§3.2),
+  单机、无任务模板/无识别结果/无告警面。上游仓库单次提交定格在 **2025-03-31**,基本是稳定的裸导航 SDK。
+- **上层 = `station-openapi-devkit`**(官方智巡平台的运营面,**2026-07-21** 发布,BSD-3 授权,Java SDK):
+  **27 个 HTTP 接口 `/remoteApi/*` + RocketMQ 四类推送**(任务状态 / 识别结果 / 告警 / 路线)。
+  鉴权二选一:AppKey 签名 或 Access Token。能力面(正是底层 robotserver 缺的那些):
+  任务模板与排程、`taskCtrl` 2/3/4(暂停 / 恢复 / 停止)、`cameraCtrl` 3/4/5(云台 + 可见光 / 红外切换)、
+  `chargeCtrl` 1/2(回充)、识别结果(`patrolValue` + `confidence` + 证据图)、
+  地图导出(`mapList` / `roadMap` / `node`)、`streamPage` 流地址。
+
+结论:平台侧的 pause/resume、ptz、读数、事件(识别结果 / 告警)这些在 robotserver 面**空缺**的能力,
+在 Station 面**都能点亮**——因此 Station OpenAPI 是云深处的**候选第二条接入路径**(Station-adapter,
+与现有 robotserver-adapter 并列),**尚未实现**,列为路线图。
+来源:<https://github.com/DeepRoboticsLab/station-openapi-devkit> ·
+<https://github.com/DeepRoboticsLab/robotserver_sdk>。
+
+### 3.5 候选厂商:优必选(UBTECH)
+
+评估结论:**先商务后工程**——目前没有可直接自助对接的公开机队运营 API。
+
+- **AIMBOT / Cruzr**:能力在厂商**私有云后台**,无公开运营 API,接入需走商务授权拿到接口/凭证。
+- **Walker S**(人形):对外是**板载 ROS SDK**——若接,将是本平台的**第四种协议形态原型「板载 ROS 桥接」**
+  (adapter 直接在机器人板上/同网跑 ROS 节点,北向翻到集成 API),与现有三种(gRPC / 裸 TCP / 厂商云)并列。
+- **电力场景**:可按 **T/CEC 159-2018**(变电站巡检机器人接口)扩展接口,或走 **IEC 60870-5-104** 三遥接入。
+- 排序:优必选整体在**商务谈成之前不投工程**;真要接,Walker S 的板载 ROS 路径最接近本架构的 adapter 模型。
+
 ## 4. 平台侧因实践而生的修正（反思日志）
 
 按「先接入、遇阻、再修平台」的顺序记录（这是本次改造的方法论：**用真实集成压力测试自己的 API**）：
 
 1. **key 交接没有故事** → `PB_SEED_KEYS`/`PB_DEV_KEYS` 播种机制（§2）。手工签发依旧是生产正道。
-2. **测试隔离** → `PB_DATA_DIR` 重定向 config.json/maps，e2e 起临时平台不污染开发数据。
+2. **测试隔离** → `PB_DATA_DIR` 重定向 plantbot.db / maps / snapshots，e2e 起临时平台不污染开发数据。
 3. **外部任务无法中止** → 平台 abort/pause/resume 命中外部机器人任务时下发 `abort|pause|resume` 订单
    （原先只有 goto/mission/announce 三类，操作员对外部任务只能干看）。
 4. **dock 语义丢失** → dock 命令对外部机器人产生的 goto 订单带 `dock: true`，adapter 可换厂商的

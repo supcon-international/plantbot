@@ -11,7 +11,7 @@ import { makeLog } from '../../shared/log.js'
 import { PlantbotClient, type PlantbotOrder } from '../../shared/plantbot.js'
 import {
   waitForSite, streamsToFactsheet, reportFault, pumpOrders, runWaypointMission,
-  pickProfile, customProfileFromEnv, worldTransformFromEnv, type VendorProfile, type MissionRun,
+  pickProfile, customProfileFromEnv, worldTransformFromEnv, makeBackoff, type VendorProfile, type MissionRun,
 } from '../../shared/bridge.js'
 
 const log = makeLog('spot-adp')
@@ -107,16 +107,23 @@ const header = () => ({ request_timestamp: ts(), client_name: 'plantbot-adapter'
 const robotNow = () => Date.now() + session.skewMs
 const endTime = (ms: number) => ts(robotNow() + ms)
 
+const danceBackoff = makeBackoff() // 1 s→30 s 指数退避，会话就绪即重置
+/** 排程重新起舞：退避 + 只在档位变化时打日志（会话反复拆除时不刷屏） */
+function scheduleDance(reason: string) {
+  const { delay, changed } = danceBackoff.next()
+  if (changed) log.warn(`Spot 会话重连（${reason}）→ ${Math.round(delay / 1000)}s 后重试`)
+  setTimeout(() => void dance(), delay)
+}
+
 function teardown(reason: string) {
   if (!session.ready && !session.timers.length) return
-  log.warn(`会话拆除（${reason}）→ 重新起舞`)
   for (const t of session.timers) clearInterval(t)
   session.timers = []
   session.ready = false
   session.lease = null
   session.estopEndpoint = null
   session.challenge = null
-  setTimeout(() => void dance(), 3000)
+  scheduleDance(reason)
 }
 
 async function dance(): Promise<void> {
@@ -232,11 +239,11 @@ async function dance(): Promise<void> {
     )
 
     session.ready = true
+    danceBackoff.reset()
   } catch (e) {
-    log.warn(`会话舞蹈失败: ${(e as Error).message} · 3s 后重试`)
     for (const t of session.timers) clearInterval(t)
     session.timers = []
-    setTimeout(() => void dance(), 3000)
+    scheduleDance((e as Error).message)
   }
 }
 
@@ -245,6 +252,9 @@ async function dance(): Promise<void> {
 let lastState: any = null
 let lastFaultIds = new Set<number>()
 let missionRun: MissionRun | null = null
+// 当前在飞运动控制（goto 或 mission）——SDK 泵的 preempt 钩子与 operator abort 置其
+// aborted，navigateTo 轮询时监听。一机一动，串行由泵保证。mission 时它就是 missionRun。
+let activeMotion: { aborted: boolean } | null = null
 let waypoints: { id: string; x: number; z: number }[] = []
 
 async function poseFromState(rs: any): Promise<{ x: number; z: number; heading: number } | null> {
@@ -284,16 +294,23 @@ async function stateLoop() {
   })
 
   // behavior fault 沿：新故障 → 平台事件（FALL/HARDWARE/LEASE_TIMEOUT）
-  const CAUSE: Record<number, string> = { 1: 'FALL 跌倒', 2: 'HARDWARE 硬件', 3: 'LEASE_TIMEOUT 租约超时' }
+  const CAUSE: Record<number, string> = { 1: 'FALL', 2: 'HARDWARE', 3: 'LEASE_TIMEOUT' } // 跌倒 / 硬件 / 租约超时
   const faults: any[] = rs.behavior_fault_state?.faults ?? []
   for (const f of faults) {
     const fid = Number(f.behavior_fault_id)
     if (!lastFaultIds.has(fid))
-      reportFault(plantbot, SERIAL, `BehaviorFault #${fid} · ${CAUSE[f.cause] ?? `cause ${f.cause}`}${f.status === 1 ? ' · 可清除' : ''}`)
+      reportFault(plantbot, SERIAL, `BehaviorFault #${fid} · ${CAUSE[f.cause] ?? `cause ${f.cause}`}${f.status === 1 ? ' · clearable' : ''}`)
   }
   lastFaultIds = new Set(faults.map((f) => Number(f.behavior_fault_id)))
 
-  await pumpOrders(plantbot, SERIAL, rep, execOrder)
+  // 运动类订单由 SDK 泵串行；抢占 = 置在飞运动 aborted（navigateTo 轮询即返回），
+  // 泵等其结束再发新单。
+  await pumpOrders(plantbot, SERIAL, rep, execOrder, {
+    preempt: () => {
+      if (activeMotion) activeMotion.aborted = true
+    },
+    log,
+  })
 }
 
 // ---------- 运动（NavigateToAnchor + feedback 轮询）----------
@@ -323,7 +340,7 @@ async function navigateTo(x: number, z: number, timeoutMs = 120_000): Promise<{ 
   const t0 = Date.now()
   for (;;) {
     await new Promise((r) => setTimeout(r, 800))
-    if (missionRun?.aborted) return { ok: false, note: 'aborted' }
+    if (activeMotion?.aborted) return { ok: false, note: 'aborted' }
     if (Date.now() - t0 > timeoutMs) return { ok: false, note: 'navigation timeout' }
     let fb: any
     try {
@@ -358,18 +375,29 @@ async function execOrder(order: PlantbotOrder) {
     case 'goto': {
       const { x, z, dock } = order.payload
       if (typeof x !== 'number' || typeof z !== 'number') return void plantbot.orderStatus(order.id, 'failed', 'x,z required')
-      if (missionRun) missionRun.aborted = true // 平台语义：teleop 抢占任务
-      const r = await navigateTo(x, z)
-      if (r.ok && dock) {
-        await sit() // 到桩坐下 → 触发充电（Spot Dock 行为的最小等价）
-        await plantbot.orderStatus(order.id, 'done', 'Docked · sitting on charger')
-      } else {
-        await plantbot.orderStatus(order.id, r.ok ? 'done' : 'failed', r.ok ? 'Anchor goal reached · 360° scan complete' : r.note)
+      // 抢占进行中的运动由 SDK 泵 preempt 钩子承担（串行后此处无并发在飞任务）
+      const ctl = { aborted: false }
+      activeMotion = ctl
+      try {
+        const r = await navigateTo(x, z)
+        if (r.ok && dock) {
+          await sit() // 到桩坐下 → 触发充电（Spot Dock 行为的最小等价）
+          await plantbot.orderStatus(order.id, 'done', 'Docked · sitting on charger')
+        } else {
+          await plantbot.orderStatus(
+            order.id,
+            r.ok ? 'done' : 'failed',
+            r.ok ? 'Anchor goal reached · 360° scan complete' : ctl.aborted ? 'preempted by newer order' : r.note,
+          )
+        }
+      } finally {
+        if (activeMotion === ctl) activeMotion = null
       }
       return
     }
     case 'mission': {
       missionRun = { orderId: order.id, aborted: false, paused: false }
+      activeMotion = missionRun
       log.info(`任务「${order.payload.name}」· ${order.payload.steps?.length ?? 0} 步（NavigateToAnchor 逐点）`)
       await runWaypointMission({
         pb: plantbot,
@@ -378,7 +406,10 @@ async function execOrder(order: PlantbotOrder) {
         waypoints,
         navTo: navigateTo,
         doneNote: (n) => `${n} anchors inspected · imagery captured`,
-        onSettled: () => (missionRun = null),
+        onSettled: () => {
+          if (activeMotion === missionRun) activeMotion = null
+          missionRun = null
+        },
       })
       return
     }
@@ -392,7 +423,7 @@ async function execOrder(order: PlantbotOrder) {
       await plantbot.orderStatus(order.id, 'done', 'resumed')
       return
     case 'abort':
-      if (missionRun) missionRun.aborted = true
+      if (activeMotion) activeMotion.aborted = true // 中止在飞运动（goto 或 mission）
       await sit().then(() => plantbot.orderStatus(order.id, 'done', 'mission aborted · sitting'))
       return
     case 'announce':

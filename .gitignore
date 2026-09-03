@@ -1,12 +1,14 @@
 node_modules/
 dist/
+sdk/adapter-sdk-ts/dist/
 *.log
 *.tsbuildinfo
 .DS_Store
 .claude/settings.local.json
 
 # fetched by `pnpm run setup`
-bin/
+bin/*
+!bin/README.md
 server/media/*.mp4
 server/media/*.ply
 server/media/*.splat

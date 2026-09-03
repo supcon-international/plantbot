@@ -61,6 +61,8 @@ Key 与场站一一绑定——同一套端点,不同 Key 自动落到各自场�
 | POST | `/api/integration/v1/maps` | 上传占据栅格地图(ROS 约定) |
 | GET | `/api/integration/v1/maps` | 底图清单 + 标定变换(像素/厂商/WGS84 → 世界系的相似参数) |
 
+> **场站未加载**:所有集成面端点在 Key 有效、但对应场站 World 未加载(未启动/已删除)时返回 `404 {error:'site not loaded'}`(不再是空 200);带 `:serial` 的端点在机器人未注册时另返回 `404 {error:'robot not registered'}`。
+
 ## 1. 注册机器人(factsheet)
 
 ```bash
@@ -90,7 +92,7 @@ curl -X POST $BASE/api/integration/v1/robots/ACME-0007/state \
   -d '{"x":-5.5,"z":-3.8,"heading":1.2,"speed":0.6,"battery":81,"mode":"navigating"}'
 ```
 
-字段全部可选,给多少更新多少。`mode ∈ idle|navigating|executing|teleop|charging`。响应携带 `ordersPending` 计数,便于适配器决定何时拉单。超过 20 秒未上报,平台侧显示 `OFFLINE`。
+字段全部可选,给多少更新多少。可选 `rssi`(dBm)/`latencyMs`(ms)只在机器人真有测量时上报——平台**不伪造链路指标**,未上报时遥测里为 `null`、UI 显示「—」。`mode ∈ idle|navigating|executing|teleop|charging`。响应携带 `ordersPending` 计数,便于适配器决定何时拉单。超过 20 秒未上报,平台侧显示 `OFFLINE`。
 
 ## 3. 订单(dispatchable)
 
@@ -200,7 +202,7 @@ while True:
 
 同一套契约的两个官方封装,都在 `sdk/`:
 
-**TypeScript — `@plantbot/adapter-sdk`**（`sdk/adapter-sdk-ts`,Node ≥18 零依赖;仓库内 `workspace:*`,体外 `npm i <repo>/sdk/adapter-sdk-ts`）。传输错误永不 throw(adapter 必须活过平台重启):
+**TypeScript — `@plantbot/adapter-sdk`**（`sdk/adapter-sdk-ts`,Node ≥18,零依赖）。SDK 现在**发布为构建产物 `dist/`**:仓库内 `pnpm install` 后自动构建(prepare 钩子),`workspace:*` 依赖直接可用;体外使用先 clone 本仓库,`pnpm --filter @plantbot/adapter-sdk build` 产出 `dist/`,再 `npm i <本地路径>/sdk/adapter-sdk-ts`。传输错误永不 throw(adapter 必须活过平台重启):
 
 ```ts
 import { PlantbotClient, waitForSite, pumpOrders } from '@plantbot/adapter-sdk'
@@ -210,9 +212,15 @@ await pb.registerUntilUp({ serial: 'MY-01', model: 'My Robot X1', level: 'dispat
   streams: [{ id: 'front', name: 'Front', url: 'rtsp://user:pw@10.0.0.9:554/ch1' }] })
 setInterval(async () => {
   const rep = await pb.state('MY-01', { x: 0, z: 0, battery: 80, mode: 'idle' })
+  // 运动类订单(goto/mission)对同一 serial 串行执行;干预类立即执行
   await pumpOrders(pb, 'MY-01', rep, async (o) => pb.orderStatus(o.id, 'done'))
 }, 1000)
 ```
+
+`pumpOrders` 的执行语义:
+- **按 `order.id` 去重**——同一单只会被交给你的 handler 执行一次,重复拉取(平台重启后 acked 单会重新入队)不会重复动作;
+- **运动类订单(`goto` / `mission`)对同一 serial 串行执行**——上一单未完结前不并发下一单;新运动类订单到达时先调用可选的 `preempt(inflight, incoming)` 钩子(由你决定是排队等待还是打断当前单),再执行;
+- **干预类订单(`pause` / `resume` / `abort` / `announce` / `ptz`)立即执行**,不受运动队列阻塞。
 
 仓库内置的三个厂商 adapter 就 import 这个包(`integrations/shared` 是薄 re-export)——SDK 源码即平台自跑的客户端,永不漂移。
 
@@ -233,13 +241,16 @@ cd ~/.node-red && npm i <repo>/sdk/node-red-contrib-plantbot   # 重启 Node-RED
 平台为「被宿主 webapp 集成」准备了三件套:
 
 1. **iframe 嵌入**:`<iframe src="https://host/robots/live?embed=1&site=plant-07">` ——
-   `embed=1` 隐藏导航壳(仅内容区,宿主掌握路由),`site=` 钉定场站;两者对本 tab 会话粘滞。
+   `embed=1` 去掉外壳(品牌栏/工具区/侧栏),但**保留一条紧凑的模块导航条**,用户仍能在模块间切换
+   (`embed=0` 退出);`site=` 钉定场站;两者对本 tab 会话粘滞。用 `embednav=top|bottom|hidden` 控制导航条位置——
+   `top`(默认,纤细顶条)、`bottom`(宿主已占用顶边时下移)、`hidden`(隐藏,由宿主自行经 URL 驱动导航)。
    跨站 iframe 要让会话 cookie 可用:平台侧设 `PB_COOKIE_SAMESITE=none`(强制 Secure,须 HTTPS),
    并在 nginx 给 SPA 加 `Content-Security-Policy: frame-ancestors 'self' https://your-host.example`。
 2. **OIDC / OAuth 2.0 SSO**(Authorization Code + PKCE,零依赖实现):设
    `OIDC_ISSUER` + `OIDC_CLIENT_ID`(机密客户端另设 `OIDC_CLIENT_SECRET`)登录页即出现 SSO 入口;
    首次登录 JIT 建号(`OIDC_DEFAULT_ROLE`,默认 viewer;`OIDC_ADMIN_USERS` 邮箱清单直接开 `'*'` admin),
-   之后角色由平台 admin 在用户面板管理。回调地址 `<origin><PUBLIC_BASE>/api/auth/oidc/callback`
+   之后角色由平台 admin 在用户面板管理。回调强制校验 `state` 与 `nonce`(ID Token 内的 nonce 必须与发起时一致,防重放)。
+   回调地址 `<origin><PUBLIC_BASE>/api/auth/oidc/callback`
    (或 `OIDC_REDIRECT_URL` 显式指定)。本地联调可用仓库自带 mock IdP:`npx tsx integrations/test/mock-idp.ts`。
 3. **会话面全量 OpenAPI**:除本文的集成面 v1 之外,浏览器/会话面(auth/SSO、场站与用户管理、任务派发、
    事件处置、播放租约、连接器…)完整规范在 [openapi-platform.yaml](openapi-platform.yaml),

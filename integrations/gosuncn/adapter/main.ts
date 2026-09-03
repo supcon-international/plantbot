@@ -11,7 +11,7 @@ import WebSocket from 'ws'
 import { createHash } from 'node:crypto'
 import { makeLog } from '../../shared/log.js'
 import { PlantbotClient, type PlantbotOrder } from '../../shared/plantbot.js'
-import { waitForSite, streamsToFactsheet, reportFault, pumpOrders, runWaypointMission, customProfileFromEnv, type MissionRun } from '../../shared/bridge.js'
+import { waitForSite, streamsToFactsheet, reportFault, pumpOrders, runWaypointMission, customProfileFromEnv, makeBackoff, type MissionRun } from '../../shared/bridge.js'
 
 const log = makeLog('gosuncn-adp')
 
@@ -52,6 +52,10 @@ interface Unit {
   mapName?: string
   status?: Record<string, any>
   mission?: MissionRun
+  /** the motion order currently in flight (goto or mission) — the pump's
+   *  preempt hook and the operator `abort` set its `aborted`; navAndWait watches
+   *  it. One robot body, one motion at a time (enforced by the SDK pump). */
+  active?: { aborted: boolean }
 }
 
 const CUSTOM = customProfileFromEnv()
@@ -164,8 +168,26 @@ interface Waypoint {
 }
 let waypoints: Waypoint[] = []
 
+/** 导航前置：切手动模式（carmode=1）。厂商语义——导航/临时路线类接口需手动模式，
+ *  且手动模式下机器人到点后**驻留**（taskType→standBy），不像自动模式那样到点即恢复
+ *  自主巡逻（那会让「到点」窗口一闪而过、平台采不到）。只在当前不是手动时切，避免刷指令。
+ *  changeControl 回 ResultWrapper（ret=1 成功），非 {successful} 三元组。 */
+async function ensureManual(u: Unit): Promise<void> {
+  if (u.status?.workModel === 1) return
+  const res = await action<any>('/robotservice/qpid/changeControl.action', { deviceId: u.deviceId, carmode: 1 }, 'POST')
+  if (res?.ret === 1) {
+    log.info(`${u.callsign} → 手动模式（导航前置，到点后驻留）`)
+    if (u.status) u.status.workModel = 1
+  } else {
+    log.warn(`${u.callsign} changeControl 切手动失败: ${res?.msg}`)
+  }
+}
+
+const ARRIVE_PX = 10 // 到点阈值 ≈0.5 m（20 px/m）；e2e assertArrives 断言世界系 < 0.8 m
+
 async function navAndWait(u: Unit, x: number, z: number, timeoutMs = 90_000): Promise<boolean> {
   const px = worldToPx(x, z)
+  await ensureManual(u)
   const res = await action<any>('/robotservice/patrol/navigateToPoint.action', {
     deviceId: u.deviceId,
     posX: String(px.X),
@@ -177,22 +199,36 @@ async function navAndWait(u: Unit, x: number, z: number, timeoutMs = 90_000): Pr
     log.warn(`${u.callsign} navigateToPoint 被拒: ${res?.msg}`)
     return false
   }
+  // 自采样 250–300 ms 轮询 findRobotStatus（不靠 1 Hz 的 u.status——0.85 m/s 穿 0.5 m 窗
+  // 仅 ~0.6 s，1 Hz 极易漏采）。到点判定 = 「最近逼近锁存」：记录到目标最小像素距，
+  // 一旦落入阈值即成功；辅以厂商信号（手动 standBy 且已停在目标附近）。
   const t0 = Date.now()
+  let minDist = Infinity
   for (;;) {
-    await new Promise((r) => setTimeout(r, 700))
-    if (Date.now() - t0 > timeoutMs) return false
-    if (u.mission?.aborted) return false
-    const s = u.status
+    await new Promise((r) => setTimeout(r, 280))
+    if (u.active?.aborted) return false
+    if (Date.now() - t0 > timeoutMs) {
+      log.warn(`${u.callsign} 导航超时（最近逼近 ${Number.isFinite(minDist) ? minDist.toFixed(0) : '?'} px）`)
+      return false
+    }
+    const s = (await action<any>('/robotservice/device/findRobotStatus.action', { deviceId: u.deviceId }))?.data
     if (!s) continue
-    if (Math.hypot(Number(s.xPosition) - px.X, Number(s.yPosition) - px.Y) < 7) return true
+    u.status = s // 让 1 Hz mode 映射拿到最新（含 workModel/speed）
+    const d = Math.hypot(Number(s.xPosition) - px.X, Number(s.yPosition) - px.Y)
+    if (Number.isFinite(d)) minDist = Math.min(minDist, d)
+    if (minDist <= ARRIVE_PX) return true
+    if (s.workModel === 1 && s.taskType === 'standBy' && Number(s.speed) < 0.05 && d <= ARRIVE_PX * 2) return true
   }
 }
 
-function runMission(u: Unit, order: PlantbotOrder) {
+/** 返回 runWaypointMission 的 Promise（不再 fire-and-forget）——SDK 订单泵靠它
+ *  纳入运动类串行/抢占（否则 exec 立即返回，泵会以为任务瞬时完成、放行下一单）。 */
+function runMission(u: Unit, order: PlantbotOrder): Promise<void> {
   const run: MissionRun = { orderId: order.id, missionId: order.payload.missionId, aborted: false, paused: false }
   u.mission = run
+  u.active = run // mission run 即当前在飞运动控制
   log.info(`${u.callsign} 开始任务「${order.payload.name}」· ${order.payload.steps?.length ?? 0} 步`)
-  void runWaypointMission({
+  return runWaypointMission({
     pb: plantbot,
     order,
     run,
@@ -200,7 +236,10 @@ function runMission(u: Unit, order: PlantbotOrder) {
     // 点位动作以动作时长驻留（抓拍/热扫由机器人本体完成）——runner 统一处理
     navTo: async (x, z) => ({ ok: await navAndWait(u, x, z) }),
     doneNote: (n) => `${n} waypoints inspected · captures uploaded`,
-    onSettled: () => (u.mission = undefined),
+    onSettled: () => {
+      u.mission = undefined
+      if (u.active === run) u.active = undefined
+    },
   })
 }
 
@@ -216,17 +255,23 @@ async function execOrder(u: Unit, order: PlantbotOrder) {
         return
       }
       if (typeof x !== 'number' || typeof z !== 'number') return void plantbot.orderStatus(order.id, 'failed', 'x,z required')
-      if (u.mission) {
-        u.mission.aborted = true // 平台语义：teleop 抢占任务
-        log.info(`${u.callsign} goto 抢占进行中的任务`)
+      // 抢占进行中的运动由 SDK 泵的 preempt 钩子承担（串行后此处不会有并发在飞任务）
+      const ctl = { aborted: false }
+      u.active = ctl
+      try {
+        const ok = await navAndWait(u, x, z, 120_000)
+        await plantbot.orderStatus(
+          order.id,
+          ok ? 'done' : 'failed',
+          ok ? 'Arrived · 360° capture complete' : ctl.aborted ? 'preempted by newer order' : 'navigation stalled',
+        )
+      } finally {
+        if (u.active === ctl) u.active = undefined
       }
-      const ok = await navAndWait(u, x, z, 120_000)
-      await plantbot.orderStatus(order.id, ok ? 'done' : 'failed', ok ? 'Arrived · 360° capture complete' : 'navigation stalled')
       return
     }
     case 'mission':
-      runMission(u, order)
-      return
+      return runMission(u, order)
     case 'announce': {
       const res = await action<any>('/robotservice/device/voiceSoundtextSet.action', { soundtext: order.payload.text, deviceId: u.deviceId, broadcastPriority: 1 }, 'POST')
       await plantbot.orderStatus(order.id, res?.successful ? 'done' : 'failed', res?.successful ? `Played: “${order.payload.text}”` : res?.msg ?? 'vendor rejected')
@@ -245,7 +290,7 @@ async function execOrder(u: Unit, order: PlantbotOrder) {
       return
     }
     case 'abort': {
-      if (u.mission) u.mission.aborted = true
+      if (u.active) u.active.aborted = true // 中止在飞运动（goto 或 mission）
       await plantbot.orderStatus(order.id, 'done', 'mission runner aborted')
       return
     }
@@ -324,11 +369,18 @@ async function main() {
       u.status = s
       if (!s.online) continue // 厂商侧离线 → 停止心跳，平台 20s 后自然判 OFFLINE
       const pos = pxToWorld(Number(s.xPosition), Number(s.yPosition))
+      // 我们把机器人钉在手动模式跑派单（到点驻留），故 workModel===1 不再等于 teleop。
+      // 语义化：在飞订单 → 动=navigating/停=executing（点位抓拍）；否则手动 standBy /
+      // 暂停 → idle；自动巡逻 → 动=navigating/停=executing（巡逻点位驻留）。
+      const inFlight = !!u.active
+      const moving = Number(s.speed) > 0.05
+      const charging = s.chargeConnectMode === 1 || s.ifChargeTask === 1
       const mode =
-        s.chargeConnectMode === 1 || s.ifChargeTask === 1 ? 'charging'
-        : s.workModel === 1 ? 'teleop'
-        : s.isPatrolStop === 1 || s.taskType === 'standBy' ? 'idle'
-        : Number(s.speed) > 0.05 ? 'navigating'
+        charging ? 'charging'
+        : inFlight ? (moving ? 'navigating' : 'executing')
+        : s.isPatrolStop === 1 ? 'idle'
+        : s.workModel === 1 && s.taskType === 'standBy' ? 'idle'
+        : moving ? 'navigating'
         : 'executing'
       const rep = await plantbot.state(u.serial, {
         x: +pos.x.toFixed(2),
@@ -339,7 +391,13 @@ async function main() {
         mode,
         errors: s.exceptionCode ? [String(s.exceptionCode)] : undefined,
       })
-      if (u.level === 'dispatchable') await pumpOrders(plantbot, u.serial, rep, (o) => execOrder(u, o))
+      if (u.level === 'dispatchable')
+        await pumpOrders(plantbot, u.serial, rep, (o) => execOrder(u, o), {
+          preempt: () => {
+            if (u.active) u.active.aborted = true // 抢占：取消在飞运动，泵等其结束再发新单
+          },
+          log,
+        })
     }
   }, 1000)
 
@@ -361,10 +419,13 @@ async function main() {
 
 // ---------- WS：单位级告警/抓拍订阅（增量开关，断线重连） ----------
 
+const wsBackoff = makeBackoff() // 1 s→30 s 指数退避，连上即重置
+
 function connectWs() {
   const url = `${GOSUNCN_BASE.replace(/^http/, 'ws')}/websocket/web/${userId}?remark=plantbot-adapter&lang=zh-cn`
   const ws = new WebSocket(url)
   ws.on('open', () => {
+    wsBackoff.reset()
     log.info('GoRobot WS 已连接，订阅告警/本体故障/抓拍（增量）')
     ws.send(
       JSON.stringify({
@@ -393,14 +454,17 @@ function connectWs() {
           continue
         }
         const snap = await snapshotFor(u)
-        const pos = pxToWorld(Number(a.x), Number(a.y))
+        // 真云 AlarmInfo 样本只有 lat/long，无激光 px x/y；仅当 x/y 为有限数才带坐标，
+        // 否则省略（平台回落到机器人当前位置），不要下发 NaN/null。
+        const ax = Number(a.x)
+        const ay = Number(a.y)
+        const pos = Number.isFinite(ax) && Number.isFinite(ay) ? pxToWorld(ax, ay) : undefined
         await plantbot.event({
           type,
           robotSerial: u.serial,
           detail: `${a.alarmName}${a.alarmValue && a.alarmValue !== '0.0' ? ` · 检测值 ${a.alarmValue}` : ''} · GoRobot #${a.id}`,
           severity: a.alarmLevel === 1 ? 'high' : undefined,
-          x: +pos.x.toFixed(2),
-          z: +pos.z.toFixed(2),
+          ...(pos ? { x: +pos.x.toFixed(2), z: +pos.z.toFixed(2) } : {}),
           snapshotUrl: snap,
           confidence: typeof a.reliability === 'number' ? a.reliability : undefined,
           category: 'security',
@@ -418,8 +482,9 @@ function connectWs() {
     // PatrolCaptureInfo：点位抓拍流仅记录（平台侧任务进度由 mission 引擎自理）
   })
   ws.on('close', () => {
-    log.warn('GoRobot WS 断开，3s 后重连')
-    setTimeout(connectWs, 3000)
+    const { delay, changed } = wsBackoff.next()
+    if (changed) log.warn(`GoRobot WS 断开，${Math.round(delay / 1000)}s 后重连`)
+    setTimeout(connectWs, delay)
   })
   ws.on('error', () => ws.close())
 }

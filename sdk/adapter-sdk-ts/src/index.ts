@@ -65,6 +65,10 @@ export interface StateReport {
   battery?: number
   mode?: 'idle' | 'navigating' | 'executing' | 'teleop' | 'charging'
   errors?: string[]
+  /** link quality in dBm — report it only if the robot measures it; the platform never fabricates link metrics */
+  rssi?: number
+  /** round-trip latency to the robot in ms (optional, same rule) */
+  latencyMs?: number
 }
 
 export interface EventReport {
@@ -234,16 +238,116 @@ export function reportFault(pb: PlantbotClient, serial: string, detail: string):
   void pb.event({ type: 'fault', robotSerial: serial, detail, severity: 'high', category: 'robot-fault' })
 }
 
-/** after a state report: pull pending orders and hand each to the executor.
- *  The executor's return value is ignored — `return pb.orderStatus(…)` is fine. */
+// ---------- order pump (per-serial dispatch discipline) ----------
+// The platform re-serves acked-but-unsettled orders across a restart
+// (see CLAUDE.md persistence note), so a naive `for (o of pull) void exec(o)`
+// runs duplicates AND lets a fresh goto/mission race the one already in flight
+// (e.g. DeepRobotics' ensureIdle→1004 cancel would then cancel its own task).
+// The pump fixes both, per serial:
+//   • de-dupe by order.id (bounded ring), so a replayed/re-served order runs once;
+//   • MOTION orders (goto/mission) run serially, FIFO by createdAt — one robot
+//     body, one motion at a time. When a motion order arrives while one is in
+//     flight, `preempt(inflight, incoming)` is called (the adapter cancels the
+//     in-flight vendor task) and the pump waits for the in-flight exec to settle
+//     before starting the newcomer;
+//   • INTERVENTION orders (pause/resume/abort/announce/ptz) run immediately and
+//     are never queued — they must reach a busy robot without waiting.
+// exec still owns settlement (pb.orderStatus). A throwing exec is caught +
+// warned so one bad order never wedges the pump.
+
+const MOTION_KINDS: ReadonlySet<PlantbotOrder['kind']> = new Set(['goto', 'mission'])
+const SEEN_CAP = 500
+
+export interface PumpOptions {
+  /** called when a motion order is in flight and a newer motion order arrives.
+   *  Cancel the in-flight vendor task here (DeepRobotics: 1004; Spot/GoRobot:
+   *  set the active run's `aborted`); the pump then awaits the in-flight exec's
+   *  promise before executing the newcomer. */
+  preempt?: (inflight: PlantbotOrder, incoming: PlantbotOrder) => void
+  /** warn sink for exec errors (defaults to the console logger) */
+  log?: Logger
+}
+
+interface PumpState {
+  seen: Set<string>
+  seenRing: string[]
+  queue: PlantbotOrder[]
+  inflight: PlantbotOrder | null
+  draining: boolean
+}
+
+const pumps = new Map<string, PumpState>()
+
+function pumpState(serial: string): PumpState {
+  let st = pumps.get(serial)
+  if (!st) {
+    st = { seen: new Set(), seenRing: [], queue: [], inflight: null, draining: false }
+    pumps.set(serial, st)
+  }
+  return st
+}
+
+/** de-dupe gate — true the first time an id is seen, false thereafter (until it
+ *  ages out of the bounded ring) */
+function firstSight(st: PumpState, id: string): boolean {
+  if (st.seen.has(id)) return false
+  st.seen.add(id)
+  st.seenRing.push(id)
+  if (st.seenRing.length > SEEN_CAP) st.seen.delete(st.seenRing.shift()!)
+  return true
+}
+
+async function runExec(order: PlantbotOrder, exec: (o: PlantbotOrder) => unknown, log: Logger): Promise<void> {
+  try {
+    await exec(order)
+  } catch (e) {
+    log.warn(`order ${order.id} (${order.kind}) exec threw: ${(e as Error).message}`)
+  }
+}
+
+async function drainMotion(st: PumpState, exec: (o: PlantbotOrder) => unknown, log: Logger): Promise<void> {
+  if (st.draining) return
+  st.draining = true
+  try {
+    while (st.queue.length) {
+      const order = st.queue.shift()!
+      const done = runExec(order, exec, log)
+      st.inflight = order // set synchronously before the await, so a same-tick newcomer sees it
+      await done
+      st.inflight = null
+    }
+  } finally {
+    st.draining = false
+  }
+}
+
+/** after a state report: pull pending orders and dispatch each with the
+ *  per-serial pump discipline above. exec's return value is used only to know
+ *  when a MOTION order has finished (so return the nav promise — `await`ing or
+ *  `return`ing pb.orderStatus(…) is fine); INTERVENTION exec's return is ignored. */
 export async function pumpOrders(
   pb: PlantbotClient,
   serial: string,
   rep: { ordersPending: number } | null,
   exec: (order: PlantbotOrder) => unknown,
+  opts?: PumpOptions,
 ): Promise<void> {
   if (!rep || rep.ordersPending <= 0) return
-  for (const order of await pb.pullOrders(serial)) void exec(order)
+  const orders = await pb.pullOrders(serial)
+  if (!orders.length) return
+  const st = pumpState(serial)
+  const log = opts?.log ?? consoleLog
+  orders.sort((a, b) => a.createdAt - b.createdAt) // FIFO by request time across the batch
+  for (const order of orders) {
+    if (!firstSight(st, order.id)) continue
+    if (MOTION_KINDS.has(order.kind)) {
+      if (st.inflight) opts?.preempt?.(st.inflight, order) // cancel in-flight; drain awaits it
+      st.queue.push(order)
+      void drainMotion(st, exec, log)
+    } else {
+      void runExec(order, exec, log) // intervention: immediate, never queued
+    }
+  }
 }
 
 // ---------- waypoint mission runner ----------

@@ -5,8 +5,8 @@
 // and the order queue that adapters pull. Nothing in here is module-global:
 // multi-site isolation.
 
-import { writeFileSync, mkdirSync } from 'node:fs'
-import { readdir, stat, unlink } from 'node:fs/promises'
+import { mkdirSync } from 'node:fs'
+import { readdir, stat, unlink, writeFile } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -94,8 +94,9 @@ export interface Telemetry {
   heading: number
   speed: number
   battery: number
-  rssi: number
-  latency: number
+  /** link quality as reported by the adapter — null when not reported or offline (never fabricated) */
+  rssi: number | null
+  latency: number | null
   mode: 'idle' | 'navigating' | 'executing' | 'teleop' | 'charging' | 'offline'
   odoKm: number
   gait: string
@@ -272,6 +273,9 @@ export interface ExternalState {
   lastSeen: number
   mode?: string
   errors?: string[]
+  /** optional link metrics from the adapter's state report (dBm / ms); absent = unknown */
+  rssi?: number
+  latencyMs?: number
 }
 
 export const EXTERNAL_STALE_MS = 20_000
@@ -451,7 +455,10 @@ export class World {
     return this.robots.find((r) => r.serial === serial && r.adapter === 'external')
   }
 
-  /** integration API: register/refresh an external (adapter-driven) unit */
+  /** integration API: register/refresh an external (adapter-driven) unit.
+   *  opts.online=false marks the unit offline (lastSeen=0) — used by the boot
+   *  replay so a persisted registration doesn't fake a 20 s online window (and
+   *  fake battery) before the adapter's first POST /state actually arrives. */
   registerExternal(input: {
     serial: string
     model: string
@@ -463,7 +470,7 @@ export class World {
     protocol?: string
     home?: { x: number; z: number }
     streams?: { id: string; name: string; kind?: PayloadSpec['kind']; url?: string }[]
-  }): RobotSpec {
+  }, opts?: { online?: boolean }): RobotSpec {
     const id = `ext-${input.serial.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
     const catalog = ROBOT_CATALOG.find((m) => m.model === input.model)
     const existing = this.robots.find((r) => r.id === id)
@@ -506,7 +513,9 @@ export class World {
     }
     this.robots.push(robot)
     this.initNav(robot)
-    this.externals.set(id, { lastSeen: Date.now() })
+    // online (default) → seen now; boot replay passes online:false → lastSeen 0
+    // so the unit reads OFFLINE until the adapter really reports state
+    this.externals.set(id, { lastSeen: opts?.online === false ? 0 : Date.now() })
     return robot
   }
 
@@ -523,7 +532,7 @@ export class World {
   /** integration API: adapter posts current state (doubles as heartbeat) */
   ingestState(
     robotId: string,
-    s: { x?: number; z?: number; heading?: number; speed?: number; battery?: number; mode?: string; errors?: string[] },
+    s: { x?: number; z?: number; heading?: number; speed?: number; battery?: number; mode?: string; errors?: string[]; rssi?: number; latencyMs?: number },
   ): boolean {
     const ext = this.externals.get(robotId)
     const nav = this.nav.get(robotId)
@@ -531,6 +540,8 @@ export class World {
     ext.lastSeen = Date.now()
     ext.mode = s.mode
     ext.errors = s.errors
+    ext.rssi = typeof s.rssi === 'number' && Number.isFinite(s.rssi) ? s.rssi : undefined
+    ext.latencyMs = typeof s.latencyMs === 'number' && Number.isFinite(s.latencyMs) ? s.latencyMs : undefined
     if (typeof s.x === 'number' && typeof s.z === 'number') {
       // platform-side odometer: accumulate reported displacement (skip jitter
       // below 2 cm and >5 m teleports — re-localization, not travel)
@@ -664,8 +675,21 @@ export class World {
     }
     this.sessions.set(id, s)
     if (this.sessions.size > 300) {
-      const oldest = [...this.sessions.keys()][0]
-      this.sessions.delete(oldest)
+      // evict the soonest-to-expire lease (an already-expired one has the
+      // smallest expiresAt, so it goes first); null = permanent file loop, never
+      // the first to go. One pass, no full key-array materialization.
+      let victim: string | undefined
+      let earliest = Infinity
+      for (const [sid, sess] of this.sessions) {
+        if (sess.expiresAt === null) continue
+        if (sess.expiresAt < earliest) {
+          earliest = sess.expiresAt
+          victim = sid
+        }
+      }
+      // all remaining leases are permanent → fall back to insertion order
+      const drop = victim ?? this.sessions.keys().next().value
+      if (drop) this.sessions.delete(drop)
     }
     return s
   }
@@ -689,17 +713,6 @@ export class World {
     buf.push(r)
     if (buf.length > 200) buf.shift()
     this.readings.set(key, buf)
-  }
-
-  listReadings(robotId: string, metric?: string, since = 0, limit = 200): Reading[] {
-    const out: Reading[] = []
-    for (const [key, buf] of this.readings) {
-      if (!key.startsWith(`${robotId}|`)) continue
-      if (metric && key !== `${robotId}|${metric}`) continue
-      for (const r of buf) if (r.ts > since) out.push(r)
-    }
-    out.sort((a, b) => a.ts - b.ts)
-    return out.slice(-limit)
   }
 
   /** metrics a robot actually emits, given its installed payloads */
@@ -901,7 +914,7 @@ export class World {
     const frame = src ? await grabFrame(src) : null
     if (frame) {
       const file = `${this.id}_ev-${ts.toString(36)}-${Math.floor(Math.random() * 46_656).toString(36)}.jpg`
-      writeFileSync(join(SNAP_DIR, file), frame)
+      await writeFile(join(SNAP_DIR, file), frame)
       sweepSnapshots()
       evidence.unshift({
         kind: 'image',
@@ -995,16 +1008,12 @@ export class World {
     return ev
   }
 
-  ackEvent(id: string) {
-    return this.setLifecycle(id, 'acked')
-  }
-
   async missionSnapshot(stream: string, missionId: string): Promise<string | undefined> {
     const src = this.frameSource(stream)
     const frame = src ? await grabFrame(src, 6000) : null
     if (!frame) return undefined
     const file = `${this.id}_${missionId}-${Date.now().toString(36)}.jpg`
-    writeFileSync(join(SNAP_DIR, file), frame)
+    await writeFile(join(SNAP_DIR, file), frame)
     sweepSnapshots()
     return `${PUB}/api/snapshots/${file}`
   }
@@ -1129,6 +1138,7 @@ export class World {
       const open = this.missions.some((m) => m.scheduleId === s.id && (m.status === 'queued' || m.status === 'active'))
       if (open) {
         s.nextRunAt = now + 60_000
+        this.persist?.schedule(s) // the deferred next-run must survive a restart too
         continue
       }
       const t = this.templates.find((x) => x.id === s.templateId)
@@ -1389,9 +1399,12 @@ export class World {
       const tmpl = m.templateId ? this.templates.find((t) => t.id === m.templateId) : undefined
       const candidates = this.robots.filter((r) => {
         if (r.integrationLevel !== 'dispatchable') return false
-        // pinned requests dispatch unconditionally — the order queue is the
-        // buffer, so a run survives the robot being briefly offline
-        if (m.requestedRobot !== 'auto') return m.requestedRobot === r.id
+        // pinned requests dispatch even while the robot is briefly offline (the
+        // order queue is the buffer) and ignore battery — but never double-book
+        // a unit that already carries an active mission, or two schedules pinned
+        // to the same robot would fire concurrent mission orders and clobber
+        // nav.missionId. It stays queued until the current run settles.
+        if (m.requestedRobot !== 'auto') return m.requestedRobot === r.id && !this.nav.get(r.id)?.missionId
         // auto-assignment only picks healthy, idle, capable units
         const ext = this.externals.get(r.id)
         if (!ext || now - ext.lastSeen > EXTERNAL_STALE_MS) return false
@@ -1449,8 +1462,8 @@ export class World {
         heading: +s.heading.toFixed(3),
         speed: +s.speed.toFixed(2),
         battery: +s.battery.toFixed(1),
-        rssi: offline ? -99 : -60,
-        latency: offline ? 999 : 45,
+        rssi: offline ? null : (ext.rssi ?? null),
+        latency: offline ? null : (ext.latencyMs ?? null),
         mode: offline ? 'offline' : ((ext.mode as Telemetry['mode']) ?? 'idle'),
         odoKm: +s.odo.toFixed(2),
         // gait derived from family + reported speed — drives the URDF twin's

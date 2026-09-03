@@ -4,8 +4,9 @@
   "version": "0.1.0",
   "scripts": {
     "setup": "node scripts/setup.mjs",
+    "postinstall": "pnpm --filter @plantbot/adapter-sdk build",
     "dev": "concurrently -k -n server,web,robots,relay -c blue,cyan,magenta,yellow \"PB_DEMO=1 PB_DEV_KEYS=1 SESSION_SECRET=plantbot-dev-only MEDIA_RELAY=http://127.0.0.1:1984 pnpm --filter server dev\" \"pnpm --filter web dev\" \"pnpm --filter integrations dev\" \"node scripts/relay.mjs\"",
-    "dev:core": "concurrently -k -n server,web -c blue,cyan \"pnpm --filter server dev\" \"pnpm --filter web dev\"",
+    "dev:core": "concurrently -k -n server,web -c blue,cyan \"PB_DEMO=1 PB_DEV_KEYS=1 SESSION_SECRET=plantbot-dev-only pnpm --filter server dev\" \"pnpm --filter web dev\"",
     "build": "pnpm --filter web build"
   },
   "devDependencies": {

@@ -535,6 +535,28 @@ export function loadSeqs(siteId: string) {
   }
 }
 
+/** events range query for the integration read API — beyond the in-memory ring
+ *  (World caps events at 400), so a since-polling third party doesn't drop events
+ *  under an alert flood. lifecycle/category live inside the JSON blob, so they're
+ *  post-filtered in JS; ts is an indexed column (idx_events_ts) for the range scan. */
+export function queryEvents(
+  siteId: string,
+  opts: { since?: number; limit?: number; lifecycle?: string; category?: string },
+): unknown[] {
+  const since = opts.since ?? 0
+  const limit = Math.min(Math.max(opts.limit ?? 100, 1), 500)
+  const filtered = !!(opts.lifecycle || opts.category)
+  // when blob filters are present, scan a wider window then post-filter to `limit`
+  const scan = filtered ? Math.max(limit * 5, 2000) : limit
+  const rows = db
+    .prepare('SELECT data FROM events WHERE site_id=? AND ts>? ORDER BY ts DESC LIMIT ?')
+    .all(siteId, since, scan) as { data: string }[]
+  let out = rows.map((r) => JSON.parse(r.data) as { lifecycle?: string; category?: string })
+  if (opts.lifecycle) out = out.filter((e) => e.lifecycle === opts.lifecycle)
+  if (opts.category) out = out.filter((e) => e.category === opts.category)
+  return out.slice(0, limit)
+}
+
 /** readings range query for the REST endpoint (beyond the in-memory ring) */
 export function queryReadings(siteId: string, robotId: string, metric: string | undefined, since: number, limit: number): Reading[] {
   const rows = metric

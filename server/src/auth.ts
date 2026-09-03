@@ -2,13 +2,28 @@
 // carry the viewer role while PB_PUBLIC_VIEW allows it (public demo);
 // PB_PUBLIC_VIEW=0 gates every non-integration API behind a session.
 
-import { createHmac, randomBytes } from 'node:crypto'
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { getUser, roleFor, ROLE_RANK, type Role, type UserRec, verifyPassword } from './config.js'
 
 const SECRET = process.env.SESSION_SECRET || randomBytes(24).toString('hex')
+// one warning for the whole process — oidc.ts shares this same env var for its
+// state-cookie secret, so it deliberately does not emit a second line
+if (!process.env.SESSION_SECRET)
+  console.warn(
+    '[auth] SESSION_SECRET is not set — using a random per-boot secret. Sessions and SSO state will ' +
+      'not survive a restart and will differ across instances. Set SESSION_SECRET in production.',
+  )
 const COOKIE = 'pb_sess'
 const TTL_MS = 7 * 24 * 3600_000
+
+/** constant-time equality for HMAC/token strings — avoids the early-exit timing
+ *  leak of `===`. Length-guarded so timingSafeEqual never throws on a mismatch. */
+export function safeStrEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a)
+  const bb = Buffer.from(b)
+  return ab.length === bb.length && timingSafeEqual(ab, bb)
+}
 
 export const PUBLIC_VIEW = process.env.PB_PUBLIC_VIEW !== '0'
 
@@ -44,7 +59,7 @@ export function readSession(cookieHeader: string | undefined): UserRec | null {
   const m = /(?:^|;\s*)pb_sess=([^;]+)/.exec(cookieHeader)
   if (!m) return null
   const [payload, mac] = m[1].split('.')
-  if (!payload || !mac || sign(payload) !== mac) return null
+  if (!payload || !mac || !safeStrEqual(sign(payload), mac)) return null
   try {
     const data = JSON.parse(Buffer.from(payload, 'base64url').toString()) as { u: string; exp: number }
     if (data.exp < Date.now()) return null
@@ -78,7 +93,12 @@ export function login(ip: string, username: string, password: string): UserRec |
   a.fails++
   a.until = Date.now() + 15 * 60_000
   attempts.set(key, a)
-  if (attempts.size > 5000) attempts.clear() // memory guard
+  // memory guard: drop only entries whose lockout window has elapsed — never
+  // wipe the whole table, which would release every active lockout at once
+  if (attempts.size > 5000) {
+    const now = Date.now()
+    for (const [k, v] of attempts) if (v.until < now) attempts.delete(k)
+  }
   return null
 }
 

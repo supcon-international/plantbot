@@ -6,15 +6,24 @@
  *    Spot (RAI Institute spot_description visual meshes, MIT; the flattened
  *    spot.urdf lives in-repo) — GS F2 renders as a silhouette
  *                                                      → web/public/assets/robots/
- * Everything is skipped if already present.
+ * Everything is skipped if already present. Per-asset failures are collected and
+ * reported at the end (non-zero exit) without aborting the other downloads.
  * Host requirements: node ≥ 22.22, ffmpeg on PATH.
- *   (unzip is used to unpack the go2rtc mac/win zip; present by default.)
+ *   (unzip is used to unpack the go2rtc mac/win zip; checked in preflight there.)
  */
-import { mkdirSync, existsSync, readFileSync, writeFileSync, statSync, unlinkSync } from 'node:fs'
+import { mkdirSync, existsSync, readFileSync, writeFileSync, statSync, unlinkSync, renameSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
+
+// per-asset failures collected here; setup exits non-zero at the end but never
+// aborts mid-way (one bad CDN shouldn't cost you every other asset)
+const failures = []
+/** best-effort removal of leftover temp files after a failed step */
+function cleanupTemp(...paths) {
+  for (const p of paths) if (existsSync(p)) { try { unlinkSync(p) } catch {} }
+}
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const FETCH_TIMEOUT_MS = Number(process.env.PB_SETUP_FETCH_TIMEOUT_MS ?? 0)
@@ -91,10 +100,20 @@ async function downloadVerified(url, dest, label, expectedSha256) {
 // ---------- host prerequisites ----------
 function preflight() {
   try {
-    execSync('ffmpeg -version', { stdio: 'ignore' })
+    execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' })
   } catch {
     console.error('✗ ffmpeg not found on PATH — install it (macOS: brew install ffmpeg) and rerun.')
     process.exit(1)
+  }
+  // go2rtc for macOS / Windows ships as a .zip that we unpack with `unzip`.
+  // It's optional (RTSP playback only), so a missing unzip is a warning, not a
+  // hard stop — go2rtc will simply be skipped.
+  if (process.platform === 'darwin' || process.platform === 'win32') {
+    try {
+      execFileSync('unzip', ['-v'], { stdio: 'ignore' })
+    } catch {
+      console.warn('  ⚠ unzip not found on PATH — needed to unpack the go2rtc archive on macOS/Windows; RTSP playback will stay offline until it is installed.')
+    }
   }
 }
 preflight()
@@ -120,8 +139,9 @@ const FOOTAGE = {
 }
 
 // ---------- robot URDF twins ----------
-// DeepRobotics X30 — official model repo (URDF + STL)
-const DR = 'https://cdn.jsdelivr.net/gh/DeepRoboticsLab/deep_robotics_model@main'
+// DeepRobotics X30 — official model repo (URDF + STL). Pinned to a commit so an
+// upstream retag/force-push can't silently change the meshes under us.
+const DR = 'https://cdn.jsdelivr.net/gh/DeepRoboticsLab/deep_robotics_model@e6753d2ef25e1e788d387ae3775fd283c199f1a3'
 const ROBOT_FILES = { 'x30/X30.urdf': `${DR}/X30/urdf/X30.urdf` }
 for (const m of ['torso', 'hip', 'thigh', 'shank'])
   ROBOT_FILES[`x30/meshes/${m}.STL`] = `${DR}/X30/urdf/meshes/${m}.STL`
@@ -129,7 +149,8 @@ for (const m of ['torso', 'hip', 'thigh', 'shank'])
 // Boston Dynamics Spot — visual OBJs from RAI Institute's spot_description
 // (MIT; the ROS 2 driver's description package). The flattened spot.urdf that
 // references them is hand-written in-repo (web/public/assets/robots/spot/).
-const SPOT = 'https://cdn.jsdelivr.net/gh/rai-opensource/spot_description@main/spot_description/meshes/base/visual'
+// Pinned to a commit for the same reason as the X30 repo above.
+const SPOT = 'https://cdn.jsdelivr.net/gh/rai-opensource/spot_description@156d1802bfb117f219dbfce7597d283d5fabc968/spot_description/meshes/base/visual'
 for (const m of [
   'body',
   'front_left_hip', 'front_left_upper_leg', 'front_left_lower_leg',
@@ -179,14 +200,14 @@ async function relayBinary() {
       const zip = join(ROOT, 'bin', asset)
       await downloadVerified(url, zip, `go2rtc ${GO2RTC_VERSION}`, expectedSha256)
       // zip holds a single `go2rtc` (or .exe) binary — extract flat into bin/
-      execSync(`unzip -o -j "${zip}" -d "${join(ROOT, 'bin')}"`, { stdio: 'ignore' })
+      execFileSync('unzip', ['-o', '-j', zip, '-d', join(ROOT, 'bin')], { stdio: 'ignore' })
       unlinkSync(zip)
       writeFileSync(binaryStamp, `${sha256File(dest)}\n`)
     } else {
       await downloadVerified(url, dest, `go2rtc ${GO2RTC_VERSION}`, expectedSha256)
     }
     if (!existsSync(dest) || statSync(dest).size <= 1e6) throw new Error('downloaded binary is missing or unexpectedly small')
-    if (!isWin) execSync(`chmod +x "${dest}"`)
+    if (!isWin) execFileSync('chmod', ['+x', dest])
     console.log('  ✓ go2rtc ready')
   } catch (e) {
     console.log(`  ⚠ go2rtc download failed (${e.message}) — RTSP playback stays offline until a relay is provided`)
@@ -204,31 +225,52 @@ const FFMPEG = process.env.FFMPEG_BIN ?? 'ffmpeg'
 const VF = "scale='min(640,iw)':-2,fps=12"
 const ENC =
   '-c:v libx264 -crf 30 -maxrate 450k -bufsize 900k -preset slow -g 12 -keyint_min 12 -pix_fmt yuv420p -movflags +faststart -an'
+// argv form for execFileSync (no shell): each token is its own array element.
+// VF keeps its inner single quotes — ffmpeg needs them to quote the min() expr.
+const ENC_ARGS = ENC.split(' ')
 async function footage(name, url) {
   const dest = join(ROOT, 'server', 'media', name)
   if (existsSync(dest) && statSync(dest).size > 1e5) return console.log(`  ✓ ${name} (cached)`)
   const tmp = `${dest}.dl`
-  await download(url, tmp, name)
-  execSync(
-    `"${FFMPEG}" -y -loglevel error -i "${tmp}" -vf "${VF}" ${ENC} "${dest}.enc.mp4" && mv "${dest}.enc.mp4" "${dest}" && rm "${tmp}"`,
-  )
-  console.log(`  ✓ ${name} transcoded (640w · 12fps · ≤450kbps)`)
+  const enc = `${dest}.enc.mp4`
+  try {
+    await download(url, tmp, name)
+    execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-i', tmp, '-vf', VF, ...ENC_ARGS, enc])
+    renameSync(enc, dest)
+    unlinkSync(tmp)
+    console.log(`  ✓ ${name} transcoded (640w · 12fps · ≤450kbps)`)
+  } catch (e) {
+    cleanupTemp(tmp, enc)
+    failures.push(`footage ${name}: ${e.message}`)
+    console.log(`  ✗ ${name} failed (${e.message})`)
+  }
 }
 
 async function stagingFeed() {
   const dest = join(ROOT, 'server', 'media', 'staging.mp4')
   if (existsSync(dest) && statSync(dest).size > 1e5) return console.log('  ✓ staging.mp4 (cached)')
   const webm = `${dest}.webm`
-  await download(
-    'https://upload.wikimedia.org/wikipedia/commons/5/52/Spot_construction_robot.webm',
-    webm,
-    'Spot staging footage (Wikimedia Commons CC)',
-  )
-  // boomerang (forward + reversed) so the short clip loops seamlessly
-  execSync(
-    `"${FFMPEG}" -y -loglevel error -i "${webm}" -filter_complex "[0:v]${VF},split[a][b];[b]reverse[r];[a][r]concat=n=2:v=1[out]" -map "[out]" ${ENC} "${dest}.enc.mp4" && mv "${dest}.enc.mp4" "${dest}" && rm "${webm}"`,
-  )
-  console.log('  ✓ staging.mp4 transcoded (seamless loop)')
+  const enc = `${dest}.enc.mp4`
+  try {
+    await download(
+      'https://upload.wikimedia.org/wikipedia/commons/5/52/Spot_construction_robot.webm',
+      webm,
+      'Spot staging footage (Wikimedia Commons CC)',
+    )
+    // boomerang (forward + reversed) so the short clip loops seamlessly
+    execFileSync(FFMPEG, [
+      '-y', '-loglevel', 'error', '-i', webm,
+      '-filter_complex', `[0:v]${VF},split[a][b];[b]reverse[r];[a][r]concat=n=2:v=1[out]`,
+      '-map', '[out]', ...ENC_ARGS, enc,
+    ])
+    renameSync(enc, dest)
+    unlinkSync(webm)
+    console.log('  ✓ staging.mp4 transcoded (seamless loop)')
+  } catch (e) {
+    cleanupTemp(webm, enc)
+    failures.push(`staging.mp4: ${e.message}`)
+    console.log(`  ✗ staging.mp4 failed (${e.message})`)
+  }
 }
 
 /** Pre-render the thermal / OGI looks once — playback stays native & smooth. */
@@ -236,11 +278,17 @@ async function filteredFeed(name, srcName, vf) {
   const dest = join(ROOT, 'server', 'media', name)
   if (existsSync(dest) && statSync(dest).size > 1e5) return console.log(`  ✓ ${name} (cached)`)
   const src = join(ROOT, 'server', 'media', srcName)
+  const enc = `${dest}.enc.mp4`
   process.stdout.write(`  ⚙ rendering ${name} … `)
-  execSync(
-    `"${FFMPEG}" -y -loglevel error -i "${src}" -vf "${vf},${VF}" ${ENC} "${dest}.enc.mp4" && mv "${dest}.enc.mp4" "${dest}"`,
-  )
-  console.log('done')
+  try {
+    execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-i', src, '-vf', `${vf},${VF}`, ...ENC_ARGS, enc])
+    renameSync(enc, dest)
+    console.log('done')
+  } catch (e) {
+    cleanupTemp(enc)
+    failures.push(`${name}: ${e.message}`)
+    console.log(`✗ failed (${e.message})`)
+  }
 }
 
 console.log('[1/4] camera footage (Mixkit free license + Commons)')
@@ -259,7 +307,14 @@ await filteredFeed('ogi.mp4', 'pumpjack.mp4', 'format=gray,eq=contrast=1.55:brig
 
 console.log('[2/4] URDF twins — X30 (DeepRoboticsLab) + Spot (RAI spot_description)')
 for (const [rel, url] of Object.entries(ROBOT_FILES)) {
-  await download(url, join(ROOT, 'web', 'public', 'assets', 'robots', rel), rel)
+  const dest = join(ROOT, 'web', 'public', 'assets', 'robots', rel)
+  try {
+    await download(url, dest, rel)
+  } catch (e) {
+    cleanupTemp(dest)
+    failures.push(`urdf ${rel}: ${e.message}`)
+    console.log(`  ✗ ${rel} failed (${e.message})`)
+  }
 }
 
 console.log('[3/4] media relay (go2rtc — RTSP → MSE for live playback)')
@@ -268,11 +323,25 @@ await relayBinary()
 console.log('[4/4] api reference renderer (redoc)')
 // Redoc standalone bundle → web/public/vendor/, referenced by api-docs.html
 // (served at <BASE>/api-docs.html; relative paths keep it sub-path-safe).
-// redoc@2 is the long-stable major — pinned so the URL shape can't drift.
-await download(
-  'https://cdn.jsdelivr.net/npm/redoc@2/bundles/redoc.standalone.js',
-  join(ROOT, 'web', 'public', 'vendor', 'redoc.standalone.js'),
-  'redoc.standalone.js',
-)
+// Pinned to an exact version + SHA-256 so the bundle can neither drift with a
+// floating tag nor be swapped by a compromised CDN.
+try {
+  await downloadVerified(
+    'https://cdn.jsdelivr.net/npm/redoc@2.5.0/bundles/redoc.standalone.js',
+    join(ROOT, 'web', 'public', 'vendor', 'redoc.standalone.js'),
+    'redoc.standalone.js (redoc@2.5.0)',
+    '0ec05be285ac885a330289b02f470e1bdbd2b6b3223a9fa213f24bf805a851d1',
+  )
+} catch (e) {
+  failures.push(`redoc.standalone.js: ${e.message}`)
+  console.log(`  ✗ redoc.standalone.js failed (${e.message})`)
+}
 
-console.log('\nAll assets ready. Run: pnpm dev')
+if (failures.length) {
+  console.error(`\n⚠ ${failures.length} asset(s) failed:`)
+  for (const f of failures) console.error(`   - ${f}`)
+  console.error('Re-run `pnpm run setup` to retry — cached/verified assets are skipped.')
+  process.exitCode = 1
+} else {
+  console.log('\nAll assets ready. Run: pnpm dev')
+}

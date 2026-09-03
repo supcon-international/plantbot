@@ -13,21 +13,22 @@ export const TYPE = {
   QUERY: 1007,
 } as const
 
-/** ErrorStatus_Navigation（types.h 逐值）——人类可读文案用于平台侧任务备注 */
+/** ErrorStatus_Navigation（types.h 逐值）——人类可读文案用于平台侧任务备注。
+ *  文案统一英文（进英文界面）；每行注释保留厂商中文原文。 */
 export const ERROR_STATUS: Record<number, string> = {
-  0: '默认',
-  8960: '单点巡检任务执行完成',
-  8962: '单点巡检任务被取消',
-  41729: '运动状态异常，任务失败（软急停、摔倒）',
-  41730: '电量过低，任务失败',
-  41731: '电机过温异常，任务失败',
-  41732: '正在使用充电器充电，任务失败',
-  41745: '导航进程未启动，无法下发任务',
-  41746: '导航模块通讯异常，无法下发任务',
-  41747: '定位状态持续异常（超过 30s）',
-  41793: '当前正在执行任务，下发新任务失败',
-  41804: '导航全局规划失败',
-  41881: '重定位失败',
+  0: 'default', // 默认
+  8960: 'single-point inspection task completed', // 单点巡检任务执行完成
+  8962: 'single-point inspection task cancelled', // 单点巡检任务被取消
+  41729: 'motion-state fault, task failed (soft e-stop / fall)', // 运动状态异常，任务失败（软急停、摔倒）
+  41730: 'battery too low, task failed', // 电量过低，任务失败
+  41731: 'motor over-temperature, task failed', // 电机过温异常，任务失败
+  41732: 'charging on charger, task failed', // 正在使用充电器充电，任务失败
+  41745: 'navigation process not started, cannot dispatch task', // 导航进程未启动，无法下发任务
+  41746: 'navigation module comms fault, cannot dispatch task', // 导航模块通讯异常，无法下发任务
+  41747: 'localization persistently abnormal (over 30s)', // 定位状态持续异常（超过 30s）
+  41793: 'a task is already running, new task rejected', // 当前正在执行任务，下发新任务失败
+  41804: 'global path planning failed', // 导航全局规划失败
+  41881: 'relocalization failed', // 重定位失败
 }
 
 export function encodeFrame(seq: number, xmlBody: string): Buffer {
@@ -180,9 +181,14 @@ export const buildQueryResp = (value: number, status: -1 | 0 | 1) =>
 
 // ---------- 解析工具 ----------
 
-const num = (body: string, tag: string): number => {
-  const m = new RegExp(`<${tag}>(-?[\\d.eE+]+)</${tag}>`).exec(body)
-  return m ? Number(m[1]) : 0
+/** 取标签内文本再 Number()：捕获 `[^<]+` 而非手写数字类，正确吃下带负指数的
+ *  科学计数法（`1.5e-3`、`-2E+4`）——旧正则 `(-?[\d.eE+]+)` 不含指数负号，
+ *  会把 `1.5e-3` 截成 `1.5e` → NaN 或 0。非数字回 0。 */
+export const num = (body: string, tag: string): number => {
+  const m = new RegExp(`<${tag}>([^<]+)</${tag}>`).exec(body)
+  if (!m) return 0
+  const v = Number(m[1].trim())
+  return Number.isFinite(v) ? v : 0
 }
 
 export function parseRealtimeResp(body: string): RealtimeStatus {
@@ -217,10 +223,7 @@ export function parseNavTaskReq(body: string): NavPoint[] {
   let m: RegExpExecArray | null
   while ((m = re.exec(body))) {
     const seg = m[1]
-    const g = (tag: string) => {
-      const mm = new RegExp(`<${tag}>(-?[\\d.eE+]+)</${tag}>`).exec(seg)
-      return mm ? Number(mm[1]) : 0
-    }
+    const g = (tag: string) => num(seg, tag)
     out.push({
       MapId: g('MapId'), Value: g('Value'), PosX: g('PosX'), PosY: g('PosY'), PosZ: g('PosZ'),
       AngleYaw: g('AngleYaw'), PointInfo: g('PointInfo'), Gait: g('Gait'), Speed: g('Speed'),

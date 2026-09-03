@@ -119,8 +119,10 @@ PLANTBOT_SIM_DIR=/opt/plantbotsimulator ./scripts/demo-up.sh
 PLANTBOT_SIM_URL=git@github.com:your-org/plantbotsimulator.git ./scripts/demo-up.sh
 ```
 
-新版本联调通过后，可用 `PLANTBOT_SIM_REF=<commit-or-tag>` 覆盖默认的 simulator 版本。已有
-`PLANTBOT_SIM_DIR` 不会被脚本更新或切换分支，避免覆盖本地改动。
+新版本联调通过后，可用 `PLANTBOT_SIM_REF=<commit-or-tag>` 覆盖默认的 simulator 版本。启动时
+`scripts/demo-up.sh` 会**校验** `PLANTBOT_SIM_DIR`：它必须是一个 git checkout、其 `HEAD` 等于期望的
+`PLANTBOT_SIM_REF`、且工作区干净（`git status --porcelain` 为空，无未提交改动），任一不符即**拒绝启动**
+（保证演示可复现）。已有 checkout 不会被脚本更新或切换分支，避免覆盖本地改动——需要换版本时自行 checkout 或显式设 `PLANTBOT_SIM_REF`。
 
 ## 源码部署拓扑（现有生产实例）
 
@@ -227,7 +229,7 @@ location ^~ /robots/stream/ { return 404; }
 3. +WP 点选放航点（一个设为 DOCK）、+ZONE 画区域、CAMS 填 RTSP 摄像头 → SAVE（实时生效）。临时补一路固定摄像头也可以直接在 LIVE 页 ADD CAMERA。
 4. CALIB 标定厂商坐标系（如 GoRobot 激光图 px→米）：取 ≥2 组对应点求解,保存 Transform,一键复制 adapter 环境变量。
 5. 接机器人,二选一：
-   - **托管连接器**（平台可直连机器人网络时的首选）：INTEG → MANAGED CONNECTORS → 选厂商填机器人地址/凭证/dock 坐标/相机 rtsp:// → 创建即接入。平台代跑 adapter 子进程（崩溃退避重启、日志面板可查、重启平台自动恢复）,无需手工密钥。
+   - **托管连接器**（平台可直连机器人网络时的首选）：INTEG → MANAGED CONNECTORS → 选厂商填机器人地址/凭证/dock 坐标/相机 rtsp:// → 创建即接入。平台代跑 adapter 子进程（崩溃退避重启、日志面板可查、重启平台自动恢复）,无需手工密钥。子进程**只继承白名单环境变量**（`PATH`/`HOME`/`TMPDIR`/`LANG`/`TZ`/`NODE_OPTIONS` + 代理与证书变量）,身份/连接参数（serial/callsign/dock/streams/凭证）逐项显式注入,不透传平台整个 env;平台关停时先 `SIGTERM`,2 秒后 `SIGKILL` 兜底回收。
    - **外部 adapter**（跨网/自有运行时/内置三型号之外）：INTEG 签发场站 API key（**明文只显示一次**,库里存哈希）→ 填进 adapter 的 `PLANTBOT_KEY`,起 adapter（见下节）。SDK 有 TypeScript 与 Node-RED 两种形态（`sdk/`,见 docs/integration.md）。
 6. 机器人自动注册出现在机队。
 
@@ -235,7 +237,8 @@ location ^~ /robots/stream/ { return 404; }
 
 机器人经 `integrations/` 的五个 **adapter** 进程接入——plant-07 = SPOT·A、
 plant-12 = X30·HB、campus-east = SPOT·CE + X30·CE + GS·F2×2（gosuncn 一对驱动两台）。
-演示环境 sim+adapter 都跑；接真机时只部署 adapter。生产采用**单编排器 unit**
+演示环境 sim+adapter 都跑；接真机时只部署 adapter（**`pnpm install` 会经 `prepare` 钩子构建
+`@plantbot/adapter-sdk` 的 `dist/`——adapter 运行时依赖它,务必在装完依赖后再起 adapter 进程**）。生产采用**单编排器 unit**
 `plantbot-integrations.service`：`ExecStart` 跑一个仓库外的 `plantbot-run-integrations.mjs`
 （进程表与 `integrations/scripts/dev-all.mjs` 逐进程一致,崩溃 2s 重生,日志带前缀进同一 journal;
 密钥/流前缀经 `EnvironmentFile=/home/ubuntu/plantbot-integrations.env` 注入,不硬编码）。
@@ -276,7 +279,7 @@ sudo systemctl restart plantbot   # 服务端变更时（任务/事件/规则等
 - **子路径是第一约束**：web 用 `BASE`、server 下发 URL 用 `PUB`，见 CLAUDE.md。本地根路径开发一切正常≠线上正常。
 - 现有源码部署的 tunnel 源站必须 `http://localhost:8888`；Docker 演示则指向
   `http://localhost:18080`（https 打纯 HTTP nginx 会 502 TLS 握手错）。
-- `pnpm setup` 被 pnpm 10 内置命令遮蔽，必须 `pnpm run setup`。
+- 版本口径:**pnpm ≥ 10**（Docker 镜像内固定 `pnpm@11.0.9`,见 `docker/demo.Dockerfile`）;`pnpm setup` 会被 pnpm 内置命令遮蔽,取回素材必须 `pnpm run setup`。
 - nginx 的 `/robots/` 各 location 必须用 `^~` 前缀匹配，否则站点其他正则 location（`.mp4`/`.html` 缓存规则）会截胡。
 - `server/data/`（SQLite + 上传地图）与 `server/media/`（素材）永不入库；`plantbot.db` 记得进备份。
 - API key 明文只在创建响应出现一次;丢了就吊销重签（库里只有哈希,找不回）。

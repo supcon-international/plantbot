@@ -222,12 +222,13 @@ type Command =
   | { type: 'pause' } | { type: 'resume' } | { type: 'abort' }
   | { type: 'announce'; text: string; priority?: number }     // GoRobot 喊话的对应物
   | { type: 'ptz'; channelId: string; pan?: number; tilt?: number; zoom?: number }  // 绝对量,非步进
-  | { type: 'velocity'; vx: number; wz: number; deadmanMs: 400 }  // 服务端超时自动置零
+  | { type: 'velocity'; vx: number; wz: number; deadmanMs: 400 }  // ⚠️ 设计目标,平台侧未实现(现有 Command 联合无此支)
 ```
 
+- 已落地的 `Command` 类型:`goto | dock | pause | resume | abort | announce | ptz`(见 `server/src/fleet.ts`);`velocity` 仍是设计目标,尚未实现。
 - `POST /api/sites/:s/robots/:id/commands` → `{ commandId, accepted, reason? }`;
   前置条件(急停按下、离线、低电)服务端拒绝并给 reason。
-- velocity 的 deadman 在**平台侧**:超时未续 → 自动下发停;客户端只表达意图。
+- velocity 的 deadman(超时未续 → 自动下发停)是**平台侧**的设计约定,随 velocity 一并待实现。
 - 南向:命令进现有 AdapterOrder 队列,外部机器人 `GET /orders` 拉单 + `POST /orders/:id/status` 回执。
 
 ## 3. 落地状态(2026-07-10 全量实施)
@@ -285,7 +286,7 @@ GET + 嵌入页 WS 已覆盖当前形态,真实需求出现再按 topic 订阅�
 
 ## 5. 明确不做
 
-- **iframe 嵌入集成**(token in URL):Plantbot 是 API-first,第三方要 UI 自己拿数据画。
+- ~~**iframe 嵌入集成**~~ — **曾经的结论,2026-07 已反转**:见 §4。平台现已支持宿主 webapp 嵌入——`?embed=1`(去壳但保留紧凑模块导航条,`?embednav=top|bottom|hidden` 定位)+ `?site=` 钉站 + `PB_COOKIE_SAMESITE=none` 跨站 cookie + OIDC SSO,不再是「不做」项。
 - **每设备类型一个模块**(电梯/空开/消防柜管理页):非机器人设备一律走 integration API 的
   state+events,是「外部数据源」,不是新模块。
 - **PDS/VDS 双算法栈**:Detector 一张表,media kind 是字段不是体系。

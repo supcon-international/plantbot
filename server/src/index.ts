@@ -2,7 +2,8 @@ import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify'
 import fastifyStatic from '@fastify/static'
 import YAML from 'yaml'
 import { WebSocketServer, WebSocket } from 'ws'
-import { readFileSync, existsSync, writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
+import { readFile, stat } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DEMO_SITES, type SiteDef } from './sites.js'
@@ -16,7 +17,7 @@ import {
   getSiteMap, saveSiteMap,
   listExternals, saveExternal, deleteExternal,
   listEventTypes, saveEventType, deleteEventTypeRec,
-  makePersist, loadSiteOps, loadSeqs, queryReadings,
+  makePersist, loadSiteOps, loadSeqs, queryReadings, queryEvents,
   listConnectors, getConnector, saveConnector, deleteConnectorRec,
   type SiteRow, type ExternalRec, type ConnectorRec, type ConnectorVendor,
 } from './config.js'
@@ -116,7 +117,9 @@ function startWorld(row: SiteRow, opts?: { fresh?: SiteDef }): World {
       loadSeqs(row.id),
     )
   }
-  for (const rec of listExternals(row.id)) w.registerExternal(rec)
+  // boot replay registers persisted units OFFLINE — the adapter's first POST
+  // /state flips them online, so we never fake a 20 s online window at startup
+  for (const rec of listExternals(row.id)) w.registerExternal(rec, { online: false })
   return w
 }
 
@@ -220,7 +223,64 @@ function integrationSite(req: FastifyRequest, reply: FastifyReply): World | null
     reply.code(401).send({ error: 'valid site API key required (Authorization: Bearer pbk_…)' })
     return null
   }
-  return worlds.get(hit.siteId) ?? null
+  const w = worlds.get(hit.siteId)
+  if (!w) {
+    // key is valid but its site isn't running (deleted / not yet loaded) — say so
+    // instead of letting handlers return 200 with an empty body
+    reply.code(404).send({ error: 'site not loaded' })
+    return null
+  }
+  return w
+}
+
+/** parse a query integer, clamping into [min,max]; NaN / absent → def */
+function clampInt(v: unknown, def: number, min: number, max: number): number {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return def
+  return Math.min(Math.max(Math.trunc(n), min), max)
+}
+
+/** persist + apply + broadcast one geometry change — the shared tail of the four
+ *  Site Builder writes (PUT geometry, POST/PATCH/DELETE camera). dockWp/bounds
+ *  patches to the site row stay in the individual routes. */
+function applyGeometry(
+  w: World,
+  next: { waypoints: Waypoint[]; zones: Zone[]; cameras: SiteCamera[]; dockWp: string; bounds?: { x: [number, number]; z: [number, number] } },
+) {
+  saveGeometry(w.id, { waypoints: next.waypoints, zones: next.zones, cameras: next.cameras })
+  w.setGeometry(next)
+  broadcast(w.id, {
+    t: 'geo',
+    site: w.site,
+    waypoints: next.waypoints,
+    zones: next.zones,
+    cameras: w.publicCameras(),
+    dockWp: next.dockWp,
+    channels: w.publicChannels(),
+  })
+}
+
+/** validate a schedule cadence at the route boundary (create/patch schedule) */
+function validateCadence(c: unknown): string | null {
+  if (!c || typeof c !== 'object') return 'cadence required'
+  const cad = c as { kind?: string; at?: unknown; everyMin?: unknown; days?: unknown }
+  if (cad.kind === 'once') {
+    if (cad.at !== undefined && typeof cad.at !== 'number') return 'once cadence: at must be an epoch-ms number'
+    return null
+  }
+  if (cad.kind === 'interval') {
+    if (typeof cad.everyMin !== 'number' || !Number.isFinite(cad.everyMin) || cad.everyMin <= 0)
+      return 'interval cadence: everyMin must be a positive number'
+    return null
+  }
+  if (cad.kind === 'weekly') {
+    if (typeof cad.at !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(cad.at))
+      return 'weekly cadence: at must be "HH:MM" (00:00–23:59)'
+    if (!Array.isArray(cad.days) || !cad.days.length || !cad.days.every((d) => Number.isInteger(d) && d >= 0 && d <= 6))
+      return 'weekly cadence: days must be a non-empty array of integers 0–6'
+    return null
+  }
+  return `unknown cadence kind '${cad.kind}'`
 }
 
 // ---------- auth ----------
@@ -375,10 +435,8 @@ app.put(`/api/sites/:siteId/geometry`, { preHandler: requireRole('admin') }, asy
   const dockWp = b.dockWp !== undefined ? b.dockWp : w.dockWp
   if (dockWp && !waypoints.some((x) => x.id === dockWp))
     return reply.code(400).send({ error: `dock waypoint '${dockWp}' is not in the waypoint list` })
-  saveGeometry(w.id, { waypoints, zones, cameras })
   patchSiteRow(w.id, { dockWp, bounds: b.bounds })
-  w.setGeometry({ waypoints, zones, cameras, dockWp, bounds: b.bounds })
-  broadcast(w.id, { t: 'geo', site: w.site, waypoints, zones, cameras: w.publicCameras(), dockWp, channels: w.publicChannels() })
+  applyGeometry(w, { waypoints, zones, cameras, dockWp, bounds: b.bounds })
   return { ok: true, waypoints: waypoints.length, zones: zones.length, cameras: cameras.length }
 })
 
@@ -398,9 +456,7 @@ app.post(`/api/sites/:siteId/cameras`, { preHandler: requireRole('admin') }, asy
     rtsp: rtsp || undefined, live: !!rtsp, source: rtsp ? 'RTSP camera' : '—',
   }
   const cameras = [...w.cameras, cam]
-  saveGeometry(w.id, { waypoints: w.waypoints, zones: w.zones, cameras })
-  w.setGeometry({ waypoints: w.waypoints, zones: w.zones, cameras, dockWp: w.dockWp })
-  broadcast(w.id, { t: 'geo', site: w.site, waypoints: w.waypoints, zones: w.zones, cameras: w.publicCameras(), dockWp: w.dockWp, channels: w.publicChannels() })
+  applyGeometry(w, { waypoints: w.waypoints, zones: w.zones, cameras, dockWp: w.dockWp })
   return { camera: { ...cam, rtsp: undefined }, ok: true }
 })
 
@@ -425,9 +481,7 @@ app.patch(`/api/sites/:siteId/cameras/:camId`, { preHandler: requireRole('admin'
             : {}),
         },
   )
-  saveGeometry(w.id, { waypoints: w.waypoints, zones: w.zones, cameras })
-  w.setGeometry({ waypoints: w.waypoints, zones: w.zones, cameras, dockWp: w.dockWp })
-  broadcast(w.id, { t: 'geo', site: w.site, waypoints: w.waypoints, zones: w.zones, cameras: w.publicCameras(), dockWp: w.dockWp, channels: w.publicChannels() })
+  applyGeometry(w, { waypoints: w.waypoints, zones: w.zones, cameras, dockWp: w.dockWp })
   return { ok: true }
 })
 
@@ -436,9 +490,7 @@ app.delete(`/api/sites/:siteId/cameras/:camId`, { preHandler: requireRole('admin
   if (!w) return
   if (!w.cameras.some((c) => c.id === (req.params as P).camId)) return reply.code(404).send({ error: 'not found' })
   const cameras = w.cameras.filter((c) => c.id !== (req.params as P).camId)
-  saveGeometry(w.id, { waypoints: w.waypoints, zones: w.zones, cameras })
-  w.setGeometry({ waypoints: w.waypoints, zones: w.zones, cameras, dockWp: w.dockWp })
-  broadcast(w.id, { t: 'geo', site: w.site, waypoints: w.waypoints, zones: w.zones, cameras: w.publicCameras(), dockWp: w.dockWp, channels: w.publicChannels() })
+  applyGeometry(w, { waypoints: w.waypoints, zones: w.zones, cameras, dockWp: w.dockWp })
   return { ok: true }
 })
 
@@ -482,12 +534,19 @@ app.delete(`/api/sites/:siteId/transforms/:id`, { preHandler: requireRole('admin
 // ---------- snapshots ----------
 
 app.get<{ Params: { file: string } }>('/api/snapshots/:file', async (req, reply) => {
-  const file = (req.params as P).file.replace(/[^A-Za-z0-9._-]/g, '')
+  const file = (req.params as P).file.replace(/[^A-Za-z0-9._-]/g, '') // path-traversal guard
   const p = join(SNAP_DIR, file)
-  if (!existsSync(p)) return reply.code(404).send({ error: 'not found' })
+  let buf: Buffer
+  try {
+    const st = await stat(p)
+    if (!st.isFile()) return reply.code(404).send({ error: 'not found' })
+    buf = await readFile(p)
+  } catch {
+    return reply.code(404).send({ error: 'not found' })
+  }
   reply.header('cache-control', 'public, max-age=3600')
   reply.type('image/jpeg')
-  return reply.send(readFileSync(p))
+  return reply.send(buf)
 })
 
 // ---------- site-scoped API ----------
@@ -517,10 +576,15 @@ app.get(`${S}/map-image`, async (req: FastifyRequest, reply) => {
   const rec = getSiteMap(w.id)
   if (!rec) return reply.code(404).send({ error: 'no uploaded map' })
   const p = join(MAPS_DIR, rec.file)
-  if (!existsSync(p)) return reply.code(404).send({ error: 'map file missing' })
+  let buf: Buffer
+  try {
+    buf = await readFile(p)
+  } catch {
+    return reply.code(404).send({ error: 'map file missing' })
+  }
   reply.header('cache-control', 'public, max-age=604800')
   reply.type('image/png')
-  return reply.send(readFileSync(p))
+  return reply.send(buf)
 })
 
 // -- fleet administration (units join via the integration API, not here) --
@@ -601,7 +665,13 @@ app.get(`${S}/robots/:id/readings`, async (req: FastifyRequest, reply) => {
   return {
     metrics: w.robotMetrics(robotId),
     // served from SQLite — survives restarts, bounded by retention (7 d)
-    readings: queryReadings(w.id, robotId, q.metric || undefined, Number(q.since ?? 0), Number(q.limit ?? 200)),
+    readings: queryReadings(
+      w.id,
+      robotId,
+      q.metric || undefined,
+      clampInt(q.since, 0, 0, Number.MAX_SAFE_INTEGER),
+      clampInt(q.limit, 200, 1, 1000),
+    ),
   }
 })
 
@@ -610,7 +680,7 @@ app.get(`${S}/robots/:id/readings`, async (req: FastifyRequest, reply) => {
 app.get(`${S}/events`, async (req: FastifyRequest, reply) => {
   const w = world(req, reply)
   if (!w) return
-  return { events: w.listEvents(Number((req.query as any)?.limit ?? 120)) }
+  return { events: w.listEvents(clampInt((req.query as any)?.limit, 120, 1, 500)) }
 })
 
 for (const [action, to] of [['ack', 'acked'], ['resolve', 'resolved'], ['dismiss', 'dismissed']] as const) {
@@ -884,6 +954,8 @@ app.post(`${S}/schedules`, { preHandler: requireRole('operator') }, async (req: 
   if (!w) return
   const b = (req.body ?? {}) as any
   if (!b.templateId || !b.cadence?.kind) return reply.code(400).send({ error: 'templateId and cadence required' })
+  const badCadence = validateCadence(b.cadence)
+  if (badCadence) return reply.code(400).send({ error: badCadence })
   const s = w.createSchedule({ templateId: b.templateId, assign: b.assign, cadence: b.cadence, priority: b.priority })
   if (!s) return reply.code(404).send({ error: 'unknown template' })
   broadcast(w.id, { t: 'schedules', schedules: w.schedules })
@@ -893,7 +965,12 @@ app.post(`${S}/schedules`, { preHandler: requireRole('operator') }, async (req: 
 app.patch(`${S}/schedules/:id`, { preHandler: requireRole('operator') }, async (req: FastifyRequest, reply) => {
   const w = world(req, reply)
   if (!w) return
-  const s = w.patchSchedule((req.params as P).id, (req.body ?? {}) as any)
+  const patch = (req.body ?? {}) as any
+  if (patch.cadence !== undefined) {
+    const badCadence = validateCadence(patch.cadence)
+    if (badCadence) return reply.code(400).send({ error: badCadence })
+  }
+  const s = w.patchSchedule((req.params as P).id, patch)
   if (!s) return reply.code(404).send({ error: 'not found' })
   broadcast(w.id, { t: 'schedules', schedules: w.schedules })
   return { schedule: s }
@@ -1014,8 +1091,17 @@ const loadSpec = (file: string, title: string): unknown => {
     const raw = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'docs', file), 'utf8')
     return YAML.parse(raw)
   } catch (e) {
-    console.error(`[api] ${file} missing/invalid:`, (e as Error).message)
-    return { openapi: '3.0.3', info: { title, version: 'unavailable' }, paths: {} }
+    const msg = (e as Error).message
+    // don't block boot — serve a placeholder — but make the failure impossible to
+    // miss in the logs, and stamp x-load-error so /openapi.json consumers see it too
+    console.error(
+      '\n[api] ┌─ OpenAPI spec failed to load ─────────────────────────────' +
+        `\n[api] │ file:   docs/${file}` +
+        `\n[api] │ reason: ${msg}` +
+        '\n[api] │ serving a minimal placeholder so the endpoint still responds' +
+        '\n[api] └───────────────────────────────────────────────────────────',
+    )
+    return { openapi: '3.0.3', info: { title, version: 'unavailable' }, paths: {}, 'x-load-error': msg }
   }
 }
 const OPENAPI_DOC = loadSpec('openapi.yaml', 'Plantbot Open Integration API')
@@ -1055,19 +1141,23 @@ app.get(`${I}/events`, async (req: FastifyRequest<{ Querystring: { limit?: strin
   const w = integrationSite(req, reply)
   if (!w) return
   const q = req.query
-  const limit = Math.min(Math.max(Number(q.limit ?? 100), 1), 500)
-  const since = Number(q.since ?? 0)
-  let events = w.listEvents(500)
-  if (since) events = events.filter((e) => e.ts > since)
-  if (q.lifecycle) events = events.filter((e) => e.lifecycle === q.lifecycle)
-  if (q.category) events = events.filter((e) => e.category === q.category)
-  return { events: events.slice(0, limit) }
+  // SQLite-backed (idx_events_ts): the full retention window, so a since-polling
+  // third party doesn't drop events under an alert flood the 400-entry in-memory
+  // ring would shed
+  return {
+    events: queryEvents(w.id, {
+      since: clampInt(q.since, 0, 0, Number.MAX_SAFE_INTEGER),
+      limit: clampInt(q.limit, 100, 1, 500),
+      lifecycle: q.lifecycle,
+      category: q.category,
+    }),
+  }
 })
 
 app.get(`${I}/missions`, async (req: FastifyRequest<{ Querystring: { status?: string; limit?: string } }>, reply) => {
   const w = integrationSite(req, reply)
   if (!w) return
-  const limit = Math.min(Math.max(Number(req.query.limit ?? 100), 1), 500)
+  const limit = clampInt(req.query.limit, 100, 1, 500)
   let missions = w.missions
   if (req.query.status) missions = missions.filter((m) => m.status === req.query.status)
   return { missions: missions.slice(-limit) }
@@ -1091,8 +1181,8 @@ app.get(`${I}/robots/:serial/readings`, async (req: FastifyRequest<{ Params: { s
   const robot = w.robotBySerial(req.params.serial)
   if (!robot) return reply.code(404).send({ error: 'robot not registered' })
   const q = req.query
-  const limit = Math.min(Math.max(Number(q.limit ?? 200), 1), 1000)
-  const since = Number(q.since ?? Date.now() - 3600_000)
+  const limit = clampInt(q.limit, 200, 1, 1000)
+  const since = clampInt(q.since, Date.now() - 3600_000, 0, Number.MAX_SAFE_INTEGER)
   return { readings: queryReadings(w.id, robot.id, q.metric, since, limit) }
 })
 
@@ -1311,8 +1401,10 @@ startRelayHealth()
 resumeConnectors((m) => console.log(m))
 
 for (const sig of ['SIGINT', 'SIGTERM'] as const) {
-  process.on(sig, () => {
-    shutdownConnectors()
+  process.on(sig, async () => {
+    // give children a SIGTERM + 2 s grace (then SIGKILL) before we exit, so a
+    // wedged adapter can't be orphaned by the platform going down
+    await shutdownConnectors()
     process.exit(0)
   })
 }

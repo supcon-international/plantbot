@@ -88,7 +88,11 @@ COPY docker/bench-rtsp.mjs ./rtsp/serve.mjs
 RUN chown -R node:node /opt/plantbotsimulator
 USER node
 WORKDIR /app/robots/integrations
-EXPOSE 8554 9101 9103 9113 30000 30010
+# Only the RTSP media port is consumed from outside this container (the go2rtc
+# relay pulls rtsp://…:8554). The vendor sim protocol ports — 9101 (gosuncn),
+# 9103/9113 (spot), 30000/30010 (deeprobotics) — are spoken only by the adapters
+# running in this same container over loopback, so they are not published.
+EXPOSE 8554
 CMD ["node", "scripts/dev-all.mjs"]
 
 

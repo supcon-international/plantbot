@@ -7,6 +7,8 @@
 >
 > 来源仓库：`https://github.com/DeepRoboticsLab/robotserver_sdk`（首次提交 `f70df5e`，2025-03-31；SDK 版本 `0.1.0`，MIT）。本文所有行号对应该仓库。
 
+> **接口分层说明**：`robotserver_sdk` 是云深处的**底层导航面**（本文所述这套 TCP+XML 协议），单机、无任务模板 / 识别结果 / 告警面。云深处另有**上层运营面** `station-openapi-devkit`（智巡平台，HTTP `/remoteApi/*` + RocketMQ 推送），任务排程、云台、回充、识别结果、地图导出都在那一层——是候选的第二条接入路径。两层的取舍见 [adapter-sim-architecture.md](../adapter-sim-architecture.md) 的 **§3.4**。
+
 ---
 
 ## 0. 一句话概括

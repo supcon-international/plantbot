@@ -8,7 +8,7 @@
 import net from 'node:net'
 import { makeLog } from '../../shared/log.js'
 import { PlantbotClient, type PlantbotOrder } from '../../shared/plantbot.js'
-import { waitForSite, streamsToFactsheet, reportFault, pumpOrders, pickProfile, customProfileFromEnv, worldTransformFromEnv, type VendorProfile } from '../../shared/bridge.js'
+import { waitForSite, streamsToFactsheet, reportFault, pumpOrders, pickProfile, customProfileFromEnv, worldTransformFromEnv, makeBackoff, type VendorProfile } from '../../shared/bridge.js'
 import {
   FrameParser, encodeFrame, TYPE, ERROR_STATUS,
   buildRealtimeReq, buildCancelReq, buildQueryReq, buildNavTaskReq, defaultNavPoint,
@@ -72,6 +72,7 @@ class RobotServerClient {
   private seq = 0
   private pending = new Map<number, Pending>()
   private navWaiters = new Map<number, { resolve: (r: { value: number; errorCode: number; errorStatus: number }) => void; timer: NodeJS.Timeout }>()
+  private backoff = makeBackoff() // 1 s→30 s 指数退避，连上即重置
   connected = false
   onConnect?: () => void
 
@@ -86,6 +87,7 @@ class RobotServerClient {
     sock.on('connect', () => {
       clearTimeout(connTimer)
       this.connected = true
+      this.backoff.reset()
       log.info(`robot_server 已连接 tcp://${DR_HOST}:${DR_PORT}（无握手，直接可用）`)
       this.onConnect?.()
     })
@@ -94,7 +96,6 @@ class RobotServerClient {
     })
     const drop = () => {
       clearTimeout(connTimer)
-      if (this.connected) log.warn('robot_server 连接断开，3s 后重连')
       this.connected = false
       for (const [, p] of this.pending) {
         clearTimeout(p.timer)
@@ -106,7 +107,9 @@ class RobotServerClient {
         w.resolve({ value: 0, errorCode: 1, errorStatus: 41802 }) // 上位机连接断开
       }
       this.navWaiters.clear()
-      setTimeout(() => this.dial(), 3000)
+      const { delay, changed } = this.backoff.next()
+      if (changed) log.warn(`robot_server 连接断开，${Math.round(delay / 1000)}s 后重连`)
+      setTimeout(() => this.dial(), delay)
     }
     sock.on('close', drop)
     sock.on('error', () => sock.destroy())
@@ -218,9 +221,9 @@ async function runNav(points: NavPoint[], label: string): Promise<{ ok: boolean;
   const res = await rs.startNavTask(points, timeout)
   sdkTaskActive = false
   if (res.errorCode === 0) return { ok: true, note: `${label} · ${statusText(res.errorStatus)}` }
-  if (res.errorCode === 2) return { ok: false, note: `已取消 · ${statusText(res.errorStatus)}` }
+  if (res.errorCode === 2) return { ok: false, note: `cancelled · ${statusText(res.errorStatus)}` }
   // 失败终态 → 同时作为本体故障事件上报
-  reportFault(plantbot, SERIAL, `导航任务失败 · ErrorStatus ${res.errorStatus} ${statusText(res.errorStatus)}`)
+  reportFault(plantbot, SERIAL, `navigation task failed · ErrorStatus ${res.errorStatus} ${statusText(res.errorStatus)}`)
   return { ok: false, note: statusText(res.errorStatus) }
 }
 
@@ -313,11 +316,14 @@ async function main() {
     })
     // 定位丢失沿触发 → 本体故障事件（协议无事件面，从状态位导出）
     if (s.Location === 1 && lastLocation === 0) {
-      reportFault(plantbot, SERIAL, '定位丢失（Location=1）· 激光不匹配环境，需人工初始化位置')
+      reportFault(plantbot, SERIAL, 'localization lost (Location=1) · laser does not match environment, manual position init required')
       log.warn('上报定位丢失故障事件')
     }
     lastLocation = s.Location
-    await pumpOrders(plantbot, SERIAL, rep, execOrder)
+    // 运动类订单由 SDK 泵串行；抢占 = 1004 取消在飞 1003（其 startNavTask 收到取消终态帧
+    // 后即结算 failed，泵随后发新单）。串行后 runNav 内的 ensureIdle 只会在「机器人本体
+    // 排程任务占用导航栈」时取消，不会误取消我方刚发的任务（那时还没发出）。
+    await pumpOrders(plantbot, SERIAL, rep, execOrder, { preempt: () => void rs.cancel(), log })
   }, 1000)
 }
 
