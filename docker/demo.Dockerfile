@@ -68,20 +68,19 @@ COPY --from=simulator deeprobotics ./deeprobotics
 COPY --from=simulator gosuncn ./gosuncn
 COPY --from=simulator shared ./shared
 
-# The source clips are presentation-quality files (some >7 Mbps / 60 fps).
-# Build a lighter RTSP-only tier so a browser can decode a wall of feeds
-# reliably; the platform still receives H.264 unchanged from this origin.
-# Use a uniform 640px tier: this keeps six concurrent Chrome MSE decoders stable
-# on modest demo laptops while retaining the original files for snapshots.
+# Re-encode the setup clips into a decoder-friendly RTSP tier while preserving
+# the public-demo egress budget: 640px, 12 fps and at most 450 kbps per feed.
+# Keep the encoder ceiling below that budget to leave room for mux overhead.
+# Main profile without B-frames keeps go2rtc's fMP4 remux stable in Chrome.
 # campus_quad consistently trips macOS VideoToolbox after go2rtc remuxing, so
 # its public RTSP alias uses the verified campus walkway loop in this demo tier.
 RUN set -eu; \
   mkdir -p /opt/rtsp-media; \
   for file in switchgear.mp4 thermal.mp4 night_walkway.mp4 substation.mp4 theft_cctv.mp4 campus_walk.mp4 campus_gate.mp4; do \
     ffmpeg -y -loglevel error -i "/app/robots/server/media/$file" \
-      -vf "scale=640:-2" -r 25 -c:v libx264 -profile:v main -level:v 3.1 \
-      -bf 0 -refs 1 -crf 24 -maxrate 1800k -bufsize 3600k -preset veryfast \
-      -g 25 -keyint_min 25 -sc_threshold 0 -pix_fmt yuv420p -an -movflags +faststart \
+      -vf "scale=640:-2" -r 12 -c:v libx264 -profile:v main -level:v 3.1 \
+      -bf 0 -refs 1 -crf 30 -maxrate 400k -bufsize 800k -preset slow \
+      -g 12 -keyint_min 12 -sc_threshold 0 -pix_fmt yuv420p -an -movflags +faststart \
       "/opt/rtsp-media/$file"; \
   done; \
   cp /opt/rtsp-media/campus_walk.mp4 /opt/rtsp-media/campus_quad.mp4
