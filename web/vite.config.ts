@@ -36,7 +36,10 @@ export default defineConfig({
       '/api': { target: 'http://127.0.0.1:8787', changeOrigin: true },
       '/media': { target: 'http://127.0.0.1:8787', changeOrigin: true },
       '/ws': { target: 'ws://127.0.0.1:8787', ws: true },
-      '/stream': {
+      // Only the go2rtc playback WebSocket (MSE/WebRTC signalling) — scoped so
+      // `host: true` doesn't expose the go2rtc management API (/stream/api/streams,
+      // /stream/api/config) to the LAN. Prod proxies /stream via nginx instead.
+      '/stream/api/ws': {
         target: 'http://127.0.0.1:1984',
         ws: true,
         changeOrigin: true,

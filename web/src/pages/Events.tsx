@@ -36,16 +36,33 @@ function useModelLabel() {
   return (m: string) => (MODEL_IDS.includes(m) ? t(`ev.m.${m}`) : (eventTypes.find((x) => x.id === m)?.label ?? m))
 }
 
+/** evidence image with a broken-file fallback: snapshot files are swept on a
+ *  bounded ring (SNAP_KEEP) while events outlive them in SQLite, so an old
+ *  event may point at a 404 — show the same placeholder as "no snapshot"
+ *  instead of the browser's broken-image glyph */
+function useBrokenImage(src?: string) {
+  const [broken, setBroken] = useState<string | null>(null)
+  return { broken: !!src && broken === src, onError: () => setBroken(src ?? null) }
+}
+
 function Snapshot({ ev, size = 'sm' }: { ev: DetectionEvent; size?: 'sm' | 'lg' }) {
-  if (!ev.snapshot) return <div className={`skeleton ${size === 'sm' ? 'h-12 w-20' : 'h-40 w-full'} opacity-30`} />
+  const img = useBrokenImage(ev.snapshot)
+  if (!ev.snapshot || img.broken) return <div className={`skeleton ${size === 'sm' ? 'h-12 w-20' : 'h-40 w-full'} opacity-30`} />
   return (
     <img
       src={ev.snapshot}
       alt={ev.label}
+      onError={img.onError}
       className={size === 'sm' ? 'h-12 w-20 border border-line object-cover' : 'w-full border border-line object-contain'}
       loading="lazy"
     />
   )
+}
+
+function CardSnapshot({ src }: { src?: string }) {
+  const img = useBrokenImage(src)
+  if (!src || img.broken) return null
+  return <img src={src} alt="" loading="lazy" onError={img.onError} className="mt-2 h-20 w-full border border-line object-cover" />
 }
 
 function DetailModal({ ev, onClose, onRule }: { ev: DetectionEvent; onClose: () => void; onRule: (id: string) => void }) {
@@ -170,7 +187,7 @@ function BoardCard({ e, onOpen }: { e: DetectionEvent; onOpen: () => void }) {
       </div>
       <div className="mt-1.5 line-clamp-2 text-[13.5px] leading-snug text-ink">{e.label}</div>
       <div className="microlabel mt-1 truncate">{e.zone}</div>
-      {e.snapshot && <img src={e.snapshot} alt="" loading="lazy" className="mt-2 h-20 w-full border border-line object-cover" />}
+      <CardSnapshot src={e.snapshot} />
       {!e.acked && canOp && (
         <Button
           variant="outline"
@@ -457,18 +474,21 @@ export function Events() {
     const v = new URLSearchParams(window.location.search).get('view')
     return v === 'rules' || v === 'table' ? v : 'board'
   })
-  const [sel, setSel] = useState<DetectionEvent | null>(null)
+  // hold only the selected id — the detail derives the live event from the
+  // store, so an ack/resolve inside the modal updates its buttons immediately
+  // (a captured event snapshot would go stale).
+  const [selId, setSelId] = useState<string | null>(null)
+  const sel = useMemo(() => (selId ? (events.find((e) => e.id === selId) ?? null) : null), [selId, events])
   const [params, setParams] = useSearchParams()
   // deep link: /events?ev=EV-0042 lands with that event's detail already open
-  // (toasts, the overview feed and map pins all arrive here)
+  // (toasts, the overview feed and map pins all arrive here). Setting the id is
+  // enough — sel resolves once events load, even if they arrive after this runs.
   useEffect(() => {
     const id = params.get('ev')
-    if (!id) return
-    const hit = events.find((e) => e.id === id)
-    if (hit) setSel(hit)
-  }, [params, events])
+    if (id) setSelId(id)
+  }, [params])
   const closeDetail = () => {
-    setSel(null)
+    setSelId(null)
     if (params.get('ev')) {
       params.delete('ev')
       setParams(params, { replace: true })
@@ -548,7 +568,7 @@ export function Events() {
         </div>
       </div>
 
-      {view === 'board' && <Board events={boardShown} onOpen={setSel} />}
+      {view === 'board' && <Board events={boardShown} onOpen={(e) => setSelId(e.id)} />}
 
       {view === 'table' && (
         <Panel className="rise overflow-x-auto">
@@ -566,7 +586,7 @@ export function Events() {
               {shown.map((e) => (
                 <TableRow
                   key={e.id}
-                  onClick={() => setSel(e)}
+                  onClick={() => setSelId(e.id)}
                   className={`cursor-pointer border-line/60 hover:bg-surface-2 ${Date.now() - e.ts < 8000 ? 'flash-new' : ''} ${e.acked ? 'opacity-50' : ''}`}
                 >
                   <TableCell className="mono px-3.5 py-2.5 align-top text-[12px] text-ink-3">

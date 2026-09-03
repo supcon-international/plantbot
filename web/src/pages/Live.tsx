@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Grid2X2, Focus, Pencil, Plus, Radio, Trash2,
 import { toast } from 'sonner'
 import { useApp, useCan, useSite, api } from '../lib/store'
 import { useT } from '../lib/i18n'
+import { useConfirm } from '../components/ConfirmDialog'
 import { FeedPlayer, VideoThumb } from '../components/StreamPlayer'
 import { Modal, Panel } from '../components/ui'
 import { Button } from '@/components/ui/button'
@@ -87,7 +88,13 @@ function useSession(channelId?: string): StreamSession | null {
     api
       .openSession(channelId)
       .then((r) => {
-        if (dead || !r.session) return
+        if (!r.session) return
+        // unmounted before the lease came back — sid was never recorded, so
+        // the cleanup below couldn't close it. Release it now instead of leaking.
+        if (dead) {
+          void api.closeSession(r.session.id)
+          return
+        }
         sid = r.session.id
         setSession(r.session)
         scheduleRenew(r.session)
@@ -192,6 +199,7 @@ function WallFeedTile({ feed, order }: { feed: Feed; order: number }) {
 export function Live() {
   const feeds = useFeeds()
   const t = useT()
+  const confirm = useConfirm()
   const isAdmin = useCan('admin')
   const siteId = useSite((s) => s.siteId)
   const [params, setParams] = useSearchParams()
@@ -227,7 +235,9 @@ export function Live() {
   }
 
   const removeCamera = async () => {
-    if (!fixedCamId || !confirm(t('live.deleteConfirm'))) return
+    if (!fixedCamId) return
+    const ok = await confirm({ message: t('live.deleteConfirm'), confirmText: t('c.delete'), destructive: true })
+    if (!ok) return
     const r = await api.deleteCamera(siteId, fixedCamId)
     if (r.error) toast.error(r.error)
     else {

@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
@@ -275,8 +276,8 @@ const D: Record<string, [string, string]> = {
   'ops.openAlerts.sub': ['crit + high', '紧急 + 高'],
   'ops.detections24h': ['Detections · 24h', '检测 · 24小时'],
   'ops.detections24h.sub': ['all severities', '全部级别'],
-  'ops.meanUplink': ['Mean uplink', '平均上行'],
-  'ops.meanUplink.sub': ['dBm · fleet avg', 'dBm · 机队均值'],
+  'ops.schedulesArmed': ['Schedules armed', '排程生效'],
+  'ops.schedulesArmed.sub': ['of {n} total', '共 {n} 条'],
   'ops.liveOperations.hint': [
     'missions running · tap a waypoint to dispatch',
     '个任务执行中 · 点击航点即可派遣',
@@ -285,8 +286,8 @@ const D: Record<string, [string, string]> = {
   'ops.all': ['All', '全部'],
   'ops.missionOps': ['Mission ops', '任务动态'],
   'ops.control': ['Control', '控制台'],
-  'ops.noActiveMissions': ['No active missions', '暂无执行中任务'],
-  'ops.awaiting': ['Awaiting detections…', '等待检测事件…'],
+  'ops.noActiveMissions': ['No missions running right now.', '现在没有执行中的任务。'],
+  'ops.awaiting': ['No detections yet. Events reported by adapters and rules show up here.', '还没有检测事件。适配器上报和规则触发的事件会出现在这里。'],
 
   // ---------- live ----------
   'live.videoWall': ['Video wall', '视频墙'],
@@ -305,9 +306,9 @@ const D: Record<string, [string, string]> = {
   'mi.queued': ['Queued', '排队中'],
   'mi.history': ['History', '历史'],
   'mi.newMission': ['NEW MISSION', '新建任务'],
-  'mi.queueEmpty': ['Queue is empty', '队列为空'],
-  'mi.noCompleted': ['No completed missions yet', '暂无已完成任务'],
-  'mi.selectMission': ['Select a mission', '选择一个任务'],
+  'mi.queueEmpty': ['Nothing queued. New runs wait here until a robot picks them up.', '队列为空。新任务会先在这里排队，直到有机器人接手。'],
+  'mi.noCompleted': ['No completed runs yet.', '还没有完成的任务。'],
+  'mi.selectMission': ['Pick a run on the left to see its plan and step timeline.', '在左侧选一个任务，查看它的计划和步骤时间线。'],
   'mi.plan': ['plan', '计划'],
   'mi.unit': ['Unit', '机器人'],
   'mi.priority': ['Priority', '优先级'],
@@ -353,8 +354,8 @@ const D: Record<string, [string, string]> = {
   'mi.schedule': ['SCHEDULE', '排程'],
   'mi.needs': ['needs', '需要'],
   'mi.runsCount': ['runs', '次执行'],
-  'mi.noRoutes': ['No route templates yet', '暂无路线模板'],
-  'mi.noSchedules': ['No schedules — pick a route and add one', '暂无排程——选择路线后添加'],
+  'mi.noRoutes': ['No route templates yet. Create one from the map and it becomes reusable.', '还没有路线模板。从地图创建一条，之后可以反复派发。'],
+  'mi.noSchedules': ['No schedules yet. Pick a route and add one; it takes effect immediately.', '还没有排程。选择一条路线添加，创建即生效。'],
   'mi.nextIn': ['next in', '下次'],
   'mi.fired': ['fired', '已触发'],
   'mi.paused': ['PAUSED', '已暂停'],
@@ -370,6 +371,8 @@ const D: Record<string, [string, string]> = {
   'fl.ugv': ['Wheeled UGV', '轮式 UGV'],
   'fl.provision': ['Provision unit', '接入新机'],
   'c.cancel': ['Cancel', '取消'],
+  'c.confirm': ['Confirm', '确认'],
+  'c.steady': ['steady', '稳定'],
   'c.done': ['DONE', '完成'],
   // managed connectors (INTEG)
   'conn.title': ['Managed connectors', '托管连接器'],
@@ -521,7 +524,7 @@ const D: Record<string, [string, string]> = {
   'ev.zoneSource': ['Zone / Source', '区域 / 来源'],
   'ev.conf': ['Conf', '置信'],
   'ev.frame': ['Frame', '画面'],
-  'ev.noEvents': ['No events', '暂无事件'],
+  'ev.noEvents': ['No events match this filter.', '没有符合筛选条件的事件。'],
   'ev.rule': ['Rule', '规则'],
   'ev.rulesTitle': ['Detection rules · edge inference', '检测规则 · 边缘推理'],
   'ev.rulesHint': ['disabled rules stop matching detections', '停用的规则将不再产生检测'],
@@ -557,7 +560,9 @@ export function translate(lang: Lang, key: string, params?: Record<string, strin
 
 export function useT() {
   const lang = useLang((s) => s.lang)
-  return (key: string, params?: Record<string, string | number>) => translate(lang, key, params)
+  // stable per-lang identity: consumers put `t` in useMemo/useEffect deps
+  // (Shell, Robots, RobotDetail) — a fresh function each render would defeat them
+  return useCallback((key: string, params?: Record<string, string | number>) => translate(lang, key, params), [lang])
 }
 
 /** relative-time with localized suffixes */

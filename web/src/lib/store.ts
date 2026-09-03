@@ -32,9 +32,9 @@ import type {
 interface HistoryPoint {
   t: number
   speed: number
-  rssi: number
+  rssi: number | null
   battery: number
-  latency: number
+  latency: number | null
 }
 
 const ROLE_RANK: Record<Role, number> = { viewer: 0, operator: 1, admin: 2 }
@@ -413,6 +413,7 @@ function connect() {
   const myGen = generation
   const proto = location.protocol === 'https:' ? 'wss' : 'ws'
   ws = new WebSocket(`${proto}://${location.host}${BASE}/ws?site=${encodeURIComponent(useSite.getState().siteId)}`)
+  const socket = ws // capture: handlers must act on THIS socket, not a later one
 
   ws.onopen = () => {
     retry = 0
@@ -515,5 +516,5 @@ function connect() {
       if (myGen === generation) connect()
     }, delay)
   }
-  ws.onerror = () => ws?.close()
+  socket.onerror = () => socket.close()
 }

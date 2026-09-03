@@ -1,12 +1,13 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { Plus, X, Camera, Flame, Radar, Wind, AudioWaveform, Compass, ScanEye, Dog, Car, Check, Copy, PawPrint, Truck, ArrowUpRight } from 'lucide-react'
+import { Plus, X, Camera, Flame, Radar, Wind, AudioWaveform, Compass, ScanEye, Dog, Car, Check, Copy, ArrowUpRight } from 'lucide-react'
 import { useApp, api, useCan } from '../lib/store'
 import { useT, useLang, IDX } from '../lib/i18n'
 import { BASE } from '../lib/base'
 import { Panel, PanelHead, BatteryBar, ModeChip, Modal } from '../components/ui'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { RobotSilhouette } from '../components/RobotSilhouette'
 const RobotThumb = lazy(() => import('../three/RobotThumb').then((m) => ({ default: m.RobotThumb })))
 import type { PayloadSpec, RobotModelSpec, RobotSpec } from '../lib/types'
 
@@ -31,10 +32,9 @@ const KIND_KEY: Record<string, string> = {
 
 /** family silhouette shown when a model has no URDF twin yet */
 export function TwinPlaceholder({ family, label }: { family: 'quadruped' | 'ugv'; label?: string }) {
-  const Icon = family === 'ugv' ? Truck : PawPrint
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-ink-3">
-      <Icon size={30} strokeWidth={1} />
+    <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-ink-3">
+      <RobotSilhouette family={family} className="w-[56%] min-w-[120px] max-w-[230px]" />
       {label && <span className="microlabel">{label}</span>}
     </div>
   )

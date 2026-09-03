@@ -154,7 +154,7 @@ function GuideCard({ icon: Icon, title, children }: { icon: any; title: string; 
   return (
     <Panel className="p-4">
       <div className="mb-2 flex items-center gap-2 text-ink">
-        <Icon size={15} className="text-(--signal)" />
+        <Icon size={15} className="text-ink-3" />
         <span className="text-[13.5px] font-medium">{title}</span>
       </div>
       <div className="space-y-1.5 text-[12.5px] leading-relaxed text-ink-2">{children}</div>
@@ -171,7 +171,7 @@ export function Docs() {
   return (
     <div className="mx-auto h-full max-w-[1000px] overflow-y-auto px-4 py-5 md:px-6">
       <div className="mb-5 flex items-center gap-3">
-        <BookOpen size={22} className="text-(--signal)" />
+        <BookOpen size={22} className="text-ink-2" />
         <div>
           <h1 className="text-[19px] font-semibold text-ink">{t('docs.title')}</h1>
           <p className="text-[13px] text-ink-3">{t('docs.sub')}</p>

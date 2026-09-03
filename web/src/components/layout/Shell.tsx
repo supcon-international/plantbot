@@ -17,7 +17,6 @@ import {
   ShieldAlert,
   Sun,
 } from 'lucide-react'
-import { useNavigate as useNav2 } from 'react-router'
 import { useApp, useAuth, useCan, useRole, useSite } from '../../lib/store'
 import { Login } from '../../pages/Login'
 import { useTheme } from '../../lib/theme'
@@ -70,9 +69,9 @@ function Brand({ compact = false }: { compact?: boolean }) {
   )
 }
 
-function NavItem({ to, label, icon: Icon, badge }: { to: string; label: string; icon: any; badge: number }) {
+function NavItem({ to, label, icon: Icon, badge, mobile = false }: { to: string; label: string; icon: any; badge: number; mobile?: boolean }) {
   return (
-    <NavLink to={to} end={to === '/'} title={label} className={({ isActive }) => `nav-item ${isActive ? 'is-active' : ''}`}>
+    <NavLink to={to} end={to === '/'} title={label} aria-label={label} className={({ isActive }) => `nav-item ${isActive ? 'is-active' : ''}`}>
       {({ isActive }) => (
         <>
           <span className="nav-item-icon">
@@ -83,7 +82,12 @@ function NavItem({ to, label, icon: Icon, badge }: { to: string; label: string; 
               </span>
             )}
           </span>
-          <span className="nav-item-label">{label}</span>
+          {/* mobile bottom-nav: only the active tab shows its label (icon-only
+              otherwise). title + aria-label keep every tab named for a11y even
+              when the visible label is hidden. */}
+          <span className="nav-item-label" style={mobile ? { display: isActive ? 'block' : 'none' } : undefined}>
+            {label}
+          </span>
           <span className="nav-item-signal" />
         </>
       )}
@@ -263,7 +267,7 @@ function EmbedNav({ nav, critCount, pos }: { nav: typeof NAV_ADMIN; critCount: n
 function NoSitesHero() {
   const t = useT()
   const isAdmin = useCan('admin')
-  const nav = useNav2()
+  const nav = useNavigate()
   return (
     <div className="flex h-full items-center justify-center p-6">
       <div className="max-w-md space-y-4 border border-line bg-surface p-8 text-center">
@@ -332,6 +336,33 @@ export function Shell() {
     )
   }
 
+  // Standalone /login (non-embed): strip the side rail, page-context bar and
+  // grid paper — a slim brand-only top bar (theme + language) over a centred
+  // card. The opaque bg-bg layer hides the fixed body::before grid; a
+  // successful sign-in routes to '/', which re-renders the full shell.
+  if (location.pathname === '/login' && !embedded) {
+    return (
+      <div className="relative z-[1] flex h-full flex-col bg-bg">
+        <header className="flex h-14 flex-none items-center gap-3 border-b border-line px-4">
+          <div className="flex items-center gap-3">
+            <BrandMark size={24} />
+            <span className="leading-tight">
+              <span className="block text-[13px] font-semibold tracking-[0.18em] text-ink">PLANTBOT</span>
+              <span className="mono block text-[9px] tracking-[0.16em] text-ink-3">{t('shell.brand')}</span>
+            </span>
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <ThemeToggle />
+            <LangSwitch />
+          </div>
+        </header>
+        <main className="min-h-0 flex-1 overflow-y-auto">
+          <Outlet />
+        </main>
+      </div>
+    )
+  }
+
   const emptyPlatform =
     sitesLoaded && sites.length === 0 && location.pathname !== '/sites' && location.pathname !== '/login'
 
@@ -380,7 +411,7 @@ export function Shell() {
       </header>
 
       <nav className="mobile-nav">
-        {nav.map((n) => <NavItem key={n.to} to={n.to} label={t(n.key)} icon={n.icon} badge={n.to === '/events' ? critCount : 0} />)}
+        {nav.map((n) => <NavItem key={n.to} to={n.to} label={t(n.key)} icon={n.icon} badge={n.to === '/events' ? critCount : 0} mobile />)}
       </nav>
 
       <Toaster />

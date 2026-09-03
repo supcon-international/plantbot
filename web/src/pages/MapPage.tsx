@@ -49,7 +49,7 @@ function SelectionCard({ sel }: { sel: MapSel }) {
         <div className="mt-2.5 flex items-center justify-between gap-3">
           <BatteryBar value={tel?.battery ?? 0} w={100} />
           <span className="mono text-[11.5px] text-ink-2">{tel?.speed.toFixed(2) ?? '—'} m/s</span>
-          <span className="mono text-[11.5px] text-ink-2">{tel?.rssi ?? '—'} dBm</span>
+          <span className="mono text-[11.5px] text-ink-2">{tel?.rssi != null ? `${tel.rssi} dBm` : '—'}</span>
           <span className="mono text-[11.5px] text-ink-3">
             x{tel?.x.toFixed(1) ?? '—'} z{tel?.z.toFixed(1) ?? '—'}
           </span>

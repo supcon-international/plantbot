@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { api, useApp, useCan, useSite } from '../lib/store'
 import { BASE } from '../lib/base'
 import { useT } from '../lib/i18n'
+import { useConfirm } from '../components/ConfirmDialog'
 import { Modal, Panel, PanelHead } from '../components/ui'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -127,7 +128,7 @@ export function Integrations() {
                 className="mono h-auto min-w-0 flex-1 bg-surface-2 py-1.5 text-[12px]"
               />
               <Button
-                variant="signal"
+                variant="outline"
                 onClick={() =>
                   api.createApiKey(keyLabel).then((r: { apiKey?: ApiKeyRec & { key: string } }) => {
                     if (r.apiKey) setFreshKey({ id: r.apiKey.id, key: r.apiKey.key })
@@ -141,8 +142,8 @@ export function Integrations() {
               </Button>
             </div>
             {freshKey && (
-              <div className="border border-(--signal) bg-surface-2 p-2.5">
-                <div className="microlabel" style={{ color: 'var(--signal)' }}>{t('integ.keyOnce')}</div>
+              <div className="border bg-surface-2 p-2.5" style={{ borderColor: 'var(--color-warn)' }}>
+                <div className="microlabel" style={{ color: 'var(--color-warn)' }}>{t('integ.keyOnce')}</div>
                 <div className="mt-1 flex items-center gap-2">
                   <span className="mono min-w-0 flex-1 truncate text-[11px] text-ink">{freshKey.key}</span>
                   <Button variant="ghost" size="sm" onClick={() => copy(freshKey.key, 'fresh')} className="mono h-auto gap-1 px-1 py-0.5 text-[10.5px] normal-case tracking-normal hover:bg-transparent">
@@ -236,7 +237,7 @@ export function Integrations() {
                 </SelectContent>
               </Select>
               <Button
-                variant="signal"
+                variant="outline"
                 disabled={!typeDraft.id || !typeDraft.label}
                 onClick={() => api.createEventType(typeDraft).then(() => (setTypeDraft({ id: '', label: '', severity: 'info' }), reload()))}
                 className="mono h-auto py-1.5 text-[11px] normal-case tracking-[0.1em] disabled:opacity-30"
@@ -298,7 +299,7 @@ export function Integrations() {
                 <Input type="number" step="0.5" value={mapDraft.originZ} onChange={(e) => setMapDraft({ ...mapDraft, originZ: Number(e.target.value) })} className="mono ml-1 h-auto w-16 bg-surface-2 px-1.5 py-1 text-[11px]" />
               </label>
               <Button
-                variant="signal"
+                variant="outline"
                 disabled={!mapFile || busy}
                 onClick={uploadMap}
                 className="mono h-auto py-1.5 text-[11px] normal-case tracking-[0.1em] disabled:opacity-30"
@@ -391,6 +392,7 @@ const STATUS_DOT: Record<string, string> = {
 
 function ConnectorsPanel({ siteId }: { siteId: string }) {
   const t = useT()
+  const confirm = useConfirm()
   const [connectors, setConnectors] = useState<Connector[]>([])
   const [catalog, setCatalog] = useState<ConnectorCatalogEntry[]>([])
   const [creating, setCreating] = useState(false)
@@ -419,7 +421,8 @@ function ConnectorsPanel({ siteId }: { siteId: string }) {
     reload()
   }
   const remove = async (c: Connector) => {
-    if (!confirm(t('conn.deleteConfirm'))) return
+    const ok = await confirm({ message: t('conn.deleteConfirm'), confirmText: t('c.delete'), destructive: true })
+    if (!ok) return
     const r = await api.deleteConnector(siteId, c.id)
     if (r.error) toast.error(r.error)
     reload()
@@ -535,7 +538,8 @@ function NewConnectorModal({
   const [vendor, setVendor] = useState<ConnectorCatalogEntry | null>(null)
   const [name, setName] = useState('')
   const [cfg, setCfg] = useState<Record<string, string>>({})
-  const [streams, setStreams] = useState<{ name: string; url: string; kind: string }[]>([])
+  const [streams, setStreams] = useState<{ id: string; name: string; url: string; kind: string }[]>([])
+  const streamSeq = useRef(0)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
 
@@ -548,7 +552,11 @@ function NewConnectorModal({
     const r = await api.createConnector(siteId, {
       vendor: vendor.vendor,
       name: name.trim(),
-      config: { ...cfg, streams: streams.filter((s) => s.name.trim() && s.url.trim()) },
+      config: {
+        ...cfg,
+        // drop the client-only `id` (stable React key) before sending
+        streams: streams.filter((s) => s.name.trim() && s.url.trim()).map(({ name, url, kind }) => ({ name, url, kind })),
+      },
     })
     setBusy(false)
     if (r.error) {
@@ -606,12 +614,12 @@ function NewConnectorModal({
               <div>
                 <div className="mb-1 flex items-center justify-between">
                   <span className="microlabel">{t('conn.streams')}</span>
-                  <Button variant="outline" size="sm" onClick={() => setStreams((s) => [...s, { name: '', url: '', kind: 'camera' }])} className="mono h-auto px-2 py-0.5 text-[10px] normal-case tracking-[0.1em]">
+                  <Button variant="outline" size="sm" onClick={() => setStreams((s) => [...s, { id: `s${streamSeq.current++}`, name: '', url: '', kind: 'camera' }])} className="mono h-auto px-2 py-0.5 text-[10px] normal-case tracking-[0.1em]">
                     + {t('conn.addStream')}
                   </Button>
                 </div>
                 {streams.map((s, i) => (
-                  <div key={i} className="mb-1.5 flex items-center gap-1.5">
+                  <div key={s.id} className="mb-1.5 flex items-center gap-1.5">
                     <Input value={s.name} onChange={(e) => setStreams((all) => all.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} placeholder={t('conn.streamName')} className="mono h-auto w-32 bg-surface-2 py-1.5 text-[11.5px]" />
                     <Input value={s.url} onChange={(e) => setStreams((all) => all.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)))} placeholder="rtsp://user:pass@10.0.0.9:554/ch1" className="mono h-auto min-w-0 flex-1 bg-surface-2 py-1.5 text-[11.5px]" />
                     <Select value={s.kind} onValueChange={(v) => setStreams((all) => all.map((x, j) => (j === i ? { ...x, kind: v } : x)))}>

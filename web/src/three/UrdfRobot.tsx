@@ -161,16 +161,27 @@ export function useUrdfRobot(url: string) {
 
   useEffect(() => {
     let alive = true
+    let loaded: URDFRobot | null = null
     setRobot(null)
+    // <primitive> objects aren't reclaimed by R3F: dispose every geometry on
+    // swap/unmount. Materials are module-level singletons — never dispose them.
+    const disposeGeom = (r: URDFRobot) =>
+      r.traverse((o) => (o as THREE.Mesh).geometry?.dispose())
     loadUrdf(url)
       .then((r) => {
-        if (!alive) return
+        // load can finish after the effect tore down (url change / unmount) —
+        // that robot never mounts, so dispose it here instead of leaking it.
+        if (!alive) {
+          disposeGeom(r)
+          return
+        }
         // URDF is Z-up (ROS); three.js is Y-up
         r.rotation.x = -Math.PI / 2
         r.traverse((o) => {
           if (o instanceof THREE.Mesh) o.frustumCulled = false
         })
         applyStandPose(r, url)
+        loaded = r
         ref.current = r
         setRobot(r)
       })
@@ -181,6 +192,7 @@ export function useUrdfRobot(url: string) {
     return () => {
       alive = false
       ref.current = null
+      if (loaded) disposeGeom(loaded)
     }
   }, [url])
 

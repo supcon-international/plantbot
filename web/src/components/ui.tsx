@@ -82,17 +82,19 @@ export function SevTag({ sev }: { sev: Severity }) {
 const MODE_TONE: Record<RobotMode, string> = {
   idle: 'var(--color-ink-3)',
   navigating: 'var(--color-ink)',
-  executing: 'var(--color-accent)',
+  executing: 'var(--color-ink)',
   teleop: 'var(--color-warn)',
-  charging: 'var(--color-accent)',
+  charging: 'var(--color-ink)',
   offline: 'var(--color-crit)',
 }
+const MODE_ACTIVE: ReadonlySet<RobotMode> = new Set(['navigating', 'executing', 'charging'])
 
 export function ModeChip({ mode }: { mode?: RobotMode }) {
   const t = useT()
   const tone = mode ? MODE_TONE[mode] : 'var(--color-ink-3)'
   return (
     <Badge className="mode-chip" data-mode={mode ?? 'offline'} style={{ color: tone }}>
+      {mode && MODE_ACTIVE.has(mode) && <span className="live-dot" style={{ width: 5, height: 5 }} />}
       {t(mode ? `mode.${mode}` : 'mode.offline')}
     </Badge>
   )
@@ -159,11 +161,22 @@ export function Spark({
   h?: number
   fill?: boolean
 }) {
+  const t = useT()
   if (points.length < 2)
     return <div style={{ width: '100%', maxWidth: w, height: h }} className="skeleton opacity-40" />
   const lo = min ?? Math.min(...points)
   const hi = max ?? Math.max(...points)
   const span = hi - lo || 1
+  // a flat series is information, not a chart: say "steady" instead of drawing
+  // a decorative straight line (variation under 2% of the scale counts as flat)
+  const range = Math.max(...points) - Math.min(...points)
+  if (range <= span * 0.02)
+    return (
+      <div className="flex items-center gap-2" style={{ width: '100%', maxWidth: w, height: h }}>
+        <div className="h-px flex-1" style={{ background: 'var(--color-line-2)' }} />
+        <span className="microlabel">{t('c.steady')}</span>
+      </div>
+    )
   const step = w / (points.length - 1)
   const ys = points.map((p, i) => `${(i * step).toFixed(1)},${(h - 2 - ((p - lo) / span) * (h - 6)).toFixed(1)}`)
   const path = `M${ys.join(' L')}`
@@ -182,7 +195,8 @@ export function Spark({
 }
 
 export function BatteryBar({ value, w = 64 }: { value: number; w?: number }) {
-  const tone = value > 40 ? 'var(--signal)' : value > 20 ? 'var(--color-warn)' : 'var(--color-crit)'
+  // greyscale by default; colour only when the level itself is the news
+  const tone = value > 40 ? 'var(--color-ink-2)' : value > 20 ? 'var(--color-warn)' : 'var(--color-crit)'
   return (
     <div className="flex items-center gap-2">
       <div className="battery-track relative h-[9px] overflow-hidden" style={{ width: w, border: '1px solid var(--color-line-2)' }}>
@@ -198,10 +212,12 @@ export function BatteryBar({ value, w = 64 }: { value: number; w?: number }) {
   )
 }
 
-export function EmptyNote({ children }: { children: ReactNode }) {
+/** empty state as a plain sentence (with an optional action), never a shouting placeholder */
+export function EmptyNote({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
-    <div className="flex h-24 items-center justify-center">
-      <span className="microlabel">{children}</span>
+    <div className="flex min-h-24 flex-col items-center justify-center gap-2 px-6 py-5 text-center">
+      <span className="max-w-[40ch] text-[13px] leading-snug text-ink-3">{children}</span>
+      {action}
     </div>
   )
 }

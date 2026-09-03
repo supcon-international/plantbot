@@ -302,7 +302,14 @@ export function RobotDetail() {
                 </div>
                 <div>
                   <div className="microlabel mb-1">{t('rd.link40')}</div>
-                  <Spark points={history.slice(-80).map((h) => h.rssi)} min={-70} max={-40} w={200} h={30} color="var(--color-ink-3)" />
+                  {(() => {
+                    const pts = history.slice(-80).map((h) => h.rssi).filter((v): v is number => v != null)
+                    return pts.length > 1 ? (
+                      <Spark points={pts} min={-70} max={-40} w={200} h={30} color="var(--color-ink-3)" />
+                    ) : (
+                      <div className="mono text-[11px] text-ink-3">—</div>
+                    )
+                  })()}
                 </div>
               </div>
             </div>

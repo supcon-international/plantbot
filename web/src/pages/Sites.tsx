@@ -1,10 +1,11 @@
 // Platform administration — sites and accounts. The delivery-engineer home:
 // create a site here, then model it in the Site Builder (/sites/:id).
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { Plus, MapPinned, Users as UsersIcon, Trash2, KeyRound, ArrowUpRight } from 'lucide-react'
 import { useApp, useSite, api, reconnectRealtime } from '../lib/store'
 import { useT } from '../lib/i18n'
+import { useConfirm } from '../components/ConfirmDialog'
 import { Panel, PanelHead, Modal } from '../components/ui'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -94,7 +95,11 @@ function UserModal({ user, onClose, onSaved }: { user: UserRow | null; onClose: 
 
   const submit = async () => {
     setErr('')
-    const roles = { [scope]: role }
+    // the form edits only the first scope; when editing, keep every other scope
+    // this user already holds and just swap the edited pair (scope may change).
+    const roles: Record<string, string> = user ? { ...user.roles } : {}
+    if (user) delete roles[curScope]
+    roles[scope] = role
     const r = user
       ? await api.patchUser(user.username, { displayName, roles, ...(password ? { password } : {}) })
       : await api.createUser({ username, displayName: displayName || username, password, roles })
@@ -180,6 +185,7 @@ function UserModal({ user, onClose, onSaved }: { user: UserRow | null; onClose: 
 
 function UsersPanel() {
   const t = useT()
+  const confirm = useConfirm()
   const [users, setUsers] = useState<UserRow[]>([])
   const [editing, setEditing] = useState<UserRow | null>(null)
   const [creating, setCreating] = useState(false)
@@ -237,7 +243,12 @@ function UsersPanel() {
                     className="text-ink-3 hover:text-crit"
                     title={t('c.delete')}
                     onClick={async () => {
-                      if (!confirm(t('users.deleteConfirm').replace('{u}', u.username))) return
+                      const ok = await confirm({
+                        message: t('users.deleteConfirm', { u: u.username }),
+                        confirmText: t('c.delete'),
+                        destructive: true,
+                      })
+                      if (!ok) return
                       await api.deleteUser(u.username)
                       load()
                     }}
@@ -267,8 +278,6 @@ export function Sites() {
 
   const refresh = () => api.listSites().then(({ sites }) => useApp.setState({ sites }))
 
-  const cards = useMemo(() => sites, [sites])
-
   return (
     <div className="mx-auto max-w-[1300px] space-y-4 p-3 md:p-4">
       <div className="flex items-center justify-between">
@@ -281,7 +290,7 @@ export function Sites() {
       </div>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {cards.map((s, i) => (
+        {sites.map((s, i) => (
           <Panel key={s.id} className={`panel-hover cursor-pointer rise rise-${Math.min(i + 1, 5)}`} onClick={() => nav(`/sites/${s.id}`)}>
             <div className="space-y-3 p-4">
               <div className="flex items-start justify-between gap-2">

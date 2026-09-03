@@ -207,8 +207,8 @@ export interface Telemetry {
   heading: number
   speed: number
   battery: number
-  rssi: number
-  latency: number
+  rssi: number | null
+  latency: number | null
   mode: RobotMode
   odoKm: number
   gait: string

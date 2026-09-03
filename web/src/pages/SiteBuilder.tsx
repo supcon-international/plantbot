@@ -8,11 +8,13 @@ import { toast } from 'sonner'
 import { ArrowLeft, Check, Copy, Crosshair, MapIcon, MousePointer2, Move3D, Plus, Trash2, Upload, Video } from 'lucide-react'
 import { api } from '../lib/store'
 import { useT } from '../lib/i18n'
+import { useConfirm } from '../components/ConfirmDialog'
 import { Panel } from '../components/ui'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import type { SiteCamera, SiteInfo, Waypoint, Zone } from '../lib/types'
 
@@ -101,12 +103,17 @@ function EditorCanvas(props: {
   // the container has no intrinsic size at first paint — measure after mount
   // (and on window resize; ResizeObserver is unreliable in embedded previews)
   const [aspect, setAspect] = useState(0.62)
+  const [wpx, setWpx] = useState(900) // measured screen width (px) for the screen⇄world scale
+  const [hover, setHover] = useState<Sel>(null)
   const drag = useRef<{ mode: 'pan' | 'wp'; id?: string; sx: number; sz: number } | null>(null)
   useEffect(() => setView(center(site.bounds)), [site.id]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const measure = () => {
       const r = svgRef.current?.getBoundingClientRect()
-      if (r && r.width > 4 && r.height > 4) setAspect(r.height / r.width)
+      if (r && r.width > 4 && r.height > 4) {
+        setAspect(r.height / r.width)
+        setWpx(r.width)
+      }
     }
     measure()
     const raf = requestAnimationFrame(measure)
@@ -132,6 +139,10 @@ function EditorCanvas(props: {
   }
 
   const u = view.halfW / 46 // screen-constant marker unit
+  // uniform screen⇄world scale: the viewBox aspect is matched to the container,
+  // so one world metre renders as pxPerM screen pixels on both axes. Label sizes
+  // and offsets are authored in screen px, then converted to world units below.
+  const pxPerM = wpx / vb.w
 
   const onWheel = (e: React.WheelEvent) => {
     const p = toWorld(e)
@@ -177,6 +188,11 @@ function EditorCanvas(props: {
   }
 
   const b = site.bounds
+  // waypoint label font tracks zoom but is clamped to 9–12 px (nominal 11 px at
+  // the site's default framing); zone label fonts are derived per-zone below.
+  const baseHalfW = (b.x[1] - b.x[0]) / 2 + 3
+  const wpFontPx = Math.max(9, Math.min(12, 11 * (baseHalfW / view.halfW)))
+  const labels = layoutLabels({ zones, waypoints, sel, hover, vb, pxPerM, wpFontPx })
   return (
     <svg
       ref={svgRef}
@@ -212,8 +228,6 @@ function EditorCanvas(props: {
         const pts = zn.polygon.map((p) => p.join(',')).join(' ')
         const hot = sel?.kind === 'zone' && sel.id === zn.id
         const c = ZONE_FILL[zn.kind]
-        const cx = zn.polygon.reduce((s, p) => s + p[0], 0) / zn.polygon.length
-        const cz = zn.polygon.reduce((s, p) => s + p[1], 0) / zn.polygon.length
         return (
           <g
             key={zn.id}
@@ -222,11 +236,10 @@ function EditorCanvas(props: {
               e.stopPropagation()
               props.onSelect({ kind: 'zone', id: zn.id })
             }}
+            onPointerEnter={() => setHover({ kind: 'zone', id: zn.id })}
+            onPointerLeave={() => setHover((h) => (h?.kind === 'zone' && h.id === zn.id ? null : h))}
           >
             <polygon points={pts} fill={c} fillOpacity={hot ? 0.22 : 0.1} stroke={c} strokeOpacity={0.8} strokeWidth={u * (hot ? 0.5 : 0.3)} />
-            <text x={cx} y={cz} fontSize={u * 2.4} fill={c} opacity={0.9} textAnchor="middle" style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.08em' }}>
-              {zn.name.toUpperCase()}
-            </text>
           </g>
         )
       })}
@@ -247,19 +260,32 @@ function EditorCanvas(props: {
         const isDock = w.id === dockWp
         const color = isDock ? 'var(--signal)' : w.kind === 'inspect' ? 'var(--color-ink)' : 'var(--color-ink-2)'
         return (
-          <g key={w.id} transform={`translate(${w.x} ${w.z})`} onPointerDown={(e) => startWpDrag(e, w.id)} style={{ cursor: tool === 'select' ? 'pointer' : undefined }}>
+          <g
+            key={w.id}
+            transform={`translate(${w.x} ${w.z})`}
+            onPointerDown={(e) => startWpDrag(e, w.id)}
+            onPointerEnter={() => setHover({ kind: 'wp', id: w.id })}
+            onPointerLeave={() => setHover((h) => (h?.kind === 'wp' && h.id === w.id ? null : h))}
+            style={{ cursor: tool === 'select' ? 'pointer' : undefined }}
+          >
             {hot && <circle r={u * 3.2} fill="none" stroke="var(--signal)" strokeWidth={u * 0.35} opacity={0.9} />}
             {w.kind === 'inspect' ? (
               <rect x={-u * 1.3} y={-u * 1.3} width={u * 2.6} height={u * 2.6} fill={color} transform="rotate(45)" />
             ) : (
               <circle r={u * 1.3} fill={isDock ? 'var(--signal)' : 'none'} stroke={color} strokeWidth={u * 0.55} />
             )}
-            <text y={-u * 2.2} fontSize={u * 2.2} fill="var(--color-ink-2)" textAnchor="middle" style={{ fontFamily: 'var(--font-mono)' }}>
-              {w.id}
-            </text>
           </g>
         )
       })}
+
+      {/* labels layer — screen-px sized, collision-avoided, drawn above markers */}
+      <g style={{ fontFamily: 'var(--font-mono)', pointerEvents: 'none' }}>
+        {labels.map((l) => (
+          <text key={l.key} x={l.x} y={l.y} fontSize={l.fontSize} fill={l.color} opacity={l.opacity} textAnchor={l.anchor} style={{ letterSpacing: '0.06em' }}>
+            {l.text}
+          </text>
+        ))}
+      </g>
 
       {/* calibration marks */}
       {props.calibMarks.map((m, i) => (
@@ -294,10 +320,170 @@ function gridLines(b: SiteInfo['bounds'], u: number) {
   return <g opacity={0.6}>{lines}</g>
 }
 
+// ---------- label layout (screen-space placement + collision, world-space out) ----------
+
+type LabelDesc = {
+  key: string
+  text: string
+  x: number // world coords for the SVG <text>
+  y: number
+  fontSize: number // world units (screen px ÷ pxPerM)
+  anchor: 'start' | 'end'
+  color: string
+  opacity: number
+  onTop: boolean
+}
+
+// Zone + waypoint labels are sized/placed in *screen pixels* (fonts, insets and
+// offsets are authored in px), then converted back to world units for the SVG,
+// which draws in a world-space viewBox. A single pass keeps a list of occupied
+// screen rects and resolves overlaps. Priority: selected/hovered (always drawn,
+// on top, reserved first) > zones > waypoints.
+function layoutLabels(p: {
+  zones: Zone[]
+  waypoints: Waypoint[]
+  sel: Sel
+  hover: Sel
+  vb: { x: number; y: number; w: number; h: number }
+  pxPerM: number
+  wpFontPx: number
+}): LabelDesc[] {
+  const { zones, waypoints, sel, hover, vb, pxPerM, wpFontPx } = p
+  const CHAR = 0.6 // monospace advance ≈ 0.6em (slight over-estimate ⇒ conservative)
+  const clamp = (lo: number, v: number, hi: number) => Math.max(lo, Math.min(hi, v))
+  const sX = (wx: number) => (wx - vb.x) * pxPerM // world → screen px
+  const sY = (wz: number) => (wz - vb.y) * pxPerM
+  const wX = (sx: number) => vb.x + sx / pxPerM // screen px → world
+  const wZ = (sy: number) => vb.y + sy / pxPerM
+
+  type Rect = { x0: number; y0: number; x1: number; y1: number }
+  const placed: Rect[] = []
+  const hits = (r: Rect) => placed.some((q) => r.x0 < q.x1 && r.x1 > q.x0 && r.y0 < q.y1 && r.y1 > q.y0)
+  const isHot = (kind: 'zone' | 'wp', id: string) =>
+    (sel?.kind === kind && sel.id === id) || (hover?.kind === kind && hover.id === id)
+
+  // zone label: top-left inside the bounding box (inset 6px), font scaled to the
+  // box width and truncated with an ellipsis if it would overflow; thin/linear
+  // zones (a fence) instead sit just above the strip, left-aligned.
+  const planZone = (zn: Zone) => {
+    const xs = zn.polygon.map((pt) => pt[0])
+    const zs = zn.polygon.map((pt) => pt[1])
+    const left = sX(Math.min(...xs))
+    const right = sX(Math.max(...xs))
+    const top = sY(Math.min(...zs))
+    const bottom = sY(Math.max(...zs))
+    const wPx = right - left
+    const hPx = bottom - top
+    const full = zn.name.toUpperCase()
+    const len = Math.max(1, full.length)
+    const thin = Math.min(wPx, hPx) < 24
+    const availW = thin ? Math.max(wPx, hPx) : wPx
+    const fpx = clamp(9, (availW / len) * 0.9, 13)
+    const cw = fpx * CHAR
+    let text = full
+    let tx: number
+    let ty: number // baseline
+    if (thin) {
+      tx = left
+      ty = top - 4
+    } else {
+      tx = left + 6
+      ty = top + 6 + fpx * 0.82
+      const maxChars = Math.floor((wPx - 12) / cw)
+      if (maxChars < len && maxChars >= 2) text = full.slice(0, maxChars - 1) + '…'
+    }
+    const rect: Rect = { x0: tx, y0: ty - fpx, x1: tx + text.length * cw, y1: ty }
+    const emit = (onTop: boolean): LabelDesc => ({
+      key: 'z-' + zn.id,
+      text,
+      x: wX(tx),
+      y: wZ(ty),
+      fontSize: fpx / pxPerM,
+      anchor: 'start',
+      color: ZONE_FILL[zn.kind],
+      opacity: onTop ? 1 : 0.9,
+      onTop,
+    })
+    return { rect, emit }
+  }
+
+  // waypoint label: id only, bottom-right of the marker (+8,+8 px) with a
+  // top-left fallback (−8,−8 px); font fixed by wpFontPx (already zoom-clamped).
+  const planWp = (w: Waypoint) => {
+    const cx = sX(w.x)
+    const cy = sY(w.z)
+    const fpx = wpFontPx
+    const tw = w.id.length * fpx * CHAR
+    type Slot = { tx: number; ty: number; anchor: 'start' | 'end' }
+    const p1: Slot = { tx: cx + 8, ty: cy + 8 + fpx * 0.82, anchor: 'start' }
+    const p2: Slot = { tx: cx - 8, ty: cy - 8, anchor: 'end' }
+    const rectFor = (s: Slot): Rect =>
+      s.anchor === 'start'
+        ? { x0: s.tx, y0: s.ty - fpx, x1: s.tx + tw, y1: s.ty }
+        : { x0: s.tx - tw, y0: s.ty - fpx, x1: s.tx, y1: s.ty }
+    const emit = (s: Slot, onTop: boolean): LabelDesc => ({
+      key: 'w-' + w.id,
+      text: w.id,
+      x: wX(s.tx),
+      y: wZ(s.ty),
+      fontSize: fpx / pxPerM,
+      anchor: s.anchor,
+      color: 'var(--color-ink-2)',
+      opacity: onTop ? 1 : 0.92,
+      onTop,
+    })
+    return { p1, p2, rectFor, emit }
+  }
+
+  const base: LabelDesc[] = []
+  const top: LabelDesc[] = []
+
+  // 1) selected/hovered — always drawn, on top; reserve their rects first
+  for (const zn of zones) {
+    if (!isHot('zone', zn.id)) continue
+    const { rect, emit } = planZone(zn)
+    placed.push(rect)
+    top.push(emit(true))
+  }
+  for (const w of waypoints) {
+    if (!isHot('wp', w.id)) continue
+    const { p1, rectFor, emit } = planWp(w)
+    placed.push(rectFor(p1))
+    top.push(emit(p1, true))
+  }
+  // 2) zones (higher priority than waypoints); skip on collision
+  for (const zn of zones) {
+    if (isHot('zone', zn.id)) continue
+    const { rect, emit } = planZone(zn)
+    if (hits(rect)) continue
+    placed.push(rect)
+    base.push(emit(false))
+  }
+  // 3) waypoints; try bottom-right, then top-left, else drop (hover reveals)
+  for (const w of waypoints) {
+    if (isHot('wp', w.id)) continue
+    const { p1, p2, rectFor, emit } = planWp(w)
+    const r1 = rectFor(p1)
+    if (!hits(r1)) {
+      placed.push(r1)
+      base.push(emit(p1, false))
+      continue
+    }
+    const r2 = rectFor(p2)
+    if (!hits(r2)) {
+      placed.push(r2)
+      base.push(emit(p2, false))
+    }
+  }
+
+  return [...base, ...top] // on-top labels rendered last ⇒ above the rest
+}
+
 // ---------- the page ----------
 
 export function SiteBuilder() {
   const t = useT()
+  const confirm = useConfirm()
   const { siteId = '' } = useParams()
   const [site, setSite] = useState<SiteInfo | null>(null)
   const [waypoints, setWaypoints] = useState<Waypoint[]>([])
@@ -418,10 +604,17 @@ export function SiteBuilder() {
     mark()
   }
 
-  const applyMeasure = () => {
+  const applyMeasure = async () => {
     if (!site?.map || !measure || measure.length !== 2) return
     const d0 = Math.hypot(measure[1][0] - measure[0][0], measure[1][1] - measure[0][1])
-    const real = Number(prompt(t('sb.measurePrompt'), d0.toFixed(2)))
+    const entered = await confirm({
+      input: true,
+      title: t('sb.measureApply'),
+      message: t('sb.measurePrompt'),
+      defaultValue: d0.toFixed(2),
+    })
+    if (entered == null) return
+    const real = Number(entered)
     if (!real || !isFinite(real) || d0 === 0) return
     const res = +(site.map.resolution * (real / d0)).toFixed(5)
     setMapMeta((m) => ({ ...m, resolution: res }))
@@ -765,9 +958,12 @@ export function SiteBuilder() {
                 <Input className="mono h-8 flex-1 bg-surface-2 text-[11px]" value={calibFrom} onChange={(e) => setCalibFrom(e.target.value)} />
                 <span className="mono text-[10px] text-ink-3">→ world</span>
               </div>
-              <label className="mono flex items-center gap-2 text-[10.5px] text-ink-2">
-                <input type="checkbox" checked={flipY} onChange={(e) => setFlipY(e.target.checked)} /> {t('sb.flipY')}
-              </label>
+              <div className="flex items-center gap-2">
+                <Switch id="calib-flipy" checked={flipY} onCheckedChange={setFlipY} />
+                <Label htmlFor="calib-flipy" className="mono cursor-pointer text-[10.5px] text-ink-2">
+                  {t('sb.flipY')}
+                </Label>
+              </div>
               <div className="space-y-1.5">
                 {pairs.map((p, i) => (
                   <div key={i} className="flex items-center gap-1.5">

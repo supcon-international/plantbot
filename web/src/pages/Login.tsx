@@ -21,10 +21,11 @@ export function Login({ gate = false }: { gate?: boolean }) {
   const [password, setPassword] = useState('')
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const canSubmit = !!username && !!password && !busy
 
   const submit = async (e?: React.FormEvent) => {
     e?.preventDefault()
-    if (!username || !password || busy) return
+    if (!canSubmit) return
     setBusy(true)
     const fail = await login(username, password)
     setBusy(false)
@@ -37,12 +38,13 @@ export function Login({ gate = false }: { gate?: boolean }) {
       <Card className="panel w-[min(380px,100%)]">
         <CardContent className="p-6">
           <form onSubmit={submit} className="space-y-4">
-            <div>
+            <div className="space-y-1.5">
+              <div className="mono text-[10px] tracking-[0.2em] text-ink-3">PLANTBOT</div>
               <div className="flex items-center gap-2 text-ink">
-                <LogIn size={15} />
-                <span className="text-[15px] font-medium">{t('login.title')}</span>
+                <LogIn size={16} />
+                <h1 className="text-[19px] font-semibold leading-none">{t('login.title')}</h1>
               </div>
-              <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-3">{t(gate ? 'login.gated' : 'login.sub')}</p>
+              <p className="text-[12.5px] leading-relaxed text-ink-3">{t(gate ? 'login.gated' : 'login.sub')}</p>
             </div>
             <div>
               <Label className="mb-1.5" htmlFor="login-user">
@@ -77,9 +79,9 @@ export function Login({ gate = false }: { gate?: boolean }) {
             )}
             <Button
               type="submit"
-              variant="signal"
-              disabled={!username || !password || busy}
-              className="mono h-auto w-full py-2.5 text-[12px] normal-case tracking-[0.12em] disabled:opacity-30"
+              variant={canSubmit ? 'signal' : 'outline'}
+              disabled={!canSubmit}
+              className="mono h-auto w-full py-2.5 text-[12px] normal-case tracking-[0.12em] disabled:opacity-40"
             >
               {t('login.go')}
             </Button>
@@ -95,7 +97,7 @@ export function Login({ gate = false }: { gate?: boolean }) {
                   variant="outline"
                   onClick={() => {
                     // top-level redirect into the OIDC flow; come back to the SPA root
-                    window.location.href = `${BASE}api/auth/oidc/login?next=/`
+                    window.location.href = `${BASE}/api/auth/oidc/login?next=/`
                   }}
                   className="mono h-auto w-full py-2.5 text-[12px] normal-case tracking-[0.12em]"
                 >
@@ -103,7 +105,7 @@ export function Login({ gate = false }: { gate?: boolean }) {
                 </Button>
               </>
             )}
-            {demo && <p className="mono text-[10.5px] leading-relaxed text-ink-3/80">{t('login.hint')}</p>}
+            {demo && <p className="mono text-[10.5px] leading-relaxed text-ink-3">{t('login.hint')}</p>}
           </form>
         </CardContent>
       </Card>

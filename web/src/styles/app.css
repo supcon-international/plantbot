@@ -122,17 +122,8 @@ body {
   overscroll-behavior-y: none;
 }
 
-body::before {
-  content: '';
-  position: fixed;
-  inset: var(--top-height) 0 0 var(--rail-width);
-  z-index: 0;
-  pointer-events: none;
-  background-image:
-    linear-gradient(color-mix(in srgb, var(--color-ink) 2.4%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--color-ink) 2.4%, transparent) 1px, transparent 1px);
-  background-size: 32px 32px;
-}
+/* No page-level grid texture: the only grid in the product is the 4 m one the
+   3D map draws for itself, where it means something. */
 
 ::selection { background: var(--signal); color: #080808; }
 
@@ -287,7 +278,7 @@ textarea:focus-visible {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.page-context-accent { width: 4px; height: 18px; flex: none; background: var(--signal); }
+.page-context-accent { width: 4px; height: 18px; flex: none; background: var(--color-ink-2); }
 .utility-label {
   font-family: var(--font-mono);
   font-size: 9px;
@@ -308,7 +299,7 @@ textarea:focus-visible {
 }
 .site-switch .utility-label { color: var(--color-ink-3); }
 .site-switch [data-slot='select-trigger'] {
-  width: min(145px, 16vw);
+  width: min(220px, 22vw);
   color: var(--color-ink-2);
   font-family: var(--font-mono);
   font-size: 10px;
@@ -446,15 +437,17 @@ textarea:focus-visible {
 
 /* ---------- product primitives ---------- */
 
+/* Labels are plain sentence-case Plex Sans; monospace and uppercase are reserved
+   for data (ids, coordinates, timestamps, channel names) and hardware chrome. */
 .microlabel {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 400;
-  letter-spacing: .13em;
-  text-transform: uppercase;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: .01em;
+  text-transform: none;
   color: var(--color-ink-3);
 }
-:lang(zh) .microlabel { font-size: 10.5px; letter-spacing: .07em; }
+:lang(zh) .microlabel { font-size: 12.5px; letter-spacing: 0; }
 .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 400; }
 
 .panel {
@@ -471,32 +464,33 @@ textarea:focus-visible {
   border-bottom: 1px solid var(--color-line);
   background: var(--color-surface-2);
 }
-.panel-head::before { content: ''; width: 3px; height: 12px; flex: none; background: var(--signal); }
+.panel-head::before { content: ''; width: 3px; height: 12px; flex: none; background: var(--color-ink-3); }
 .panel-head > span:first-child { flex: 1; }
 .panel-hover { transition: border-color 110ms ease, background 110ms ease; }
 .panel-hover:hover { border-color: var(--color-ink-3); background: var(--color-surface-2); }
 
 .kpi-tile { min-height: 98px; background: var(--color-surface); }
-.kpi-tile::before { content: ''; position: absolute; inset: 0 auto auto 0; width: 52px; height: 3px; background: var(--signal); animation: meter-load 520ms cubic-bezier(.2,.8,.2,1) both; }
-.kpi-tile::after { content: ''; position: absolute; top: 12px; right: 12px; width: 6px; height: 6px; background: var(--signal); opacity: .8; }
+.kpi-tile::before { content: ''; position: absolute; inset: 0 auto auto 0; width: 52px; height: 2px; background: var(--color-ink-2); animation: meter-load 520ms cubic-bezier(.2,.8,.2,1) both; }
 .kpi-tile > div:nth-child(2) { font-family: var(--font-condensed); font-weight: 400; letter-spacing: -.02em; }
 @keyframes meter-load { from { transform: scaleX(0); transform-origin: left; } to { transform: scaleX(1); transform-origin: left; } }
 
 .modal-surface { overflow-y: auto; border: 1px solid var(--color-line-2); border-radius: 0 !important; box-shadow: 10px 10px 0 rgba(0,0,0,.32); }
 .toast-card { border: 1px solid var(--color-line-2); background: var(--color-surface); box-shadow: 8px 8px 0 rgba(0,0,0,.32); }
 .toast-card::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--signal); }
-.text-link { color: var(--color-ink-2); font-family: var(--font-condensed); font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
-.text-link:hover { color: var(--signal); }
+.text-link { color: var(--color-ink-2); font-family: var(--font-sans); font-size: 12px; font-weight: 500; letter-spacing: .01em; text-transform: none; text-decoration: underline; text-decoration-color: var(--color-line-2); text-underline-offset: 3px; }
+.text-link:hover { color: var(--color-ink); text-decoration-color: var(--color-ink-3); }
 
 .battery-track { background: var(--color-bg); }
 .battery-fill { background: repeating-linear-gradient(90deg, currentColor 0 7px, transparent 7px 9px); opacity: 1; }
 .battery-value { font-size: 10.5px; }
 .mode-chip,
 .mission-status-chip { border-radius: 0 !important; }
+/* status chips are neutral outlines; activity is carried by the small live dot,
+   not by a filled acid-green pill on every busy robot */
 .mode-chip[data-mode='executing'],
+.mode-chip[data-mode='navigating'],
 .mode-chip[data-mode='charging'],
-.mission-status-chip[data-status='active'] { border-color: var(--signal) !important; background: var(--signal) !important; color: #080808 !important; }
-.mode-chip[data-mode='navigating'] { border-color: var(--signal) !important; color: var(--signal) !important; }
+.mission-status-chip[data-status='active'] { border-color: var(--color-ink-2) !important; background: transparent !important; color: var(--color-ink) !important; }
 
 /* (legacy tinted-button redirect removed — primary CTAs now use the shadcn
    Button `signal` variant, filter chips carry explicit signal classes.) */
@@ -539,7 +533,7 @@ video-stream video { display: block; width: 100%; height: 100%; object-fit: cove
   letter-spacing: .1em;
   text-transform: uppercase;
 }
-.map-readout strong { color: var(--signal); font-weight: 500; }
+.map-readout strong { color: var(--color-ink); font-weight: 500; }
 .map-readout span { display: flex; align-items: center; gap: 5px; }
 .map-readout i { display: inline-block; width: 7px; height: 7px; background: currentColor; }
 .map-status-readout,
@@ -571,3 +565,10 @@ video-stream video { display: block; width: 100%; height: 100%; object-fit: cove
   .modal-surface { animation: none !important; }
   * { scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }
+/* light theme: the 3D viewport's empty sky and the map chrome follow the paper palette
+   instead of the dark console black (otherwise a black band shows above the scene) */
+[data-theme='light'] .map-viewport { background: var(--color-surface-3) !important; }
+[data-theme='light'] .map-tools { background: #ffffff !important; box-shadow: 4px 4px 0 rgba(0,0,0,.08); }
+[data-theme='light'] .map-readout { background: rgba(255,255,255,.92); color: var(--color-ink-2); }
+/* site switcher: long site names get an ellipsis instead of a hard clip */
+.site-switch [data-slot='select-value'] { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

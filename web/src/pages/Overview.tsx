@@ -20,8 +20,10 @@ function KpiRow() {
   const queued = missions.filter((m) => m.status === 'queued').length
   const open = events.filter((e) => e.lifecycle === 'new' && (e.severity === 'critical' || e.severity === 'high')).length
   const detections24h = events.filter((e) => Date.now() - e.ts < 24 * 3600_000).length
-  const tel = Object.values(telemetry)
-  const rssi = tel.length ? Math.round(tel.reduce((a, x) => a + x.rssi, 0) / tel.length) : null
+  // schedules are the site's standing patrol commitment — a real figure, unlike
+  // a fleet-averaged link quality the adapters don't actually report
+  const schedules = useApp((s) => s.schedules)
+  const armed = schedules.filter((sc) => sc.enabled).length
 
   const tiles: { label: string; value: string | number; sub?: string; tone?: string }[] = [
     { label: t('ops.fleetReady'), value: `${ready}/${robots.length || '—'}`, sub: t('ops.fleetReady.sub') },
@@ -33,7 +35,7 @@ function KpiRow() {
       tone: open > 0 ? 'var(--color-crit)' : 'var(--color-ink)',
     },
     { label: t('ops.detections24h'), value: detections24h, sub: t('ops.detections24h.sub') },
-    { label: t('ops.meanUplink'), value: rssi != null ? `${rssi}` : '—', sub: t('ops.meanUplink.sub') },
+    { label: t('ops.schedulesArmed'), value: armed, sub: t('ops.schedulesArmed.sub', { n: schedules.length }) },
   ]
   return (
     <div className="grid grid-cols-2 gap-2 md:grid-cols-5 md:gap-3">
