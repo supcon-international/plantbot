@@ -24,9 +24,11 @@ const SIM_DIR = process.env.PLANTBOT_SIM_DIR || join(ROOT, '..', '..', 'plantbot
 const SIM_TSX = join(SIM_DIR, 'node_modules', '.bin', 'tsx')
 const SIMS_UP = existsSync(SIM_TSX)
 
-const P07 = 'pbk_dev_plant07'
-const P12 = 'pbk_dev_plant12'
-const CE = 'pbk_dev_campuseast'
+// Docker/customer demos inject random per-site keys. Local `pnpm dev` keeps the
+// deterministic defaults so the existing zero-config workflow is unchanged.
+const P07 = process.env.PB_DEMO_KEY_PLANT07 || 'pbk_dev_plant07'
+const P12 = process.env.PB_DEMO_KEY_PLANT12 || 'pbk_dev_plant12'
+const CE = process.env.PB_DEMO_KEY_CAMPUSEAST || 'pbk_dev_campuseast'
 
 // adapters live here; sims live in plantbotsimulator (layer: 'sim' | 'adp')
 const ADAPTERS = [

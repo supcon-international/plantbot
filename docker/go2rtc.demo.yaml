@@ -1,0 +1,8 @@
+log:
+  level: warn
+api:
+  listen: ":1984"
+rtsp:
+  listen: ""
+webrtc:
+  listen: ""

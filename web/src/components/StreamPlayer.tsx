@@ -30,17 +30,21 @@ export function StreamPlayer({
     // MSE only — WebRTC listener is disabled server-side; mode order matters.
     el.mode = 'mse'
     el.background = false
-    if (el.ws || el.pc) el.ondisconnect?.() // drop previous stream before switching
+    el.RECONNECT_TIMEOUT = 3_000
     el.src = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${BASE}/stream/api/ws?src=${encodeURIComponent(src)}`
     if (el.video) {
       el.video.controls = false
       el.video.muted = muted
       el.video.autoplay = true
     }
+    // React gives each source a keyed element, so this cleanup only tears down
+    // the instance being removed. Release its decoder immediately when Focus
+    // switches to Wall instead of keeping it alive for VideoRTC's 5 s grace.
+    return () => el.ondisconnect()
   }, [src, muted])
 
   // @ts-expect-error custom element
-  return <video-stream ref={ref} class={className} style={{ display: 'block', width: '100%', height: '100%' }} />
+  return <video-stream key={src} ref={ref} class={className} style={{ display: 'block', width: '100%', height: '100%' }} />
 }
 
 /** Native looped playback for local demo footage — no transcode hop, no dropped frames. */
@@ -62,6 +66,10 @@ export function LoopPlayer({ src, className = '' }: { src: string; className?: s
       clearTimeout(t)
       v.removeEventListener('loadeddata', kick)
       document.removeEventListener('pointerdown', kick)
+      // Release the decoder before another wall page starts its players.
+      v.pause()
+      v.removeAttribute('src')
+      v.load()
     }
   }, [src])
   return (

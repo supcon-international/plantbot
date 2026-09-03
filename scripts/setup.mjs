@@ -10,15 +10,22 @@
  * Host requirements: node ≥ 22.22, ffmpeg on PATH.
  *   (unzip is used to unpack the go2rtc mac/win zip; present by default.)
  */
-import { mkdirSync, existsSync, writeFileSync, statSync } from 'node:fs'
+import { mkdirSync, existsSync, readFileSync, writeFileSync, statSync, unlinkSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
+const FETCH_TIMEOUT_MS = Number(process.env.PB_SETUP_FETCH_TIMEOUT_MS ?? 0)
+if (!Number.isFinite(FETCH_TIMEOUT_MS) || FETCH_TIMEOUT_MS < 0)
+  throw new Error('PB_SETUP_FETCH_TIMEOUT_MS must be a non-negative number')
 
 async function fetchBuf(url) {
-  const res = await fetch(url, { redirect: 'follow' })
+  const res = await fetch(url, {
+    redirect: 'follow',
+    ...(FETCH_TIMEOUT_MS > 0 ? { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) } : {}),
+  })
   if (!res.ok) throw new Error(`${res.status} ${url}`)
   return Buffer.from(await res.arrayBuffer())
 }
@@ -42,6 +49,43 @@ async function download(url, dest, label) {
     }
   }
   console.log('done')
+}
+
+function sha256(data) {
+  return createHash('sha256').update(data).digest('hex')
+}
+
+function sha256File(path) {
+  return sha256(readFileSync(path))
+}
+
+async function downloadVerified(url, dest, label, expectedSha256) {
+  if (existsSync(dest)) {
+    if (sha256File(dest) === expectedSha256) {
+      console.log(`  ✓ ${label} (cached, verified)`)
+      return
+    }
+    unlinkSync(dest)
+    console.log(`  ! ${label} cache checksum mismatch; downloading again`)
+  }
+
+  mkdirSync(dirname(dest), { recursive: true })
+  process.stdout.write(`  ↓ ${label} … `)
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const body = await fetchBuf(url)
+      const actualSha256 = sha256(body)
+      if (actualSha256 !== expectedSha256)
+        throw new Error(`SHA-256 mismatch: expected ${expectedSha256}, received ${actualSha256}`)
+      writeFileSync(dest, body)
+      break
+    } catch (e) {
+      if (attempt >= 3) throw e
+      process.stdout.write(`retry ${attempt} … `)
+      await new Promise((r) => setTimeout(r, 2500 * attempt))
+    }
+  }
+  console.log('done (verified)')
 }
 
 // ---------- host prerequisites ----------
@@ -104,31 +148,44 @@ const GO2RTC_VERSION = 'v1.9.14'
 async function relayBinary() {
   const isWin = process.platform === 'win32'
   const dest = join(ROOT, 'bin', isWin ? 'go2rtc.exe' : 'go2rtc')
-  if (existsSync(dest) && statSync(dest).size > 1e6) return console.log('  ✓ go2rtc (cached)')
-  const asset = {
-    'darwin-arm64': 'go2rtc_mac_arm64.zip',
-    'darwin-x64': 'go2rtc_mac_amd64.zip',
-    'linux-x64': 'go2rtc_linux_amd64',
-    'linux-arm64': 'go2rtc_linux_arm64',
-    'linux-arm': 'go2rtc_linux_arm',
-    'win32-x64': 'go2rtc_win64.zip',
+  const release = {
+    'darwin-arm64': ['go2rtc_mac_arm64.zip', '919b78adc759d6b3883d1e1b2ac915ac0985bb903ff1897b4d228527bd64690c'],
+    'darwin-x64': ['go2rtc_mac_amd64.zip', '9b0b9a27a4dc3a5b8b93376e7e8fc2787c6af624a512842622be84aec0171c7a'],
+    'linux-x64': ['go2rtc_linux_amd64', '32d616af226bd731678ffde328b94cfb94e30339bfefc469cfb76323144615a6'],
+    'linux-arm64': ['go2rtc_linux_arm64', '359fabade8a7a51e81a55fe6df6b0ef81764a5e1d63179577534eaaa71904b50'],
+    'linux-arm': ['go2rtc_linux_arm', '4d7e1639af5a2722a28e864468fd8099b3c1682565446c798bf9e3b38fde12e4'],
+    'win32-x64': ['go2rtc_win64.zip', 'dd4167d75cb04abe618855b7c71f8658bd009f60c1a71835d134d2c11c939907'],
   }[`${process.platform}-${process.arch}`]
-  if (!asset) {
+  if (!release) {
     console.log(`  ⚠ go2rtc: no prebuilt binary for ${process.platform}-${process.arch} — install it manually for RTSP playback`)
     return
   }
+  const [asset, expectedSha256] = release
+  const binaryStamp = `${dest}.sha256`
+  const archiveAsset = asset.endsWith('.zip')
+  const cachedBinaryValid = existsSync(dest) && statSync(dest).size > 1e6 && (
+    archiveAsset
+      ? existsSync(binaryStamp) && readFileSync(binaryStamp, 'utf8').trim() === sha256File(dest)
+      : sha256File(dest) === expectedSha256
+  )
+  if (cachedBinaryValid) return console.log('  ✓ go2rtc (cached, verified)')
+  if (existsSync(dest)) unlinkSync(dest)
+  if (existsSync(binaryStamp)) unlinkSync(binaryStamp)
+
   const url = `https://github.com/AlexxIT/go2rtc/releases/download/${GO2RTC_VERSION}/${asset}`
   mkdirSync(join(ROOT, 'bin'), { recursive: true })
   try {
-    if (asset.endsWith('.zip')) {
+    if (archiveAsset) {
       const zip = join(ROOT, 'bin', asset)
-      await download(url, zip, `go2rtc ${GO2RTC_VERSION}`)
+      await downloadVerified(url, zip, `go2rtc ${GO2RTC_VERSION}`, expectedSha256)
       // zip holds a single `go2rtc` (or .exe) binary — extract flat into bin/
       execSync(`unzip -o -j "${zip}" -d "${join(ROOT, 'bin')}"`, { stdio: 'ignore' })
-      execSync(`rm -f "${zip}"`)
+      unlinkSync(zip)
+      writeFileSync(binaryStamp, `${sha256File(dest)}\n`)
     } else {
-      await download(url, dest, `go2rtc ${GO2RTC_VERSION}`)
+      await downloadVerified(url, dest, `go2rtc ${GO2RTC_VERSION}`, expectedSha256)
     }
+    if (!existsSync(dest) || statSync(dest).size <= 1e6) throw new Error('downloaded binary is missing or unexpectedly small')
     if (!isWin) execSync(`chmod +x "${dest}"`)
     console.log('  ✓ go2rtc ready')
   } catch (e) {
@@ -193,7 +250,7 @@ await filteredFeed('thermal.mp4', 'smokestack.mp4', 'format=gray,format=gbrp,pse
 await filteredFeed('ogi.mp4', 'pumpjack.mp4', 'format=gray,eq=contrast=1.55:brightness=-0.06,unsharp=5:5:0.8,noise=alls=5:allf=t')
 // the data-saver (.low.mp4) tier is retired — sweep any twins from old checkouts
 {
-  const { readdirSync, unlinkSync } = await import('node:fs')
+  const { readdirSync } = await import('node:fs')
   for (const name of readdirSync(join(ROOT, 'server', 'media')).filter((f) => f.endsWith('.low.mp4'))) {
     unlinkSync(join(ROOT, 'server', 'media', name))
     console.log(`  ✗ ${name} (data-saver tier removed)`)

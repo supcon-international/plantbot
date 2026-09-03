@@ -1,0 +1,120 @@
+x-plantbot-build: &plantbot-build
+  context: .
+  dockerfile: docker/demo.Dockerfile
+  additional_contexts:
+    simulator: ${PLANTBOT_SIM_DIR:-../plantbotsimulator}
+
+x-plantbot-logging: &plantbot-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  relay:
+    build:
+      <<: *plantbot-build
+      target: relay
+    restart: unless-stopped
+    logging: *plantbot-logging
+    networks: [plantbot]
+
+  api:
+    build:
+      <<: *plantbot-build
+      target: api
+    init: true
+    restart: unless-stopped
+    logging: *plantbot-logging
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      API_HOST: 0.0.0.0
+      API_PORT: "8787"
+      PUBLIC_BASE: /robots
+      PB_DEMO: "1"
+      PB_PUBLIC_VIEW: "0"
+      PB_TRUST_PROXY: ${PLANTBOT_TRUSTED_PROXIES:-172.30.250.10,172.30.250.1}
+      MEDIA_RELAY: http://relay:1984
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
+      PB_ADMIN_PASSWORD: ${PB_ADMIN_PASSWORD:?PB_ADMIN_PASSWORD is required}
+      PB_OPERATOR_PASSWORD: ${PB_OPERATOR_PASSWORD:?PB_OPERATOR_PASSWORD is required}
+      PB_VIEWER_PASSWORD: ${PB_VIEWER_PASSWORD:?PB_VIEWER_PASSWORD is required}
+      PB_SEED_KEYS: plant-07=${PLANT07_KEY:?PLANT07_KEY is required},plant-12=${PLANT12_KEY:?PLANT12_KEY is required},campus-east=${CAMPUSEAST_KEY:?CAMPUSEAST_KEY is required}
+    volumes:
+      - plantbot-data:/app/robots/server/data
+    depends_on:
+      relay:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8787/api/health').then(r=>r.json()).then(x=>{const s=new Set(x.sites??[]);if(!x.ok||!x.demo||!x.relayOnline||!['plant-07','plant-12','campus-east'].every(id=>s.has(id)))process.exit(1)}).catch(()=>process.exit(1))"
+      interval: 5s
+      timeout: 3s
+      retries: 60
+      start_period: 10s
+    stop_grace_period: 15s
+    networks: [plantbot]
+
+  bench:
+    build:
+      <<: *plantbot-build
+      target: bench
+    init: true
+    restart: unless-stopped
+    logging: *plantbot-logging
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      PLANTBOT_SIM_DIR: /opt/plantbotsimulator
+      PLANTBOT_ROOT: /app/robots
+      PLANTBOT_BASE: http://api:8787
+      SIM_RTSP_MEDIA_DIR: /opt/rtsp-media
+      STREAM_BASE: rtsp://bench:8554
+      SIM_RTSP_BASE: rtsp://bench:8554
+      PB_DEMO_KEY_PLANT07: ${PLANT07_KEY:?PLANT07_KEY is required}
+      PB_DEMO_KEY_PLANT12: ${PLANT12_KEY:?PLANT12_KEY is required}
+      PB_DEMO_KEY_CAMPUSEAST: ${CAMPUSEAST_KEY:?CAMPUSEAST_KEY is required}
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "/app/robots/docker/bench-health.mjs"]
+      interval: 5s
+      timeout: 12s
+      retries: 60
+      start_period: 20s
+    stop_grace_period: 15s
+    networks: [plantbot]
+
+  gateway:
+    build:
+      <<: *plantbot-build
+      target: gateway
+      args:
+        WEB_BASE: /robots/
+    restart: unless-stopped
+    logging: *plantbot-logging
+    ports:
+      - "${PLANTBOT_BIND:-127.0.0.1}:${PLANTBOT_PORT:-18080}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+      bench:
+        condition: service_healthy
+      relay:
+        condition: service_healthy
+    networks:
+      plantbot:
+        ipv4_address: ${PLANTBOT_GATEWAY_IP:-172.30.250.10}
+
+volumes:
+  plantbot-data:
+
+networks:
+  plantbot:
+    ipam:
+      config:
+        - subnet: ${PLANTBOT_SUBNET:-172.30.250.0/24}
+          gateway: ${PLANTBOT_NETWORK_GATEWAY:-172.30.250.1}

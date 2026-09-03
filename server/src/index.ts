@@ -124,7 +124,12 @@ for (const row of listSiteRows()) {
   startWorld(row, importedNow.includes(row.id) ? { fresh: DEMO_SITES.find((d) => d.id === row.id)! } : undefined)
 }
 
-const app = Fastify({ logger: false, bodyLimit: 24 * 1024 * 1024 })
+// Reverse-proxied deployments opt in with the exact gateway address. This
+// preserves the real client IP for login throttling without trusting forwarded
+// headers received directly or from another container.
+const trustedProxies = process.env.PB_TRUST_PROXY?.split(',').map((item) => item.trim()).filter(Boolean) ?? []
+const trustProxy = trustedProxies.length ? trustedProxies : false
+const app = Fastify({ logger: false, bodyLimit: 24 * 1024 * 1024, trustProxy })
 // no CORS layer: dev runs same-origin behind the vite proxy, production
 // same-origin behind nginx — cross-origin browsers have no business here
 // demo footage served directly (Range-capable) — file channels play these

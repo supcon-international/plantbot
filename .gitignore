@@ -17,3 +17,4 @@ web/public/assets/scenes/
 demos/
 server/data/
 web/public/vendor/
+.env.demo
