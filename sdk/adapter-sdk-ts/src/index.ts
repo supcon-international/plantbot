@@ -34,6 +34,8 @@ export interface PlantbotOrder {
     name?: string
     steps?: MissionStep[]
     channelId?: string
+    /** absolute requires a declared stream PTZ capability and arrival feedback. */
+    mode?: 'absolute' | 'relative' | 'home'
     pan?: number
     tilt?: number
     zoom?: number
@@ -54,7 +56,7 @@ export interface Factsheet {
   home?: { x: number; z: number }
   /** camera/thermal channels this robot publishes — url may be an
    *  adapter-hosted file/HLS URL or the robot's native rtsp:// source */
-  streams?: { id: string; name: string; kind?: string; url?: string }[]
+  streams?: { id: string; name: string; kind?: string; url?: string; ptz?: { absolute: boolean; pan: [number, number]; tilt: [number, number]; zoom: [number, number] } }[]
 }
 
 export interface StateReport {

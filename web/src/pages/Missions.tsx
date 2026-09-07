@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ArrowLeft, Plus, X, ChevronUp, ChevronDown, OctagonX, Camera, Flame, Wind, AudioWaveform, Gauge, Timer, ScanEye, Route, CalendarClock, Play, Pause, Trash2, ListChecks } from 'lucide-react'
 import { useApp, api, useCan } from '../lib/store'
-import { useT, useAgo } from '../lib/i18n'
+import { useT, useAgo, useLang } from '../lib/i18n'
 import { Panel, PanelHead, MissionStatusTag, EmptyNote, Modal } from '../components/ui'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -17,6 +17,7 @@ import { OpsMap } from '../components/OpsMap'
 import { timeShort } from '../lib/format'
 import type { ActionType, Mission, MissionStep, MissionTemplate, Schedule, Waypoint } from '../lib/types'
 import { ACTION_TYPES } from '../lib/types'
+import { MissionArchive } from '../components/MissionArchive'
 
 const ACTION_ICON: Record<ActionType, any> = {
   capture_photo: Camera,
@@ -344,7 +345,7 @@ function MissionDetail({ m }: { m: Mission }) {
                     {cur && <span className="live-dot" />}
                     <span className="ml-auto flex gap-1">
                       {st.actions.map((a, kk) => {
-                        const Icon = ACTION_ICON[a.type]
+                        const Icon = ACTION_ICON[a.type] ?? ScanEye
                         return (
                           <span key={kk} title={t(`act.${a.type}`)} className="flex h-5 w-5 items-center justify-center border border-line text-ink-3">
                             <Icon size={10} />
@@ -617,7 +618,8 @@ export function Missions() {
   const t = useT()
   const [selId, setSelId] = useState<string | null>(null)
   const [planning, setPlanning] = useState<false | 'mission' | 'template'>(false)
-  const [tab, setTab] = useState<'runs' | 'routes'>('runs')
+  const [tab, setTab] = useState<'runs' | 'routes' | 'calendar' | 'archive'>('runs')
+  const zh = useLang(s => s.lang) === 'zh'
 
   const groups = useMemo(() => {
     const by = (st: string[]) =>
@@ -637,11 +639,13 @@ export function Missions() {
     <div className="mx-auto max-w-[1400px] space-y-3 p-3 md:p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3">
-          <ToggleGroup type="single" value={tab} onValueChange={(v) => v && setTab(v as 'runs' | 'routes')}>
+          <ToggleGroup type="single" value={tab} onValueChange={(v) => v && setTab(v as typeof tab)}>
             {(
               [
                 ['runs', ListChecks, t('mi.tabRuns')],
                 ['routes', Route, t('mi.tabRoutes')],
+                ['calendar', CalendarClock, zh ? '日历' : 'Calendar'],
+                ['archive', ListChecks, zh ? '归档与报告' : 'Archive & reports'],
               ] as const
             ).map(([v, Icon, label]) => (
               <ToggleGroupItem key={v} value={v} className="gap-1.5 px-2.5 data-[state=on]:bg-surface-2 data-[state=on]:text-ink">
@@ -664,6 +668,8 @@ export function Missions() {
           </Button>
         )}
       </div>
+
+      {(tab === 'calendar' || tab === 'archive') && <MissionArchive mode={tab} renderDetail={(mission) => <MissionDetail m={mission} />} />}
 
       {tab === 'routes' && (
         <RoutesView

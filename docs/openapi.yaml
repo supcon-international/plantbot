@@ -696,6 +696,7 @@ components:
               name: { type: string, example: Front cam }
               kind: { type: string, enum: [camera, thermal, ogi], default: camera }
               url: { type: string, description: file/HLS URL or the robot's native rtsp:// source }
+              ptz: { $ref: "#/components/schemas/PtzCapability" }
 
     StateReport:
       type: object
@@ -731,11 +732,13 @@ components:
             steps:
               type: array
               items: { $ref: "#/components/schemas/MissionStep" }
-            channelId: { type: string, description: "ptz: target channel" }
+            channelId: { type: string, description: "ptz: registered stream id of the target camera" }
+            mode: { type: string, enum: [absolute, relative, home], description: "absolute: calibrated degrees and optical zoom multiplier; done requires actual arrival. Unsupported modes must fail." }
             pan: { type: number }
             tilt: { type: number }
             zoom: { type: number }
         state: { type: string, enum: [pending, acked, done, failed] }
+        note: { type: string, description: "Adapter result or platform failure reason; a terminal receipt cannot be overwritten" }
         createdAt: { type: integer, description: epoch ms }
         updatedAt: { type: integer, description: epoch ms of the last state change }
 
@@ -969,6 +972,7 @@ components:
         label: { type: string }
         codec: { type: string }
         streamKey: { type: string }
+        ptz: { $ref: "#/components/schemas/PtzCapability" }
         source:
           type: object
           description: rtsp sources are redacted to kind-only
@@ -976,3 +980,35 @@ components:
             kind: { type: string, enum: [file, rtsp, hls, webrtc] }
             file: { type: string, description: public demo-loop URL (file kind) }
             url: { type: string, description: always empty for rtsp }
+
+    PtzCapability:
+      type: object
+      required:
+        - absolute
+        - pan
+        - tilt
+        - zoom
+      description: Declared by adapter factsheet streams[].ptz. Absolute means calibrated degrees for pan/tilt and
+        optical zoom multiplier; adapter must send done only after arrival feedback. Relative-only ranges describe
+        vendor control input, not a position.
+      properties:
+        absolute:
+          type: boolean
+        pan:
+          type: array
+          items:
+            type: number
+          minItems: 2
+          maxItems: 2
+        tilt:
+          type: array
+          items:
+            type: number
+          minItems: 2
+          maxItems: 2
+        zoom:
+          type: array
+          items:
+            type: number
+          minItems: 2
+          maxItems: 2

@@ -6,8 +6,8 @@ import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { standUpVendor, waitFor, api, integration, fleetRobot, sampleTelemetry, assertArrives, assertOfflineRecovers, simsAvailable, type VendorStack } from './harness.js'
 
-const P = 18801
-const SIM = 19001
+const P = Number(process.env.E2E_GOSUNCN_PORT ?? 18801)
+const SIM = Number(process.env.E2E_GOSUNCN_SIM_PORT ?? 19001)
 const SITE = 'campus-east'
 const KEY = 'pbk_dev_campuseast'
 const SN1 = 'GSCN-F2-2024-0117'
@@ -140,6 +140,44 @@ test('mission：显式指派 → 逐点巡查 → done；abort 生效', { skip: 
 test('announce：喊话命令被接受并转发厂商', { skip: SKIP, timeout: 20_000 }, async () => {
   const r = await api(stack, 'POST', `/api/sites/${SITE}/robots/${RID1}/commands`, { type: 'announce', text: '前方巡逻，请注意安全' })
   assert.equal(r.body.command.accepted, true)
+})
+
+test('PTZ：真实 F2 adapter 复位回执、方向拒绝与绝对定位能力边界', { skip: SKIP, timeout: 30_000 }, async () => {
+  const { body: state } = await api(stack, 'GET', `/api/sites/${SITE}/ptz`)
+  const camera = state.channels.find((c: any) => c.robotId === RID1 && c.ptz)
+  assert.ok(camera, 'adapter publishes its reset-capable camera')
+  assert.equal(camera.ptz.absolute, false, 'F2 never declares absolute positioning')
+
+  // The real adapter sends the documented RC_Robot_PTZ_Ctrl reset (12) to
+  // the vendor-protocol simulator. Its receipt must not claim arrival.
+  const reset = await api(stack, 'POST', `/api/sites/${SITE}/ptz/manual`, { channelId: camera.id, mode: 'home' })
+  assert.equal(reset.status, 200)
+  const record = await waitFor(async () => {
+    const { body } = await api(stack, 'GET', `/api/sites/${SITE}/ptz`)
+    const run = body.runs.find((r: any) => r.id === reset.body.run.id)
+    return run && run.status !== 'running' ? run : null
+  }, 15_000, 'F2 reset adapter receipt', 250)
+  assert.equal(record.status, 'done', record.note)
+  assert.equal(record.mode, 'home')
+  assert.match(record.steps[0].note, /reset accepted by vendor; position is not verified/)
+  assert.equal(record.steps[0].completedAt !== undefined, true)
+
+  // Exercise the adapter's rejection itself, through the generic semantic
+  // command route. The PTZ UI route already rejects directional movement.
+  const relative = await api(stack, 'POST', `/api/sites/${SITE}/robots/${RID1}/commands`, { type: 'ptz', channelId: camera.id, mode: 'relative', pan: 10 })
+  assert.equal(relative.body.command.accepted, true, 'command reaches the real adapter')
+  const rejected = await waitFor(async () => {
+    const { body } = await api(stack, 'GET', `/api/sites/${SITE}/integrations`)
+    const order = body.orders.find((o: any) => o.id === relative.body.command.orderId)
+    return order && (order.state === 'done' || order.state === 'failed') ? order : null
+  }, 10_000, 'F2 directional rejection', 250)
+  assert.equal(rejected.state, 'failed')
+  assert.match(rejected.note, /directional PTZ disabled: official stop opcode is not documented/)
+
+  const absolute = await api(stack, 'POST', `/api/sites/${SITE}/robots/${RID1}/commands`, { type: 'ptz', channelId: camera.id, mode: 'absolute', pan: 0, tilt: 0, zoom: 1 })
+  assert.equal(absolute.body.command.accepted, false)
+  assert.equal(absolute.body.command.orderId, undefined, 'unsupported absolute control is never dispatched')
+  assert.match(absolute.body.command.reason, /does not support absolute PTZ/)
 })
 
 test('线协议怪癖：Basic 登录闸 / 手动模式前置 / 10s 流地址', { skip: SKIP, timeout: 30_000 }, async () => {

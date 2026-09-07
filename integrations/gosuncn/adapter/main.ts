@@ -295,19 +295,20 @@ async function execOrder(u: Unit, order: PlantbotOrder) {
       return
     }
     case 'ptz': {
-      const { pan = 0, tilt = 0, zoom = 0 } = order.payload
-      const moves: [number, number][] = []
-      if (pan) moves.push([pan > 0 ? 3 : 7, Math.min(90, Math.abs(pan))])
-      if (tilt) moves.push([tilt > 0 ? 1 : 5, Math.min(90, Math.abs(tilt))])
-      if (zoom) moves.push([zoom > 0 ? 9 : 10, Math.min(90, Math.abs(zoom) * 10)])
-      if (!moves.length) moves.push([12, 0]) // 无参 → 复位
-      let ok = true
-      for (const [ctrl, value] of moves) {
-        const xml = `<?xml version="1.0" encoding="utf-8" ?>\n<Root>\n <Header>\n <CmdType>RC_Robot_PTZ_Ctrl</CmdType>\n <To>${u.deviceId}</To>\n <From>Clientwpf</From>\n </Header>\n <Robot_PTZ_Ctrl>\n <unCtrlValue>${ctrl}</unCtrlValue>\n <Value>${Math.round(value) || 50}</Value>\n </Robot_PTZ_Ctrl>\n</Root>`
-        const res = await action<any>('/robotservice/qpid/sendMQComandByUTF8.action', { deviceId: u.deviceId, content: xml }, 'POST')
-        ok &&= !!res?.successful
+      if (order.payload.mode === 'absolute') {
+        await plantbot.orderStatus(order.id, 'failed', 'unsupported: GoRobot API exposes directional PTZ only, not absolute preset positioning')
+        return
       }
-      await plantbot.orderStatus(order.id, ok ? 'done' : 'failed', ok ? 'PTZ moved' : 'vendor rejected')
+      const { pan = 0, tilt = 0, zoom = 0 } = order.payload
+      if (pan || tilt || zoom || order.payload.mode === 'relative') {
+        await plantbot.orderStatus(order.id, 'failed', 'directional PTZ disabled: official stop opcode is not documented; cannot guarantee the camera stops')
+        return
+      }
+      // Reset (12) is explicitly documented. No directional pulse is sent:
+      // the protocol requires release-to-stop but omits the stop opcode.
+      const xml = `<?xml version="1.0" encoding="utf-8" ?>\n<Root><Header><CmdType>RC_Robot_PTZ_Ctrl</CmdType><To>${u.deviceId}</To><From>Clientwpf</From></Header><Robot_PTZ_Ctrl><unCtrlValue>12</unCtrlValue><Value>50</Value></Robot_PTZ_Ctrl></Root>`
+      const res = await action<any>('/robotservice/qpid/sendMQComandByUTF8.action', { deviceId: u.deviceId, content: xml }, 'POST')
+      await plantbot.orderStatus(order.id, res?.successful ? 'done' : 'failed', res?.successful ? 'PTZ reset accepted by vendor; position is not verified' : 'vendor rejected')
       return
     }
   }
@@ -353,7 +354,7 @@ async function main() {
       level: u.level,
       protocol: 'GRobot cloud API (.action RPC + WS push)',
       home,
-      streams: streamsToFactsheet(u.streams, STREAM_BASE),
+      streams: streamsToFactsheet(u.streams, STREAM_BASE).map((stream, index) => ({ ...stream, ...(index === 0 ? { ptz: { absolute: false, pan: [-90, 90] as [number, number], tilt: [-90, 90] as [number, number], zoom: [-9, 9] as [number, number] } } : {}) })),
     })
   }
 

@@ -3,10 +3,13 @@ import { useSearchParams } from 'react-router'
 import { ChevronLeft, ChevronRight, Grid2X2, Focus, Pencil, Plus, Radio, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useApp, useCan, useSite, api } from '../lib/store'
-import { useT } from '../lib/i18n'
+import { useT, useLang } from '../lib/i18n'
 import { useConfirm } from '../components/ConfirmDialog'
 import { FeedPlayer, VideoThumb } from '../components/StreamPlayer'
-import { Modal, Panel } from '../components/ui'
+import { EmptyNote, Modal, Panel } from '../components/ui'
+import { RecordingArchive } from '../components/RecordingArchive'
+import { PtzInspection } from '../components/PtzInspection'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -197,6 +200,26 @@ function WallFeedTile({ feed, order }: { feed: Feed; order: number }) {
 }
 
 export function Live() {
+  const zh = useLang(s => s.lang) === 'zh'
+  const siteId = useSite(s => s.siteId)
+  return <div>
+    <div className="mx-auto max-w-[1400px] px-3 pt-3 md:px-4 md:pt-4">
+      <h1 className="mb-3 text-xl font-medium">{zh ? '视频与云台' : 'Video & PTZ'}</h1>
+    </div>
+    <Tabs defaultValue="live">
+      <div className="mx-auto w-full max-w-[1400px] px-3 md:px-4"><TabsList aria-label={zh ? '视频功能' : 'Video workspace'}>
+        <TabsTrigger value="live">{zh ? '实时视频' : 'Live video'}</TabsTrigger>
+        <TabsTrigger value="ptz">{zh ? '云台巡检' : 'PTZ inspection'}</TabsTrigger>
+        <TabsTrigger value="archive">{zh ? '录像回放' : 'Recordings'}</TabsTrigger>
+      </TabsList></div>
+      <TabsContent value="live"><LiveFeeds /></TabsContent>
+      <TabsContent value="ptz" className="mx-auto w-full max-w-[1400px] p-3 md:p-4"><PtzInspection key={siteId} /></TabsContent>
+      <TabsContent value="archive" className="mx-auto w-full max-w-[1400px] p-3 md:p-4"><RecordingArchive key={siteId} /></TabsContent>
+    </Tabs>
+  </div>
+}
+
+function LiveFeeds() {
   const feeds = useFeeds()
   const t = useT()
   const confirm = useConfirm()
@@ -257,7 +280,7 @@ export function Live() {
             </Button>
           </div>
         ) : (
-          <div className="skeleton h-64 w-full" />
+          <EmptyNote>{t('live.noFeeds')}</EmptyNote>
         )}
         {adding && <CameraModal onClose={() => setAdding(false)} />}
       </div>

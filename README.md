@@ -11,8 +11,8 @@
 - 场站是什么样：地图、航点、禁行区、固定摄像头、充电桩
 - 什么时候巡哪条路线：任务模板加排程，创建即生效
 - 谁去巡：按电量、距离、能力自动派单，或钉死某一台
-- 发现了什么：事件流带证据快照，可确认、关闭、驳回
-- 证据在哪：视频墙、快照、传感器读数时序
+- 发现了什么：事件带证据，可确认、关闭、驳回；设备缺陷记录责任人、处置和关闭说明
+- 证据在哪：实时视频、启用后的录像、快照、读数和巡检报告
 
 机器人本身经「适配器」接入，见下文。
 
@@ -44,16 +44,19 @@ git clone https://github.com/supcon-international/plantbotsimulator.git ../plant
 | 页面 | 用途 |
 | --- | --- |
 | OPS | 总览：KPI、实时 3D 作业地图、机队状态、最新事件 |
-| LIVE | 视频墙：机器人相机和固定摄像头，RTSP 源经 go2rtc 播放 |
-| TASKS | 任务模板、排程、执行记录，创建向导在地图上点航点 |
+| LIVE | 实时视频、录像检索/回放/下载、云台预置点/计划/记录 |
+| TASKS | 任务模板、排程、周/月日历、执行归档与 CSV/可打印报告 |
 | FLEET | 机器人列表、传感器覆盖、3D 数字孪生、接入向导 |
 | MAP | 作业地图：占据栅格底图、航点、区域、实时位姿，点航点即可派遣 |
-| EVENTS | 事件看板与表格，检测规则的启停和阈值 |
-| SITES | 新建场站，进入 Site Builder 编辑地图、航点、摄像头、坐标标定（管理员） |
+| EVENTS | 事件看板、检测规则、设备缺陷的提交/指派/处理/关闭记录 |
+| ASSETS | 被巡设备档案与卡片/表格视图，设备—位号—巡检点—数据地址台账 |
+| SITES | 建站和 Site Builder、用户、组织目录与操作审计（管理员） |
 | INTEG | 接入面板：签发 API key、托管连接器、自定义事件类型（管理员） |
 | DOCS | 在线 API 文档（管理员） |
 
 顶栏可以切换场站、语言和明暗主题。
+
+录像由管理员按通道启用，只能查询启用后的历史。云台计划可先配置；执行要求 adapter 声明绝对定位能力并回报真实到位，现有 F2 只开放复位，Spot/X30 当前接入未提供云台定位。设备位号的“驱动”沿用 adapter/connector 数据绑定；组织归属不自动授予权限。本次没有部署新的 AI 算法。需求覆盖及能力边界见 [docs/inspection-operations.md](docs/inspection-operations.md)。
 
 ## 代码怎么组织
 
@@ -113,6 +116,7 @@ cd server && node_modules/.bin/tsc --noEmit       # 后端类型检查
 cd web && node_modules/.bin/tsc --noEmit          # 前端类型检查
 cd integrations && pnpm test                      # 单元测试加全行为端到端测试（需要仿真器在旁边）
 cd sdk/adapter-sdk-ts && pnpm test                # SDK 单元测试
+node scripts/test-inspection-ui.mjs               # 生产子路径 UI 回归（先执行上面的 WEB_BASE 构建）
 ```
 
 ## 部署
@@ -137,6 +141,7 @@ Linux 服务器上想一键看完整演示（含仿真机器人和视频），�
 | [docs/adapter-sim-architecture.md](docs/adapter-sim-architecture.md) | 仿真器、适配器、平台三层架构与厂商映射 |
 | [docs/vendors/](docs/vendors/) | 三家厂商协议的逐字段参考 |
 | [docs/platform-model.md](docs/platform-model.md) | 视频、读数、事件、任务、地图、控制六个领域的模型 |
+| [docs/inspection-operations.md](docs/inspection-operations.md) | 巡检运营需求覆盖、成熟产品参考、执行边界与验收方法 |
 | [docs/deploy.md](docs/deploy.md) | 生产部署与运维 |
 | [CLAUDE.md](CLAUDE.md) | 给 code agent 的项目约定，与 AGENTS.md 逐字相同 |
 

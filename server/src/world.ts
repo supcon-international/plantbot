@@ -259,6 +259,7 @@ export interface AdapterOrder {
     steps?: MissionStep[]
     text?: string
     channelId?: string
+    mode?: 'absolute' | 'relative' | 'home'
     pan?: number
     tilt?: number
     zoom?: number
@@ -266,6 +267,13 @@ export interface AdapterOrder {
   state: 'pending' | 'acked' | 'done' | 'failed'
   createdAt: number
   updatedAt: number
+  note?: string
+}
+
+function validPtzCapability(value: PayloadSpec['ptz']): PayloadSpec['ptz'] {
+  if (!value || typeof value.absolute !== 'boolean') return undefined
+  if (!(['pan', 'tilt', 'zoom'] as const).every((axis) => Array.isArray(value[axis]) && value[axis].length === 2 && value[axis].every(Number.isFinite) && value[axis][0] <= value[axis][1])) return undefined
+  return { absolute: value.absolute, pan: [...value.pan], tilt: [...value.tilt], zoom: [...value.zoom] }
 }
 
 /** latest adapter-reported state for an external robot */
@@ -305,6 +313,8 @@ export class World {
   orders: AdapterOrder[] = []
   externals = new Map<string, ExternalState>() // robotId -> adapter state
   commandLog: CommandRecord[] = []
+  /** Patrol ownership prevents a manual command moving a camera mid-dwell. */
+  ptzLocks = new Map<string, string>()
   /** robotId|metric -> ring buffer of recent readings */
   readings = new Map<string, Reading[]>()
   sessions = new Map<string, StreamSession>()
@@ -469,7 +479,7 @@ export class World {
     ip?: string
     protocol?: string
     home?: { x: number; z: number }
-    streams?: { id: string; name: string; kind?: PayloadSpec['kind']; url?: string }[]
+    streams?: { id: string; name: string; kind?: PayloadSpec['kind']; url?: string; ptz?: PayloadSpec['ptz'] }[]
   }, opts?: { online?: boolean }): RobotSpec {
     const id = `ext-${input.serial.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
     const catalog = ROBOT_CATALOG.find((m) => m.model === input.model)
@@ -482,6 +492,7 @@ export class World {
       stream: s.id,
       file: s.url, // adapter-hosted HLS/MP4 URL if any
       detail: 'Adapter-published channel',
+      ptz: validPtzCapability(s.ptz),
     }))
     const home = input.home ?? { x: this.site.bounds.x[0] + 2, z: this.site.bounds.z[0] + 2 }
     const robot: RobotSpec = {
@@ -591,6 +602,7 @@ export class World {
           codec: 'h264',
           source: srcOf(p.file),
           streamKey: p.stream,
+          ptz: p.ptz,
         })
       }
     }
@@ -1233,7 +1245,7 @@ export class World {
 
   // ---------- commands (semantic, server-validated) ----------
 
-  command(robotId: string, cmd: Command, by = 'operator'): CommandRecord {
+  command(robotId: string, cmd: Command, by = 'operator', ptzOwner?: string): CommandRecord {
     const rec: CommandRecord = {
       id: `CMD-${String(this.cmdSeq++).padStart(4, '0')}`,
       robotId,
@@ -1295,7 +1307,29 @@ export class World {
       case 'ptz': {
         const ch = this.channels(robotId).find((c) => c.id === cmd.channelId)
         if (!ch) return done(false, 'unknown channel')
-        this.enqueueOrder(robotId, 'ptz', { channelId: ch.streamKey ?? ch.id, pan: cmd.pan, tilt: cmd.tilt, zoom: cmd.zoom })
+        const owner = this.ptzLocks.get(ch.id)
+        if (owner && owner !== ptzOwner) return done(false, 'camera is reserved by a PTZ inspection')
+        if (cmd.mode !== undefined && !['absolute', 'relative', 'home'].includes(cmd.mode)) return done(false, 'invalid PTZ mode')
+        if (cmd.mode !== undefined && !ch.ptz) return done(false, 'adapter does not declare PTZ control')
+        if (cmd.mode === 'absolute') {
+          if (!ch.ptz?.absolute) return done(false, 'adapter does not support absolute PTZ positioning')
+          for (const axis of ['pan', 'tilt', 'zoom'] as const) {
+            const v = cmd[axis], range = ch.ptz[axis]
+            if (typeof v !== 'number' || !Number.isFinite(v) || v < range[0] || v > range[1])
+              return done(false, `${axis} is outside the adapter range`)
+          }
+        } else {
+          if ([cmd.pan, cmd.tilt, cmd.zoom].some((v) => v !== undefined && (typeof v !== 'number' || !Number.isFinite(v)))) return done(false, 'PTZ values must be finite numbers')
+          if (cmd.mode === 'home' && [cmd.pan, cmd.tilt, cmd.zoom].some((v) => v !== undefined && v !== 0)) return done(false, 'home mode cannot include directional values')
+          if (cmd.mode === 'relative') {
+            if (ch.ptz!.absolute) return done(false, 'use absolute positioning for this adapter')
+            for (const axis of ['pan', 'tilt', 'zoom'] as const) {
+              const v = cmd[axis], range = ch.ptz![axis]
+              if (v !== undefined && (v < range[0] || v > range[1])) return done(false, `${axis} is outside the adapter range`)
+            }
+          }
+        }
+        rec.orderId = this.enqueueOrder(robotId, 'ptz', { channelId: ch.streamKey ?? ch.id, mode: cmd.mode, pan: cmd.pan, tilt: cmd.tilt, zoom: cmd.zoom }).id
         return done(true)
       }
     }
@@ -1342,7 +1376,10 @@ export class World {
       updatedAt: Date.now(),
     }
     this.orders.push(o)
-    if (this.orders.length > 200) this.orders.shift()
+    if (this.orders.length > 200) {
+      const finished = this.orders.findIndex((x) => x.state === 'done' || x.state === 'failed')
+      if (finished >= 0) this.orders.splice(finished, 1)
+    }
     this.persist?.order(o)
     return o
   }
@@ -1360,8 +1397,11 @@ export class World {
   setOrderStatus(orderId: string, state: 'done' | 'failed', note?: string): AdapterOrder | undefined {
     const o = this.orders.find((x) => x.id === orderId)
     if (!o) return undefined
+    // A late adapter receipt cannot undo cancellation, timeout or a prior receipt.
+    if (o.state === 'done' || o.state === 'failed') return o
     o.state = state
     o.updatedAt = Date.now()
+    o.note = note
     this.persist?.order(o)
     // only the mission order itself settles the mission — pause/resume/abort
     // orders carry missionId purely as a reference
