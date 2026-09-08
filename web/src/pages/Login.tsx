@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { KeyRound, LogIn } from 'lucide-react'
 import { useAuth } from '../lib/store'
@@ -14,9 +14,12 @@ import { Label } from '@/components/ui/label'
 export function Login({ gate = false }: { gate?: boolean }) {
   const login = useAuth((s) => s.login)
   const demo = useAuth((s) => s.demo)
+  const user = useAuth((s) => s.me?.user)
+  const publicView = useAuth((s) => s.publicView)
   const sso = useAuth((s) => s.me?.sso ?? null)
   const t = useT()
   const nav = useNavigate()
+  useEffect(() => { if (!gate && user) nav('/', { replace: true }) }, [gate, user, nav])
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [err, setErr] = useState<string | null>(null)
@@ -44,7 +47,7 @@ export function Login({ gate = false }: { gate?: boolean }) {
                 <LogIn size={16} />
                 <h1 className="text-[19px] font-semibold leading-none">{t('login.title')}</h1>
               </div>
-              <p className="text-[12.5px] leading-relaxed text-ink-3">{t(gate ? 'login.gated' : 'login.sub')}</p>
+              <p className="text-[12.5px] leading-relaxed text-ink-3">{t(gate || !publicView ? 'login.gated' : 'login.sub')}</p>
             </div>
             <div>
               <Label className="mb-1.5" htmlFor="login-user">

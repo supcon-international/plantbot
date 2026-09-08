@@ -97,13 +97,14 @@ export const useAuth = create<AuthState>((set, get) => ({
     if (!r.ok) return ((await r.json().catch(() => null)) as { error?: string } | null)?.error ?? 'login failed'
     await get().refresh()
     // gated deployments: the site list and WS room need the fresh session
-    api.listSites().then(({ sites }) => useApp.setState({ sites })).catch(() => {})
+    await loadSiteList()
     reconnectRealtime()
     return null
   },
   logout: async () => {
     await apiFetch('/api/auth/logout', { method: 'POST' })
     await get().refresh()
+    reconnectRealtime()
   },
   // per-site role from auth/me, falling back to the '*' wildcard — an empty
   // platform has no sites yet, and the platform admin still needs their rank
@@ -354,20 +355,23 @@ let retry = 0
 let started = false
 let generation = 0
 
+async function loadSiteList() {
+  try {
+    const { sites } = await api.listSites()
+    useApp.setState({ sites, sitesLoaded: true })
+    if (!sites.some(s => s.id === useSite.getState().siteId) && sites[0]) useSite.getState().setSite(sites[0].id)
+  } catch { useApp.setState({ sitesLoaded: true }) }
+}
+
 export function startRealtime() {
   if (started) return
   started = true
-  useAuth.getState().refresh()
-  api
-    .listSites()
-    .then(({ sites }) => {
-      useApp.setState({ sites, sitesLoaded: true })
-      // heal a stale persisted site id
-      if (!sites.some((s) => s.id === useSite.getState().siteId) && sites[0])
-        useSite.getState().setSite(sites[0].id)
-    })
-    .catch(() => useApp.setState({ sitesLoaded: true }))
-  connect()
+  void useAuth.getState().refresh().then(async () => {
+    const auth = useAuth.getState()
+    if (!auth.publicView && !auth.me?.user) { useApp.setState({ sitesLoaded: true }); return }
+    await loadSiteList()
+    connect()
+  })
   setInterval(() => useApp.setState({ clock: Date.now() }), 1000)
   useSite.subscribe((state, prev) => {
     if (state.siteId === prev.siteId) return
@@ -410,6 +414,9 @@ export function reconnectRealtime() {
 }
 
 function connect() {
+  const auth = useAuth.getState()
+  if (!auth.loaded || (!auth.publicView && !auth.me?.user)) return
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return
   const myGen = generation
   const proto = location.protocol === 'https:' ? 'wss' : 'ws'
   ws = new WebSocket(`${proto}://${location.host}${BASE}/ws?site=${encodeURIComponent(useSite.getState().siteId)}`)

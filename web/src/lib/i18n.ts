@@ -53,7 +53,7 @@ const D: Record<string, [string, string]> = {
   'login.go': ['SIGN IN', '登 录'],
   'login.or': ['OR', '或'],
   'login.sso': ['CONTINUE WITH', '单点登录'],
-  'login.hint': ['demo accounts admin / operator / viewer · password “plantbot”', '演示账户 admin / operator / viewer,密码 “plantbot”'],
+  'login.hint': ['Accounts: admin / operator / viewer. Use your deployment credentials.', '账户：admin / operator / viewer。请使用部署时提供的凭证。'],
   'login.failed': ['Invalid credentials', '用户名或密码错误'],
   'login.gated': ['This deployment requires sign-in to view.', '该部署要求登录后访问。'],
   'nav.sites': ['SITES', '场站'],

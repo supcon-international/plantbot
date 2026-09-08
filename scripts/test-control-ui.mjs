@@ -29,6 +29,7 @@ const proc = spawn(join(root, 'server/node_modules/.bin/tsx'), ['server/src/inde
     API_HOST: '127.0.0.1',
     PB_DATA_DIR: data,
     PB_DEMO: '1',
+    PB_PUBLIC_VIEW: process.env.PB_UI_PUBLIC_VIEW ?? '1',
     PB_DEV_KEYS: '1',
     PUBLIC_BASE: '/robots',
     SESSION_SECRET: 'isolated-ui-test',
@@ -191,7 +192,7 @@ try {
  await acquire(ptz);await page.goto(`${base}/robots`)
  await wait(async()=>!(await api('GET',cp)).session,'route change releases control')
  checks.push('Mobile layout and route-change cleanup')
- const viewer=await browser.newContext();const vp=await viewer.newPage();await vp.goto(`${base}/robots/${RID}`);await vp.getByRole('tab',{name:'Teleoperation',exact:true}).click()
+ const viewer=await browser.newContext();const vp=await viewer.newPage();await vp.goto(`${base}/robots/${RID}`);if(process.env.PB_UI_PUBLIC_VIEW==='0'){await vp.locator('#login-user').fill('viewer');await vp.locator('#login-pass').fill('plantbot');await vp.locator('form button[type=submit]').click();await vp.locator('#login-user').waitFor({state:'hidden'})}await vp.getByRole('tab',{name:'Teleoperation',exact:true}).click()
  await vp.getByTestId('manual-drive').waitFor()
  assert.equal(await vp.getByTestId('manual-drive').getByRole('button',{name:'Take control',exact:true}).count(),0)
  await viewer.close();checks.push('Viewer has no manual control actions')
