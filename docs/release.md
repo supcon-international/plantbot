@@ -90,4 +90,4 @@ Every package includes source revision, image IDs and checksums. Startup loads l
 
 ## Maintainers / 维护者
 
-Commit version, changelog and source changes, then run `pnpm run release:build linux/amd64`. The command builds and exports both packages into `dist/releases`, using only committed source files. Validate the extracted packages with real API and Adapter startup before publishing. ARM64 build support is not a claim of a tested ARM64 release.
+Commit version, changelog and source changes, then run `pnpm run release:build linux/amd64`. The command builds and exports both packages into `dist/releases`, using only committed source files. Run `node scripts/test-release-packages.mjs <server.tar.gz> <adapter.tar.gz>` to validate the extracted packages against a disposable Server, actual model inference and a native Spot simulator before publishing. The test requires the sibling `plantbotsimulator` checkout and the local vision Python environment. ARM64 build support is not a claim of a tested ARM64 release.

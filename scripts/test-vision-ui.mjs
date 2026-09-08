@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Run after WEB_BASE=/robots/ pnpm build. Uses an isolated database, the actual
 // production bundle and a subpath reverse proxy. No production services touched.
-import { chromium } from 'playwright'
+import { chromium, firefox, webkit } from 'playwright'
 import AxeBuilder from '@axe-core/playwright'
 import assert from 'node:assert/strict'
 import { createServer, request } from 'node:http'
@@ -13,9 +13,11 @@ import { join, resolve, dirname, extname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { tmpdir } from 'node:os'
 
+const engine = process.env.PB_UI_BROWSER ?? 'chromium'
+assert.ok(['chromium', 'firefox', 'webkit'].includes(engine), 'Use chromium, firefox or webkit')
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const dist = join(root, 'web/dist'),
-  out = join(root, 'demos/vision-qa')
+  out = join(root, 'demos/vision-qa', engine)
 assert.ok(existsSync(join(dist, 'index.html')), 'Build the production bundle first')
 const data = mkdtempSync(join(tmpdir(), 'pb-ui-'))
 mkdirSync(out, { recursive: true })
@@ -119,7 +121,7 @@ try {
  writeFileSync(configuration,JSON.stringify({id:'ui-edge',name:'Test edge adapter',serverUrl:`http://127.0.0.1:${apiPort}`,sources:[{id:'camera',label:'Test camera',view:'fixed',url:movie,loop:true}]}))
  worker=spawn(python,['integrations/vision/worker.py'],{cwd:root,env:{...process.env,PB_ADAPTER_CONFIG:configuration,PB_SITE_KEY:'pbk_dev_plant07',PB_VISION_DATA:join(data,'vision')},stdio:['ignore','pipe','pipe']})
  worker.stdout.on('data',b=>{serverLog+=b});worker.stderr.on('data',b=>{serverLog+=b})
- browser=await chromium.launch({channel:'chrome',headless:true})
+ browser=await ({chromium,firefox,webkit})[engine].launch({...(engine==='chromium'?{channel:'chrome'}:{}),headless:true})
  const context=await browser.newContext({viewport:{width:1440,height:1000}})
  page=await context.newPage();page.setDefaultTimeout(15000)
  page.on('pageerror',e=>errors.push(e.message))
@@ -130,7 +132,7 @@ try {
  await page.locator('form button[type="submit"]').click();await page.waitForURL(u=>['/robots','/robots/'].includes(u.pathname))
  const api=async(method,path,body)=>{const r=await context.request.fetch(`${base}/api/sites/plant-07${path}`,{method,...(body?{data:body}:{})});assert.ok(r.ok(),await r.text());return r.json()}
  await wait(async()=>(await api('GET','/vision')).adapters.length===1,'real vision adapter online')
- await page.goto(`${base}/live`);await page.getByRole('tab',{name:'Vision inspection',exact:true}).click()
+ await page.getByRole('link',{name:'Live',exact:true}).click();await page.getByRole('tab',{name:'Vision inspection',exact:true}).click()
  await page.getByRole('button',{name:'Add monitoring',exact:true}).click()
  let dialog=page.getByRole('dialog')
  await dialog.getByLabel('Name',{exact:true}).fill('Gate occupancy')
@@ -182,9 +184,9 @@ try {
  // Persisted language is a user setting, and a reload verifies the actual Chinese UI.
  await page.evaluate(()=>localStorage.setItem('aegis-lang',JSON.stringify({state:{lang:'zh'},version:0})))
  await page.reload();await page.getByRole('tab',{name:'视觉巡检',exact:true}).click();await page.getByRole('heading',{name:'视觉巡检',exact:true}).waitFor();await page.screenshot({path:join(out,'04-chinese-mobile.png'),fullPage:true});checks.push('Chinese labels and mobile rendering')
- const viewer=await browser.newContext();const vp=await viewer.newPage();await vp.goto(`${base}/login`)
+ const viewer=await browser.newContext();const vp=await viewer.newPage();vp.on('pageerror',e=>errors.push(e.message));await vp.goto(`${base}/login`)
  await vp.locator('#login-user').fill('viewer');await vp.locator('#login-pass').fill('plantbot');await vp.locator('form button[type="submit"]').click()
- await vp.goto(`${base}/live`);await vp.getByRole('tab',{name:'Vision inspection',exact:true}).click()
+ await vp.waitForURL(u=>['/robots','/robots/'].includes(u.pathname));await vp.getByRole('link',{name:'Live',exact:true}).click();await vp.getByRole('tab',{name:'Vision inspection',exact:true}).click()
  await vp.getByTestId('vision-workspace').waitFor();assert.equal(await vp.getByRole('button',{name:'Add monitoring',exact:true}).count(),0)
  assert.equal(await vp.getByRole('switch',{name:'Enable Gate occupancy',exact:true}).isDisabled(),true)
  await viewer.close();checks.push('Disable persists across reload, mobile layout and viewer permissions')

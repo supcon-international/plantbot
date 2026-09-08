@@ -88,6 +88,8 @@ integrations/vision/.venv/bin/python -m unittest discover -s integrations/vision
 pnpm --dir integrations exec tsx --test test/vision.e2e.ts
 WEB_BASE=/robots/ pnpm build
 node scripts/test-vision-ui.mjs
+PB_UI_BROWSER=firefox node scripts/test-vision-ui.mjs
+PB_UI_BROWSER=webkit node scripts/test-vision-ui.mjs
 ```
 
 测试包含 11 项确定性规则、真实权重检测与 OCR、视角变化和黑屏、服务端权限/重放/版本/重启，以及真实 Adapter + 子路径生产前端的浏览器操作。模拟与标准样例验收不等于特定工厂的误报率承诺。
