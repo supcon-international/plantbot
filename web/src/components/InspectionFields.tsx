@@ -1,10 +1,11 @@
 import { useId, type ReactNode } from 'react'
-import { X } from 'lucide-react'
+import { Close as X } from '@carbon/icons-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useT } from '../lib/i18n'
 
 export function InspectionField({
   label,
@@ -100,10 +101,11 @@ export function InspectionSelect({
   )
 }
 export function InspectionHeading({ children, onClose }: { children: ReactNode; onClose: () => void }) {
+  const t = useT()
   return (
     <div className="flex items-center justify-between gap-4 border-b border-line px-4 py-3">
-      <h2 className="font-condensed text-xl">{children}</h2>
-      <Button variant="ghost" size="iconSm" onClick={onClose} aria-label="Close">
+      <h2 className="font-sans text-xl font-medium">{children}</h2>
+      <Button variant="ghost" size="iconSm" onClick={onClose} aria-label={t('c.close')}>
         <X size={16} />
       </Button>
     </div>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { KeyRound, LogIn } from 'lucide-react'
+import { Key as KeyRound, Login as LogIn } from '@carbon/icons-react'
 import { useAuth } from '../lib/store'
 import { BASE } from '../lib/base'
 import { useT } from '../lib/i18n'
@@ -42,12 +42,12 @@ export function Login({ gate = false }: { gate?: boolean }) {
         <CardContent className="p-6">
           <form onSubmit={submit} className="space-y-4">
             <div className="space-y-1.5">
-              <div className="mono text-[10px] tracking-[0.2em] text-ink-3">PLANTBOT</div>
+              <div className="mono text-[12px] tracking-normal text-ink-3">PLANTBOT</div>
               <div className="flex items-center gap-2 text-ink">
                 <LogIn size={16} />
                 <h1 className="text-[19px] font-semibold leading-none">{t('login.title')}</h1>
               </div>
-              <p className="text-[12.5px] leading-relaxed text-ink-3">{t(gate || !publicView ? 'login.gated' : 'login.sub')}</p>
+              <p className="text-[14px] leading-relaxed text-ink-3">{t(gate || !publicView ? 'login.gated' : 'login.sub')}</p>
             </div>
             <div>
               <Label className="mb-1.5" htmlFor="login-user">
@@ -59,7 +59,7 @@ export function Login({ gate = false }: { gate?: boolean }) {
                 onChange={(e) => setUsername(e.target.value)}
                 autoComplete="username"
                 autoFocus
-                className="mono bg-surface-2 py-2 text-[13px]"
+                className="mono bg-surface-2 py-2 text-[14px]"
               />
             </div>
             <div>
@@ -72,7 +72,7 @@ export function Login({ gate = false }: { gate?: boolean }) {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="current-password"
-                className="mono bg-surface-2 py-2 text-[13px]"
+                className="mono bg-surface-2 py-2 text-[14px]"
               />
             </div>
             {err && (
@@ -84,7 +84,7 @@ export function Login({ gate = false }: { gate?: boolean }) {
               type="submit"
               variant={canSubmit ? 'signal' : 'outline'}
               disabled={!canSubmit}
-              className="mono h-auto w-full py-2.5 text-[12px] normal-case tracking-[0.12em] disabled:opacity-40"
+              className="h-auto w-full py-2.5 text-[12px] normal-case tracking-normal disabled:opacity-40"
             >
               {t('login.go')}
             </Button>
@@ -92,7 +92,7 @@ export function Login({ gate = false }: { gate?: boolean }) {
               <>
                 <div className="flex items-center gap-3">
                   <span className="h-px flex-1 bg-line" />
-                  <span className="mono text-[10px] tracking-[0.14em] text-ink-3">{t('login.or')}</span>
+                  <span className="mono text-[12px] tracking-normal text-ink-3">{t('login.or')}</span>
                   <span className="h-px flex-1 bg-line" />
                 </div>
                 <Button
@@ -102,13 +102,13 @@ export function Login({ gate = false }: { gate?: boolean }) {
                     // top-level redirect into the OIDC flow; come back to the SPA root
                     window.location.href = `${BASE}/api/auth/oidc/login?next=/`
                   }}
-                  className="mono h-auto w-full py-2.5 text-[12px] normal-case tracking-[0.12em]"
+                  className="h-auto w-full py-2.5 text-[12px] normal-case tracking-normal"
                 >
                   <KeyRound size={13} /> {t('login.sso')} · {sso.label}
                 </Button>
               </>
             )}
-            {demo && <p className="mono text-[10.5px] leading-relaxed text-ink-3">{t('login.hint')}</p>}
+            {demo && <p className="mono text-[12px] leading-relaxed text-ink-3">{t('login.hint')}</p>}
           </form>
         </CardContent>
       </Card>

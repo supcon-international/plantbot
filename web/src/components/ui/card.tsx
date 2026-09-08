@@ -8,13 +8,13 @@ function Card({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="card"
-      className={cn('relative flex flex-col border border-line bg-surface text-ink', className)}
+      className={cn('relative rounded-md flex flex-col border border-line bg-surface text-ink', className)}
       {...props}
     />
   )
 }
 
-// The console .panel-head: signal block + microlabel row.
+// Shared heading row; hierarchy comes from type and spacing.
 function CardHeader({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div

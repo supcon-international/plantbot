@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { ArrowUpRight } from 'lucide-react'
+import { ArrowUpRight } from '@carbon/icons-react'
 import { useApp, useHistory } from '../lib/store'
 import { useT, useAgo } from '../lib/i18n'
 import { Panel, PanelHead, Spark, BatteryBar, SevDot, ModeChip, EmptyNote } from '../components/ui'
@@ -15,7 +15,10 @@ function KpiRow() {
   const missions = useApp((s) => s.missions)
   const t = useT()
 
-  const ready = Object.values(telemetry).filter((x) => x.battery > 20).length
+  const ready = robots.filter((r) => {
+    const state = telemetry[r.id]
+    return r.integrationLevel === 'dispatchable' && state?.mode === 'idle' && !state.missionId && state.battery >= 25
+  }).length
   const activeMissions = missions.filter((m) => m.status === 'active').length
   const queued = missions.filter((m) => m.status === 'queued').length
   const open = events.filter((e) => e.lifecycle === 'new' && (e.severity === 'critical' || e.severity === 'high')).length
@@ -45,7 +48,7 @@ function KpiRow() {
           <div className="mono mt-1.5 text-[26px] leading-none md:text-[30px]" style={{ color: tile.tone ?? 'var(--color-ink)' }}>
             {tile.value}
           </div>
-          {tile.sub && <div className="mono mt-1 text-[10.5px] text-ink-3">{tile.sub}</div>}
+          {tile.sub && <div className="mt-1 text-[12px] text-ink-3">{tile.sub}</div>}
         </Panel>
       ))}
     </div>
@@ -69,19 +72,20 @@ function FleetCell({ r }: { r: RobotSpec }) {
   const history = useHistory(r.id)
   const nav = useNavigate()
   const t = useT()
+  const online = !!tel && tel.mode !== 'offline'
   const m = tel?.missionId ? missions.find((x) => x.id === tel.missionId) : undefined
   return (
-    <Panel className="panel-hover cursor-pointer p-3" onClick={() => nav(`/robots/${r.id}`)}>
+    <Panel className="panel-hover cursor-pointer p-3" ariaLabel={`${r.callsign} · ${t('c.detail')}`} onClick={() => nav(`/robots/${r.id}`)}>
       <div className="flex items-center gap-2">
-        <span className="live-dot" style={{ background: r.color }} />
-        <span className="mono text-[12.5px] font-medium tracking-[0.05em] text-ink">{r.callsign}</span>
+        <span className={online ? 'live-dot' : 'h-1.5 w-1.5 shrink-0 rounded-full bg-ink-3'} />
+        <span className="mono text-[14px] font-medium tracking-normal text-ink">{r.callsign}</span>
         <span className="ml-auto">
           <ModeChip mode={tel?.mode} />
         </span>
       </div>
       <div className="mt-2.5 flex items-center justify-between gap-3">
-        <BatteryBar value={tel?.battery ?? 0} w={90} />
-        <span className="mono text-[11px] text-ink-3">{tel?.speed?.toFixed(2) ?? '—'} m/s</span>
+        <BatteryBar value={online ? tel.battery : undefined} w={90} />
+        <span className="mono text-[12px] text-ink-3">{online ? tel.speed.toFixed(2) : '—'} m/s</span>
       </div>
       <div className="mt-2 truncate text-[12px] text-ink-3">
         {m ? (
@@ -94,7 +98,7 @@ function FleetCell({ r }: { r: RobotSpec }) {
         )}
       </div>
       <div className="mt-2">
-        <Spark points={history.slice(-70).map((h) => h.speed)} min={0} max={1.6} w={220} h={22} color={r.color} />
+        {online && <Spark points={history.slice(-70).map((h) => h.speed)} min={0} max={1.6} w={220} h={22} />}
       </div>
     </Panel>
   )
@@ -105,7 +109,6 @@ function Feed() {
   const clock = useApp((s) => s.clock)
   const t = useT()
   const ago = useAgo()
-  const nav = useNavigate()
   return (
     <Panel className="flex min-h-0 flex-col">
       <PanelHead
@@ -119,19 +122,19 @@ function Feed() {
       <div className="min-h-0 flex-1 overflow-y-auto">
         {events.length === 0 && <EmptyNote>{t('ops.awaiting')}</EmptyNote>}
         {events.slice(0, 12).map((e) => (
-          <div
+          <Link
             key={e.id}
-            onClick={() => nav(`/events?ev=${e.id}`)}
-            className={`flex cursor-pointer items-center gap-2.5 border-b border-line/60 px-3.5 py-2 transition-colors hover:bg-surface-2 ${Date.now() - e.ts < 8000 ? 'flash-new' : ''} ${e.acked ? 'opacity-45' : ''}`}
+            to={`/events?ev=${e.id}`}
+            className={`flex cursor-pointer items-center gap-2.5 border-b border-line/60 px-3.5 py-2 transition-colors hover:bg-surface-2 ${Date.now() - e.ts < 8000 ? 'flash-new' : ''} `}
           >
             <SevDot sev={e.severity} pulse={!e.acked && e.severity === 'critical'} />
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[13px] leading-snug text-ink">{e.label}</div>
+              <div className="truncate text-[14px] leading-snug text-ink">{e.label}</div>
               <div className="microlabel mt-0.5 truncate">{e.zone}</div>
             </div>
             {e.snapshot && <img src={e.snapshot} alt="" loading="lazy" className="h-8 shrink-0 border border-line object-cover" style={{ width: 52 }} />}
-            <span className="mono w-12 shrink-0 text-right text-[10.5px] text-ink-3">{ago(e.ts, clock)}</span>
-          </div>
+            <span className="mono w-12 shrink-0 text-right text-[12px] text-ink-3">{ago(e.ts, clock)}</span>
+          </Link>
         ))}
       </div>
     </Panel>
@@ -164,15 +167,15 @@ function MissionLog() {
         }
       />
       <div className="space-y-2.5 border-b border-line/70 p-3.5">
-        {active.length === 0 && <span className="text-[12.5px] text-ink-3">{t('ops.noActiveMissions')}</span>}
+        {active.length === 0 && <span className="text-[14px] text-ink-3">{t('ops.noActiveMissions')}</span>}
         {active.map((m) => {
           const r = robots.find((x) => x.id === m.robotId)
           return (
             <div key={m.id}>
               <div className="flex items-center gap-2">
-                <span className="mono text-[11px] text-ink-3">{r?.callsign ?? '—'}</span>
-                <span className="truncate text-[12.5px] text-ink-2">{m.name}</span>
-                <span className="mono ml-auto text-[10.5px] text-ink-3">
+                <span className="mono text-[12px] text-ink-3">{r?.callsign ?? '—'}</span>
+                <span className="truncate text-[14px] text-ink-2">{m.name}</span>
+                <span className="mono ml-auto text-[12px] text-ink-3">
                   {m.currentStep}/{m.steps.length}
                 </span>
               </div>
@@ -185,9 +188,9 @@ function MissionLog() {
         {recentResults.map((r, i) => (
           <div key={`${r.mission.id}-${r.ts}-${i}`} className="flex items-center gap-2 border-b border-line/50 px-3.5 py-2">
             <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: r.ok ? 'var(--color-ok)' : 'var(--color-warn)' }} />
-            <span className="mono shrink-0 text-[10.5px] text-ink-3">{r.waypointId}</span>
+            <span className="mono shrink-0 text-[12px] text-ink-3">{r.waypointId}</span>
             <span className="truncate text-[12px] text-ink-2">{r.note}</span>
-            <span className="mono ml-auto w-10 shrink-0 text-right text-[10px] text-ink-3">{ago(r.ts, clock)}</span>
+            <span className="mono ml-auto w-10 shrink-0 text-right text-[12px] text-ink-3">{ago(r.ts, clock)}</span>
           </div>
         ))}
       </div>
@@ -200,6 +203,7 @@ export function Overview() {
   const missions = useApp((s) => s.missions)
   const t = useT()
   const nav = useNavigate()
+  const site = useApp((s) => s.site)
   const active = missions.filter((m) => m.status === 'active').length
 
   // dashboard map is a launchpad: robots open their detail, events open the board
@@ -211,6 +215,10 @@ export function Overview() {
 
   return (
     <div className="mx-auto max-w-[1500px] space-y-3 p-3 md:p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h1 className="text-2xl font-medium text-ink">{t('nav.ops')}</h1>
+        <span className="text-sm text-ink-3">{site?.name}</span>
+      </div>
       <KpiRow />
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
         <div className="space-y-3 lg:col-span-8">

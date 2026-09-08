@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ArrowLeft, Plus, X, ChevronUp, ChevronDown, OctagonX, Camera, Flame, Wind, AudioWaveform, Gauge, Timer, ScanEye, Route, CalendarClock, Play, Pause, Trash2, ListChecks } from 'lucide-react'
+import { ArrowLeft, Add as Plus, Close as X, ChevronUp, ChevronDown, StopSign as OctagonX, Camera, Fire as Flame, Windy as Wind, Waveform as AudioWaveform, Meter as Gauge, Timer, View as ScanEye, Roadmap as Route, EventSchedule as CalendarClock, Play, Pause, TrashCan as Trash2, ListChecked as ListChecks } from '@carbon/icons-react'
 import { useApp, api, useCan } from '../lib/store'
 import { useT, useAgo, useLang } from '../lib/i18n'
 import { Panel, PanelHead, MissionStatusTag, EmptyNote, Modal } from '../components/ui'
@@ -97,20 +97,20 @@ function MissionPlanner({ mode = 'mission', onClose }: { mode?: 'mission' | 'tem
     <div className="flex h-full flex-col">
       {/* header */}
       <div className="flex shrink-0 items-center gap-3 border-b border-line px-3 py-2.5 md:px-4">
-        <Button variant="ghost" onClick={onClose} className="mono gap-1.5 px-1 text-[11.5px] normal-case tracking-[0.08em]">
+        <Button variant="ghost" onClick={onClose} className="gap-1.5 px-1 text-[12px] normal-case tracking-normal">
           <ArrowLeft size={15} />
           {t('mi.back')}
         </Button>
         <span className="h-4 w-px bg-line" />
         <div>
-          <span className="text-[13.5px] font-medium text-ink">{isTemplate ? t('mi.newRoute') : t('mi.wizTitle')}</span>
+          <span className="text-[14px] font-medium text-ink">{isTemplate ? t('mi.newRoute') : t('mi.wizTitle')}</span>
           <span className="microlabel ml-3 hidden lg:inline">{t('mi.plannerHint')}</span>
         </div>
         <Button
           variant="signal"
           disabled={!name.trim() || !steps.length || busy}
           onClick={submit}
-          className="mono ml-auto px-3.5 text-[11.5px] normal-case tracking-[0.12em] disabled:opacity-30"
+          className="ml-auto px-3.5 text-[12px] normal-case tracking-normal disabled:opacity-30"
         >
           {busy ? t('mi.wizSubmitting') : isTemplate ? t('mi.saveRoute') : t('mi.wizQueue')}
         </Button>
@@ -141,7 +141,7 @@ function MissionPlanner({ mode = 'mission', onClose }: { mode?: 'mission' | 'tem
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder={t('mi.wizNamePh')}
-                className="mono bg-surface-2 py-2 text-[13px]"
+                className="mono bg-surface-2 py-2 text-[14px]"
               />
             </div>
             {!isTemplate && (
@@ -160,7 +160,7 @@ function MissionPlanner({ mode = 'mission', onClose }: { mode?: 'mission' | 'tem
                   <div>
                     <Label className="mb-1.5">{t('mi.wizAssign')}</Label>
                     <Select value={assignee} onValueChange={setAssignee}>
-                      <SelectTrigger className="mono w-full bg-surface-2 text-[12px] normal-case tracking-normal">
+                      <SelectTrigger className="w-full bg-surface-2 text-[12px] normal-case tracking-normal">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -176,11 +176,11 @@ function MissionPlanner({ mode = 'mission', onClose }: { mode?: 'mission' | 'tem
                 </div>
                 <label className="flex cursor-pointer items-center gap-2.5">
                   <Switch checked={recurring} onCheckedChange={setRecurring} />
-                  <span className="text-[13px] text-ink-2">{t('mi.wizRecurring')}</span>
+                  <span className="text-[14px] text-ink-2">{t('mi.wizRecurring')}</span>
                 </label>
               </>
             )}
-            {isTemplate && <div className="text-[12.5px] leading-relaxed text-ink-3">{t('mi.routeHint')}</div>}
+            {isTemplate && <div className="text-[14px] leading-relaxed text-ink-3">{t('mi.routeHint')}</div>}
           </div>
 
           {/* sequence */}
@@ -192,7 +192,7 @@ function MissionPlanner({ mode = 'mission', onClose }: { mode?: 'mission' | 'tem
           <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3.5 pb-4 pt-1">
             {steps.length === 0 && (
               <div className="flex h-32 items-center justify-center border border-dashed border-line-2 px-6 text-center">
-                <span className="text-[13px] leading-relaxed text-ink-3">{t('mi.wizTap')}</span>
+                <span className="text-[14px] leading-relaxed text-ink-3">{t('mi.wizTap')}</span>
               </div>
             )}
             {steps.map((st, i) => (
@@ -200,8 +200,8 @@ function MissionPlanner({ mode = 'mission', onClose }: { mode?: 'mission' | 'tem
                 <div className="flex items-center gap-2.5">
                   <span className="mono flex h-6 w-6 shrink-0 items-center justify-center bg-ink text-[12px] font-semibold text-bg">{i + 1}</span>
                   <div className="min-w-0 flex-1">
-                    <span className="mono text-[12.5px] text-ink">{st.waypointId}</span>
-                    <span className="ml-2 truncate text-[12.5px] text-ink-3">{wpName(st.waypointId, waypoints)}</span>
+                    <span className="mono text-[14px] text-ink">{st.waypointId}</span>
+                    <span className="ml-2 truncate text-[14px] text-ink-3">{wpName(st.waypointId, waypoints)}</span>
                   </div>
                   <span className="flex shrink-0 items-center gap-0.5">
                     <Button variant="ghost" size="iconSm" onClick={() => move(i, -1)} disabled={i === 0} className="size-6 hover:bg-transparent disabled:opacity-25"><ChevronUp size={14} /></Button>
@@ -221,7 +221,7 @@ function MissionPlanner({ mode = 'mission', onClose }: { mode?: 'mission' | 'tem
                         onPressedChange={() => toggleAction(i, type)}
                         variant="outline"
                         size="sm"
-                        className="mono h-auto gap-1.5 px-2 py-1.5 text-[11px] normal-case tracking-[0.04em] data-[state=on]:border-(--signal) data-[state=on]:bg-(--signal) data-[state=on]:text-[#080808]"
+                        className="h-auto gap-1.5 px-2 py-1.5 text-[12px] normal-case tracking-normal data-[state=on]:border-(--signal) data-[state=on]:bg-highlight data-[state=on]:text-primary"
                       >
                         <Icon size={11} />
                         {t(`act.${type}`)}
@@ -239,7 +239,7 @@ function MissionPlanner({ mode = 'mission', onClose }: { mode?: 'mission' | 'tem
               variant="signal"
               disabled={!name.trim() || !steps.length || busy}
               onClick={submit}
-              className="mono h-auto w-full py-2.5 text-[12px] normal-case tracking-[0.12em] disabled:opacity-30"
+              className="h-auto w-full py-2.5 text-[12px] normal-case tracking-normal disabled:opacity-30"
             >
               {busy ? t('mi.wizSubmitting') : isTemplate ? t('mi.saveRoute') : t('mi.wizQueue')}
             </Button>
@@ -270,12 +270,12 @@ function MissionDetail({ m }: { m: Mission }) {
             <span className="flex items-center gap-2">
               {m.id} · {t('mi.plan')}
               {tmpl && (
-                <Badge variant="outline" className="gap-1 px-1 py-px text-[9.5px] tracking-[0.08em]">
+                <Badge variant="outline" className="gap-1 px-1 py-px text-[12px] tracking-normal">
                   <Route size={9} /> {tmpl.name}
                 </Badge>
               )}
               {m.paused && (
-                <Badge variant="outline" className="border-warn/40 bg-warn/10 px-1 py-px text-[9.5px] tracking-[0.08em] text-warn">
+                <Badge variant="outline" className="border-warn/40 bg-warn/10 px-1 py-px text-[12px] tracking-normal text-warn">
                   {t('mi.paused')}
                 </Badge>
               )}
@@ -289,7 +289,7 @@ function MissionDetail({ m }: { m: Mission }) {
                     variant="outline"
                     size="sm"
                     onClick={() => (m.paused ? api.resumeMission(m.id) : api.pauseMission(m.id))}
-                    className="mono h-auto gap-1 px-1.5 py-0.5 text-[10px] normal-case tracking-[0.08em]"
+                    className="h-auto gap-1 px-1.5 py-0.5 text-[12px] normal-case tracking-normal"
                   >
                     {m.paused ? <Play size={11} /> : <Pause size={11} />} {m.paused ? t('mi.resume') : t('mi.pause')}
                   </Button>
@@ -298,7 +298,7 @@ function MissionDetail({ m }: { m: Mission }) {
                   variant="outline"
                   size="sm"
                   onClick={() => api.abortMission(m.id)}
-                  className="mono h-auto gap-1 px-1.5 py-0.5 text-[10px] normal-case tracking-[0.08em] hover:border-crit/50 hover:text-crit"
+                  className="h-auto gap-1 px-1.5 py-0.5 text-[12px] normal-case tracking-normal hover:border-crit/50 hover:text-crit"
                 >
                   <OctagonX size={11} /> {t('c.abort')}
                 </Button>
@@ -318,7 +318,7 @@ function MissionDetail({ m }: { m: Mission }) {
             ].map(([kk, v]) => (
               <div key={kk as string}>
                 <div className="microlabel mb-0.5">{kk}</div>
-                <div className="mono text-[12.5px]" style={{ color: kk === t('mi.findings') && flagged ? 'var(--color-warn)' : 'var(--color-ink-2)' }}>
+                <div className="mono text-[14px]" style={{ color: kk === t('mi.findings') && flagged ? 'var(--color-warn)' : 'var(--color-ink-2)' }}>
                   {v as string}
                 </div>
               </div>
@@ -340,8 +340,8 @@ function MissionDetail({ m }: { m: Mission }) {
                 <span className={`mt-1 h-[15px] w-[15px] shrink-0 rotate-45 border ${cur ? 'border-ink bg-ink/20' : past ? 'border-ink-3 bg-surface-3' : 'border-line-2'}`} />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className={`mono text-[12.5px] ${cur ? 'text-ink' : 'text-ink-2'}`}>{st.waypointId}</span>
-                    <span className="text-[12.5px] text-ink-3">{wpName(st.waypointId, waypoints)}</span>
+                    <span className={`mono text-[14px] ${cur ? 'text-ink' : 'text-ink-2'}`}>{st.waypointId}</span>
+                    <span className="text-[14px] text-ink-3">{wpName(st.waypointId, waypoints)}</span>
                     {cur && <span className="live-dot" />}
                     <span className="ml-auto flex gap-1">
                       {st.actions.map((a, kk) => {
@@ -357,7 +357,7 @@ function MissionDetail({ m }: { m: Mission }) {
                   {results.map((r, kk) => (
                     <div key={kk} className="mt-1.5 flex items-start gap-2">
                       <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: r.ok ? 'var(--color-ok)' : 'var(--color-warn)' }} />
-                      <span className="mono text-[11px] text-ink-3">{timeShort(r.ts)}</span>
+                      <span className="mono text-[12px] text-ink-3">{timeShort(r.ts)}</span>
                       <span className="text-[12px] text-ink-2">{r.note}</span>
                       {r.snapshot && <img src={r.snapshot} alt="" className="ml-auto h-9 w-14 shrink-0 border border-line object-cover" />}
                     </div>
@@ -380,30 +380,31 @@ function Row({ m, active, onClick }: { m: Mission; active: boolean; onClick: () 
   const ago = useAgo()
   const robot = robots.find((r) => r.id === m.robotId)
   return (
-    <button
+    <Button variant="ghost"
       onClick={onClick}
-      className={`block w-full border-b border-line/70 px-3.5 py-2.5 text-left transition-colors ${active ? 'bg-surface-2' : 'hover:bg-surface-2/50'}`}
+      aria-pressed={active}
+      className={`block h-auto w-full whitespace-normal font-normal border-b border-line/70 px-3.5 py-2.5 text-left transition-colors ${active ? 'bg-surface-2' : 'hover:bg-surface-2/50'}`}
       style={active ? { boxShadow: 'inset 2px 0 0 var(--color-ink)' } : undefined}
     >
       <div className="flex items-center gap-2">
-        <span className="mono text-[11px] text-ink-3">{m.id}</span>
-        <span className="truncate text-[13.5px] text-ink">{m.name}</span>
-        <span className="mono ml-auto shrink-0 text-[10px] text-ink-3">P{m.priority}</span>
+        <span className="mono text-[12px] text-ink-3">{m.id}</span>
+        <span className="truncate text-[14px] text-ink">{m.name}</span>
+        <span className="mono ml-auto shrink-0 text-[12px] text-ink-3">P{m.priority}</span>
       </div>
       <div className="mt-1.5 flex items-center gap-2">
         <MissionStatusTag status={m.status} />
-        <span className="mono text-[11px] text-ink-3">{robot?.callsign ?? (m.requestedRobot === 'auto' ? 'auto' : m.requestedRobot)}</span>
+        <span className="mono text-[12px] text-ink-3">{robot?.callsign ?? (m.requestedRobot === 'auto' ? 'auto' : m.requestedRobot)}</span>
         {m.status === 'active' && (
           <div className="ml-auto flex w-24 items-center gap-1.5">
             <Progress value={m.progress * 100} className="h-[3px] flex-1 border-0 bg-surface-3" />
-            <span className="mono text-[10px] text-ink-3">{Math.round(m.progress * 100)}%</span>
+            <span className="mono text-[12px] text-ink-3">{Math.round(m.progress * 100)}%</span>
           </div>
         )}
         {m.status !== 'active' && (
-          <span className="mono ml-auto text-[10.5px] text-ink-3">{m.endedAt ? ago(m.endedAt, clock) : ago(m.createdAt, clock)}</span>
+          <span className="mono ml-auto text-[12px] text-ink-3">{m.endedAt ? ago(m.endedAt, clock) : ago(m.createdAt, clock)}</span>
         )}
       </div>
-    </button>
+    </Button>
   )
 }
 
@@ -437,7 +438,7 @@ function ScheduleModal({ tmpl, onClose }: { tmpl: MissionTemplate; onClose: () =
         <span className="microlabel flex items-center gap-1.5">
           <CalendarClock size={12} /> {t('mi.newSchedule')} · {tmpl.name}
         </span>
-        <Button variant="ghost" size="iconSm" onClick={onClose} aria-label="close">
+        <Button variant="ghost" size="iconSm" onClick={onClose} aria-label={t('c.close')}>
           <X size={16} />
         </Button>
       </div>
@@ -446,13 +447,13 @@ function ScheduleModal({ tmpl, onClose }: { tmpl: MissionTemplate; onClose: () =
           <Label className="mb-1.5">
             {t('mi.cadence')} · {t('mi.every')} {everyMin} min
           </Label>
-          <Slider min={5} max={120} step={5} value={[everyMin]} onValueChange={([v]) => setEveryMin(v)} />
+          <Slider aria-label={t('mi.every')} min={5} max={120} step={5} value={[everyMin]} onValueChange={([v]) => setEveryMin(v)} />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label className="mb-1.5">{t('mi.wizAssign')}</Label>
             <Select value={assign} onValueChange={setAssign}>
-              <SelectTrigger className="mono w-full bg-surface-2 text-[12px] normal-case tracking-normal">
+              <SelectTrigger className="w-full bg-surface-2 text-[12px] normal-case tracking-normal">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -481,7 +482,7 @@ function ScheduleModal({ tmpl, onClose }: { tmpl: MissionTemplate; onClose: () =
             {t('mi.requiresNote')}: <span className="mono">{tmpl.requires.join(' · ')}</span> — {capable.length} {t('mi.capableUnits')}
           </div>
         )}
-        <Button variant="signal" onClick={submit} className="mono h-auto w-full py-2.5 text-[12px] normal-case tracking-[0.12em]">
+        <Button variant="signal" onClick={submit} className="h-auto w-full py-2.5 text-[12px] normal-case tracking-normal">
           {t('mi.activateSchedule')}
         </Button>
       </div>
@@ -515,7 +516,7 @@ function RoutesView({ onNewRoute, onOpenRun }: { onNewRoute: () => void; onOpenR
           }
           right={
             canOp && (
-              <Button variant="outline" size="sm" onClick={onNewRoute} className="mono h-auto gap-1 px-1.5 py-0.5 text-[10px] normal-case tracking-[0.08em]">
+              <Button variant="outline" size="sm" onClick={onNewRoute} className="h-auto gap-1 px-1.5 py-0.5 text-[12px] normal-case tracking-normal">
                 <Plus size={11} /> {t('mi.newRoute')}
               </Button>
             )
@@ -526,14 +527,14 @@ function RoutesView({ onNewRoute, onOpenRun }: { onNewRoute: () => void; onOpenR
           return (
             <div key={tp.id} className="border-b border-line/70 px-3.5 py-3">
               <div className="flex items-center gap-2">
-                <span className="mono text-[11px] text-ink-3">{tp.id}</span>
-                <span className="truncate text-[13.5px] text-ink">{tp.name}</span>
+                <span className="mono text-[12px] text-ink-3">{tp.id}</span>
+                <span className="truncate text-[14px] text-ink">{tp.name}</span>
                 {canOp && (
                   <span className="ml-auto flex shrink-0 items-center gap-1.5">
-                    <Button variant="outline" size="sm" onClick={() => runOnce(tp)} title={t('mi.runOnce')} className="mono h-auto gap-1 px-1.5 py-0.5 text-[10px] normal-case tracking-[0.08em]">
+                    <Button variant="outline" size="sm" onClick={() => runOnce(tp)} title={t('mi.runOnce')} className="h-auto gap-1 px-1.5 py-0.5 text-[12px] normal-case tracking-normal">
                       <Play size={10} /> {t('mi.run')}
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => setSchedFor(tp)} title={t('mi.newSchedule')} className="mono h-auto gap-1 px-1.5 py-0.5 text-[10px] normal-case tracking-[0.08em]">
+                    <Button variant="outline" size="sm" onClick={() => setSchedFor(tp)} title={t('mi.newSchedule')} className="h-auto gap-1 px-1.5 py-0.5 text-[12px] normal-case tracking-normal">
                       <CalendarClock size={10} /> {t('mi.schedule')}
                     </Button>
                     {!tp.builtin && (
@@ -574,17 +575,17 @@ function RoutesView({ onNewRoute, onOpenRun }: { onNewRoute: () => void; onOpenR
           return (
             <div key={sc.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line/70 px-3.5 py-3">
               {canOp ? (
-                <Switch checked={sc.enabled} onCheckedChange={(on) => api.patchSchedule(sc.id, { enabled: on })} />
+                <Switch aria-label={tp?.name ?? sc.id} checked={sc.enabled} onCheckedChange={(on) => api.patchSchedule(sc.id, { enabled: on })} />
               ) : (
-                <span className="mono text-[10px] text-ink-3">{sc.enabled ? 'ON' : 'OFF'}</span>
+                <span className="mono text-[12px] text-ink-3">{sc.enabled ? 'ON' : 'OFF'}</span>
               )}
               <div className="min-w-0 flex-1">
-                <div className={`truncate text-[13px] ${sc.enabled ? 'text-ink' : 'text-ink-3'}`}>{tp?.name ?? sc.templateId}</div>
+                <div className={`truncate text-[14px] ${sc.enabled ? 'text-ink' : 'text-ink-3'}`}>{tp?.name ?? sc.templateId}</div>
                 <div className="microlabel mt-0.5">
                   {cadenceLabel(sc.cadence, t)} · {sc.assign.kind === 'auto' ? t('mi.autoCapable') : robot?.callsign ?? '—'} · P{sc.priority}
                 </div>
               </div>
-              <div className="mono text-right text-[11px] text-ink-3">
+              <div className="mono text-right text-[12px] text-ink-3">
                 {eta !== null ? (
                   <span style={eta < 30 ? { color: 'var(--color-accent)' } : undefined}>
                     {t('mi.nextIn')} {eta >= 60 ? `${Math.floor(eta / 60)}m ${eta % 60}s` : `${eta}s`}
@@ -592,7 +593,7 @@ function RoutesView({ onNewRoute, onOpenRun }: { onNewRoute: () => void; onOpenR
                 ) : (
                   '—'
                 )}
-                <span className="block text-[10px] opacity-80">
+                <span className="block text-[12px] opacity-80">
                   {sc.runCount}× {t('mi.fired')}
                 </span>
               </div>
@@ -637,8 +638,9 @@ export function Missions() {
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-3 p-3 md:p-4">
+      <h1 className="text-2xl font-medium text-ink">{t('nav.tasks')}</h1>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
           <ToggleGroup type="single" value={tab} onValueChange={(v) => v && setTab(v as typeof tab)}>
             {(
               [
@@ -649,12 +651,12 @@ export function Missions() {
               ] as const
             ).map(([v, Icon, label]) => (
               <ToggleGroupItem key={v} value={v} className="gap-1.5 px-2.5 data-[state=on]:bg-surface-2 data-[state=on]:text-ink">
-                <Icon size={13} strokeWidth={1.5} />
-                <span className="mono text-[11px] tracking-[0.08em]">{label}</span>
+                <Icon size={13} />
+                <span className="mono text-[12px] tracking-normal">{label}</span>
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
-          <div className="mono hidden text-[13px] text-ink-2 sm:block">
+          <div className="mono hidden text-[14px] text-ink-2 sm:block">
             {groups.active.length} {t('ms.active')} · {groups.queued.length} {t('ms.queued')} · {schedules.filter((s) => s.enabled).length} {t('mi.schedulesArmed')}
           </div>
         </div>
@@ -662,7 +664,7 @@ export function Missions() {
           <Button
             variant="signal"
             onClick={() => setPlanning('mission')}
-            className="mono text-[11.5px] normal-case tracking-[0.1em]"
+            className="text-[12px] normal-case tracking-normal"
           >
             <Plus size={13} /> {t('mi.newMission')}
           </Button>

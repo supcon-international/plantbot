@@ -6,10 +6,12 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { MapControls, Text, Line, Billboard, Edges } from '@react-three/drei'
 import * as THREE from 'three'
-import { Plus, Minus, Maximize2 } from 'lucide-react'
+import { Add as Plus, Subtract as Minus, Maximize as Maximize2 } from '@carbon/icons-react'
 import { useApp, api, useCan } from '../lib/store'
 import { useTheme } from '../lib/theme'
 import { useT } from '../lib/i18n'
+import { Button } from '@/components/ui/button'
+import mapLabelFont from '../assets/fonts/IBMPlexMono-Regular.ttf?url'
 import type { Building, Waypoint } from '../lib/types'
 import { RafResizeObserver } from './rafResizeObserver'
 import { pushSnap, sampleSnap, INTERP_DELAY_MS, type PoseSnap } from './poseBuffer'
@@ -22,13 +24,17 @@ export type MapSel =
 
 const HOME = { pos: new THREE.Vector3(0, 26, 22), tgt: new THREE.Vector3(0, 0, 0.5) }
 
-const MONO = undefined // troika default — keep bundle lean
+const MONO = mapLabelFont // Local primary font, served through Vite's deployment prefix
+// A map marker is geometry, not an emoji glyph that can trigger remote font fallback.
+const CHARGE_MARK = new THREE.Shape()
+  .moveTo(0.04, 0.22).lineTo(-0.16, -0.03).lineTo(-0.02, -0.03)
+  .lineTo(-0.04, -0.22).lineTo(0.16, 0.04).lineTo(0.02, 0.04).closePath()
 
 // three can't read CSS vars — the scene carries its own two palettes.
 // dark = charcoal yard with white clay; light = paper board with warm shadows.
 const MAP_THEME = {
   dark: {
-    accent: '#c8ff00',
+    accent: '#b2ed1d',
     clay: '#dedede',
     clayMid: '#929292',
     clayEdge: '#050505',
@@ -56,7 +62,7 @@ const MAP_THEME = {
     unit: (c: string) => c,
   },
   light: {
-    accent: '#587500',
+    accent: '#48640c',
     clay: '#ffffff',
     clayMid: '#c6c6c6',
     clayEdge: '#161616',
@@ -252,7 +258,6 @@ function Buildings({ buildings, onMiss }: { buildings: Building[]; onMiss?: () =
   )
 }
 
-const ZONE_GLYPH: Record<string, string> = { restricted: '⊘', inspection: '◇', charging: '⚡' }
 
 function ZoneFlat({ z, labels }: { z: ReturnType<typeof useApp.getState>['zones'][number]; labels: boolean }) {
   const P = useMapTheme()
@@ -295,7 +300,7 @@ function ZoneFlat({ z, labels }: { z: ReturnType<typeof useApp.getState>['zones'
           anchorX={lp.anchor === 'end' ? 'right' : lp.anchor === 'start' ? 'left' : 'center'}
           anchorY="middle"
         >
-          {`${ZONE_GLYPH[z.kind] ?? ''} ${z.name.toUpperCase()}`}
+          {z.name}
         </Text>
       )}
     </group>
@@ -432,18 +437,10 @@ function WaypointMark({
               <ringGeometry args={[0.34, 0.4, 28]} />
               <meshBasicMaterial color={P.accent} />
             </mesh>
-            <Text
-              raycast={NO_RAYCAST}
-              font={MONO}
-              position={[0, 0.03, 0.02]}
-              rotation={[-Math.PI / 2, 0, 0]}
-              fontSize={0.42}
-              color={P.accent}
-              anchorX="center"
-              anchorY="middle"
-            >
-              ⚡
-            </Text>
+            <mesh raycast={NO_RAYCAST} position={[0, 0.03, 0.02]} rotation={[-Math.PI / 2, 0, 0]}>
+              <shapeGeometry args={[CHARGE_MARK]} />
+              <meshBasicMaterial color={P.accent} side={THREE.DoubleSide} />
+            </mesh>
           </>
         )}
         {wp.kind === 'inspect' && checkpoint && (
@@ -1051,25 +1048,28 @@ export function Map3D({
       <div className="map-readout map-status-readout pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2">
         <span><i style={{ color: 'var(--signal)' }} /><strong>{robots.length}</strong> {t('c.units')}</span>
         <span><i style={{ color: pins.length ? 'var(--color-warn)' : 'var(--color-ink-3)' }} /><strong>{pins.reduce((sum, pin) => sum + pin.count, 0)}</strong> {t('c.open')}</span>
-        <span>GRID <strong>4 M</strong></span>
+        <span>{t('map.grid')} <strong>4 m</strong></span>
       </div>
 
       {/* zoom / reset */}
       {interactive && (
         <div className="map-tools absolute bottom-3 right-3 z-10 flex flex-col border border-line bg-surface/90">
-          <button
+          <Button variant="ghost"
+            aria-label={t('map.zoomIn')}
             onClick={() => dolly(controls.current, 0.74)}
             className="flex h-8 w-8 items-center justify-center text-ink-3 transition-colors hover:text-ink"
           >
             <Plus size={14} />
-          </button>
-          <button
+          </Button>
+          <Button variant="ghost"
+            aria-label={t('map.zoomOut')}
             onClick={() => dolly(controls.current, 1.35)}
             className="flex h-8 w-8 items-center justify-center border-t border-line text-ink-3 transition-colors hover:text-ink"
           >
             <Minus size={14} />
-          </button>
-          <button
+          </Button>
+          <Button variant="ghost"
+            aria-label={t('map.resetView')}
             onClick={() => {
               const c = controls.current
               if (!c) return
@@ -1080,20 +1080,20 @@ export function Map3D({
             className="flex h-8 w-8 items-center justify-center border-t border-line text-ink-3 transition-colors hover:text-ink"
           >
             <Maximize2 size={12} />
-          </button>
+          </Button>
         </div>
       )}
 
       {/* waypoint teleop menu — dispatching needs the operator role */}
       {gotoMenu && interactive && !onWaypointClick && canOperate && (
         <div className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2">
-          <div className="panel flex items-center gap-2 px-3 py-2">
+          <div className="panel flex max-w-[calc(100vw-32px)] flex-wrap items-center gap-2 px-3 py-2">
             <span className="mono text-[13px] text-ink">{gotoMenu.id}</span>
             <span className="hidden text-[13px] text-ink-3 sm:block">{gotoMenu.name}</span>
             <span className="mx-1 h-4 w-px bg-line-2" />
             <span className="microlabel">{t('c.send')}</span>
             {robots.map((r) => (
-              <button
+              <Button variant="ghost"
                 key={r.id}
                 onClick={() => {
                   api.goto(r.id, gotoMenu.x, gotoMenu.z)
@@ -1103,11 +1103,11 @@ export function Map3D({
                 className="mono border border-line-2 px-1.5 py-1 text-[12px] tracking-[0.06em] text-ink-2 transition-colors hover:border-ink-3 hover:text-ink"
               >
                 {r.callsign}
-              </button>
+              </Button>
             ))}
-            <button onClick={() => setGotoMenu(null)} className="ml-1 text-ink-3 hover:text-ink">
+            <Button variant="ghost" aria-label={t('c.close')} onClick={() => setGotoMenu(null)} className="ml-1 text-ink-3 hover:text-ink">
               ×
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -1158,12 +1158,12 @@ export function Map3D({
             ).map(([key, icon]) => (
               <span key={key} className="flex items-center gap-1.5">
                 {icon}
-                <span className="mono text-[10px] text-ink-3">{t(key)}</span>
+                <span className="text-[12px] text-ink-3">{t(key)}</span>
               </span>
             ))}
           </div>
           <div>
-            <span className="mono text-[10px] text-ink-3/80">
+            <span className="mono text-[12px] text-ink-3">
               {site.map ? `occupancy ${Math.round(site.map.resolution * 100)} cm/px · ${site.map.source}` : site.name} · 3D
             </span>
           </div>

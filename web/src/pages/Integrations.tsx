@@ -1,8 +1,8 @@
 // Admin panel for the open integration API: managed connectors (platform-run
 // vendor adapters), site keys, external units, custom event vocabulary,
 // occupancy-map upload (ROS map_server convention).
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Check, Cpu, KeyRound, Plug, Copy, Trash2, Upload, Tags, ListOrdered, RefreshCw, X } from 'lucide-react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { Checkmark as Check, Chip as Cpu, Key as KeyRound, Plug, Copy, TrashCan as Trash2, Upload, TagGroup as Tags, ListNumbered as ListOrdered, Renew as RefreshCw, Close as X } from '@carbon/icons-react'
 import { toast } from 'sonner'
 import { api, useApp, useCan, useSite } from '../lib/store'
 import { BASE } from '../lib/base'
@@ -11,6 +11,7 @@ import { useConfirm } from '../components/ConfirmDialog'
 import { Modal, Panel, PanelHead } from '../components/ui'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table'
 import type { AdapterOrder, ApiKeyRec, Connector, ConnectorCatalogEntry, ConnectorField, EventTypeDef, ExternalUnit, Severity, SiteMapMeta } from '../lib/types'
@@ -33,12 +34,21 @@ const fmtAgo = (ts: number, now: number) => {
 }
 
 export function Integrations() {
+  const siteId = useSite((s) => s.siteId)
+  return <SiteIntegrations key={siteId} />
+}
+
+function SiteIntegrations() {
   const t = useT()
+  const confirm = useConfirm()
   const isAdmin = useCan('admin')
   const siteId = useSite((s) => s.siteId)
   const site = useApp((s) => s.site)
   const clock = useApp((s) => s.clock)
   const [sum, setSum] = useState<Summary | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const request = useRef(0)
   const [keyLabel, setKeyLabel] = useState('')
   /** plaintext appears exactly once — from the create response, never the list */
   const [freshKey, setFreshKey] = useState<{ id: string; key: string } | null>(null)
@@ -50,19 +60,30 @@ export function Integrations() {
   const fileRef = useRef<HTMLInputElement>(null)
 
   const reload = useCallback(() => {
+    const id = ++request.current
+    setLoading(true)
+    setLoadError(false)
     api
       .integrations()
-      .then((d: Summary & { error?: string }) => (d.error ? undefined : setSum(d)))
-      .catch(() => {})
-  }, [])
+      .then((d: Summary & { error?: string }) => {
+        if (id !== request.current) return
+        if (d.error) throw new Error(d.error)
+        setSum(d)
+      })
+      .catch(() => { if (id === request.current) setLoadError(true) })
+      .finally(() => { if (id === request.current) setLoading(false) })
+  }, [siteId])
   useEffect(() => {
+    setSum(null)
+    setFreshKey(null)
     if (isAdmin) reload()
+    return () => { request.current++ }
   }, [isAdmin, siteId, reload])
 
   if (!isAdmin)
     return (
       <div className="flex h-full items-center justify-center">
-        <span className="mono text-[12px] text-ink-3">admin role required</span>
+        <span className="text-sm text-ink-3">{t('integ.adminRequired')}</span>
       </div>
     )
 
@@ -103,15 +124,21 @@ export function Integrations() {
       <div>
         <div className="flex items-center gap-2 text-ink">
           <Plug size={15} />
-          <span className="text-[15px] font-medium">{t('integ.title')}</span>
+          <h1 className="text-2xl font-medium">{t('integ.title')}</h1>
         </div>
         <p className="microlabel mt-1">{t('integ.sub')}</p>
       </div>
 
-      {/* ---------- managed connectors (platform runs the adapter) ---------- */}
-      <ConnectorsPanel siteId={siteId} />
+      {loadError && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 border border-crit/40 bg-crit/5 p-3 text-sm text-ink-2">
+        <span>{t('c.loadFailed')}</span>
+        <Button variant="outline" onClick={reload}>{t('c.refresh')}</Button>
+      </div>}
+      {loading && !sum && <div role="status" className="flex min-h-24 items-center border border-line p-4 text-sm text-ink-3">{t('c.loading')}…</div>}
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      {/* ---------- managed connectors (platform runs the adapter) ---------- */}
+      <ConnectorsPanel key={siteId} siteId={siteId} />
+
+      <div className={sum ? 'grid gap-4 lg:grid-cols-2' : 'hidden'} aria-busy={loading}>
         {/* ---------- API keys ---------- */}
         <Panel>
           <PanelHead label={
@@ -122,6 +149,7 @@ export function Integrations() {
           <div className="space-y-2 p-3">
             <div className="flex gap-2">
               <Input
+                aria-label={t('integ.keyLabel')}
                 value={keyLabel}
                 onChange={(e) => setKeyLabel(e.target.value)}
                 placeholder={t('integ.keyLabel')}
@@ -136,7 +164,7 @@ export function Integrations() {
                     reload()
                   })
                 }
-                className="mono h-auto shrink-0 py-1.5 text-[11px] normal-case tracking-[0.1em]"
+                className="h-auto shrink-0 py-1.5 text-[12px] normal-case tracking-normal"
               >
                 {t('integ.newKey')}
               </Button>
@@ -145,8 +173,8 @@ export function Integrations() {
               <div className="border bg-surface-2 p-2.5" style={{ borderColor: 'var(--color-warn)' }}>
                 <div className="microlabel" style={{ color: 'var(--color-warn)' }}>{t('integ.keyOnce')}</div>
                 <div className="mt-1 flex items-center gap-2">
-                  <span className="mono min-w-0 flex-1 truncate text-[11px] text-ink">{freshKey.key}</span>
-                  <Button variant="ghost" size="sm" onClick={() => copy(freshKey.key, 'fresh')} className="mono h-auto gap-1 px-1 py-0.5 text-[10.5px] normal-case tracking-normal hover:bg-transparent">
+                  <span className="mono min-w-0 flex-1 truncate text-[12px] text-ink">{freshKey.key}</span>
+                  <Button variant="ghost" size="sm" onClick={() => copy(freshKey.key, 'fresh')} className="h-auto gap-1 px-1 py-0.5 text-[12px] normal-case tracking-normal hover:bg-transparent">
                     <Copy size={11} /> {copied === 'fresh' ? 'copied' : 'copy'}
                   </Button>
                 </div>
@@ -155,12 +183,17 @@ export function Integrations() {
             {(sum?.apiKeys ?? []).map((k) => (
               <div key={k.id} className="border border-line bg-surface-2 p-2.5">
                 <div className="flex items-center gap-2">
-                  <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink-2">{k.label}</span>
-                  <Button variant="ghost" size="iconSm" onClick={() => api.deleteApiKey(k.id).then(reload)} title={t('integ.revoke')} className="size-6 hover:bg-transparent hover:text-crit">
+                  <span className="min-w-0 flex-1 truncate text-[14px] text-ink-2">{k.label}</span>
+                  <Button variant="ghost" size="iconSm" aria-label={t('integ.revoke')} onClick={async () => {
+                    if (await confirm({ message: `${t('integ.revoke')} · ${k.label || k.prefix}?`, confirmText: t('integ.revoke'), destructive: true })) {
+                      await api.deleteApiKey(k.id)
+                      reload()
+                    }
+                  }} title={t('integ.revoke')} className="size-6 hover:bg-transparent hover:text-crit">
                     <Trash2 size={12} />
                   </Button>
                 </div>
-                <div className="mono mt-1 truncate text-[11px] text-ink-3">{k.prefix}</div>
+                <div className="mono mt-1 truncate text-[12px] text-ink-3">{k.prefix}</div>
                 <div className="microlabel mt-1">
                   {t('integ.created')} {new Date(k.createdAt).toISOString().slice(0, 10)} · {t('integ.lastUsed')}{' '}
                   {k.lastUsedAt ? fmtAgo(k.lastUsedAt, clock) : t('integ.never')}
@@ -175,27 +208,32 @@ export function Integrations() {
           <PanelHead label={
             <span className="flex items-center gap-2">
               <Plug size={13} /> {t('integ.externals')}
-              <Button variant="ghost" size="iconSm" onClick={reload} className="ml-auto size-6 hover:bg-transparent" aria-label="refresh">
+              <Button variant="ghost" size="iconSm" onClick={reload} className="ml-auto size-6 hover:bg-transparent" aria-label={t('c.refresh')}>
                 <RefreshCw size={12} />
               </Button>
             </span>
           } />
           <div className="space-y-2 p-3">
-            {!sum?.externals.length && <p className="text-[12.5px] leading-relaxed text-ink-3">{t('integ.noExternals')}</p>}
+            {!sum?.externals.length && <p className="text-[14px] leading-relaxed text-ink-3">{t('integ.noExternals')}</p>}
             {(sum?.externals ?? []).map((u) => (
               <div key={u.id} className="flex items-center gap-2.5 border border-line bg-surface-2 p-2.5">
                 <span className="live-dot shrink-0" style={{ background: u.online ? 'var(--color-ok)' : 'var(--color-crit)' }} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-2">
-                    <span className="mono text-[12.5px] text-ink">{u.callsign}</span>
-                    <span className="truncate text-[11.5px] text-ink-3">{u.model} · {u.serial}</span>
+                    <span className="mono text-[14px] text-ink">{u.callsign}</span>
+                    <span className="truncate text-[12px] text-ink-3">{u.model} · {u.serial}</span>
                   </div>
                   <div className="microlabel mt-0.5">
                     {t(`integ.level.${u.level ?? 'state-only'}`)} · {u.online ? t('integ.online') : t('integ.offline')} ·{' '}
                     {fmtAgo(u.lastSeen, clock)}
                   </div>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => api.removeExternal(u.id).then(reload)} className="mono h-auto px-1 py-0.5 text-[10.5px] normal-case tracking-normal hover:bg-transparent hover:text-crit">
+                <Button variant="ghost" size="sm" onClick={async () => {
+                  if (await confirm({ message: `${t('integ.remove')} · ${u.callsign}?`, confirmText: t('integ.remove'), destructive: true })) {
+                    await api.removeExternal(u.id)
+                    reload()
+                  }
+                }} className="h-auto px-1 py-0.5 text-[12px] normal-case tracking-normal hover:bg-transparent hover:text-crit">
                   {t('integ.remove')}
                 </Button>
               </div>
@@ -213,19 +251,21 @@ export function Integrations() {
           <div className="space-y-2 p-3">
             <div className="flex flex-wrap gap-2">
               <Input
+                aria-label={t('integ.typeId')}
                 value={typeDraft.id}
                 onChange={(e) => setTypeDraft({ ...typeDraft, id: e.target.value })}
                 placeholder={t('integ.typeId')}
                 className="mono h-auto w-36 bg-surface-2 py-1.5 text-[12px]"
               />
               <Input
+                aria-label={t('integ.typeLabel')}
                 value={typeDraft.label}
                 onChange={(e) => setTypeDraft({ ...typeDraft, label: e.target.value })}
                 placeholder={t('integ.typeLabel')}
                 className="mono h-auto min-w-0 flex-1 bg-surface-2 py-1.5 text-[12px]"
               />
               <Select value={typeDraft.severity} onValueChange={(v) => setTypeDraft({ ...typeDraft, severity: v as Severity })}>
-                <SelectTrigger size="sm" className="mono bg-surface-2 text-[11px] normal-case tracking-normal">
+                <SelectTrigger aria-label={t('ev.severity')} size="sm" className="bg-surface-2 text-[12px] normal-case tracking-normal">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -240,20 +280,25 @@ export function Integrations() {
                 variant="outline"
                 disabled={!typeDraft.id || !typeDraft.label}
                 onClick={() => api.createEventType(typeDraft).then(() => (setTypeDraft({ id: '', label: '', severity: 'info' }), reload()))}
-                className="mono h-auto py-1.5 text-[11px] normal-case tracking-[0.1em] disabled:opacity-30"
+                className="h-auto py-1.5 text-[12px] normal-case tracking-normal disabled:opacity-30"
               >
                 {t('integ.newType')}
               </Button>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {(sum?.eventTypes ?? []).map((et) => (
-                <span key={et.id} className="mono flex items-center gap-1.5 border border-line bg-surface-2 px-2 py-1 text-[11px]">
+                <span key={et.id} className="mono flex items-center gap-1.5 border border-line bg-surface-2 px-2 py-1 text-[12px]">
                   <span style={{ color: SEVERITY_COLOR[et.severity] }}>●</span>
                   <span className="text-ink-2">{et.id}</span>
                   {et.builtin ? (
-                    <span className="text-[9.5px] tracking-[0.1em] text-ink-3/70">{t('integ.builtin')}</span>
+                    <span className="text-[12px] tracking-normal text-ink-3">{t('integ.builtin')}</span>
                   ) : (
-                    <Button variant="ghost" size="iconSm" onClick={() => api.deleteEventType(et.id).then(reload)} className="size-4 hover:bg-transparent hover:text-crit" aria-label="delete type">
+                    <Button variant="ghost" size="iconSm" onClick={async () => {
+                      if (await confirm({ message: `${t('c.delete')} · ${et.label}?`, confirmText: t('c.delete'), destructive: true })) {
+                        await api.deleteEventType(et.id)
+                        reload()
+                      }
+                    }} className="size-4 hover:bg-transparent hover:text-crit" aria-label={t('c.delete')}>
                       <Trash2 size={10} />
                     </Button>
                   )}
@@ -275,34 +320,34 @@ export function Integrations() {
             {site?.map ? (
               <div className="flex items-center gap-3 border border-line bg-surface-2 p-2.5">
                 <img src={site.map.image} alt="occupancy" className="h-16 w-28 border border-line-2 object-cover" />
-                <div className="mono text-[11px] leading-relaxed text-ink-3">
+                <div className="mono text-[12px] leading-relaxed text-ink-3">
                   {t('integ.uploaded')}: {site.map.source}
                   <br />
                   {site.map.width}×{site.map.height}px · {site.map.resolution} m/px · origin [{site.map.origin.join(', ')}]
                 </div>
               </div>
             ) : (
-              <p className="mono text-[11px] text-ink-3/80">{t('integ.noMap')}</p>
+              <p className="mono text-[12px] text-ink-3">{t('integ.noMap')}</p>
             )}
             <div className="flex flex-wrap items-end gap-2">
-              <input ref={fileRef} type="file" accept="image/png" onChange={(e) => setMapFile(e.target.files?.[0] ?? null)} className="mono w-full text-[11px] text-ink-3 file:mr-2 file:border file:border-line file:bg-surface-2 file:px-2 file:py-1 file:text-ink-2" />
-              <label className="mono flex items-center text-[10.5px] text-ink-3">
+              <input aria-label={t('integ.map')} ref={fileRef} type="file" accept="image/png" onChange={(e) => setMapFile(e.target.files?.[0] ?? null)} className="mono w-full text-[12px] text-ink-3 file:mr-2 file:border file:border-line file:bg-surface-2 file:px-2 file:py-1 file:text-ink-2" />
+              <label className="mono flex items-center text-[12px] text-ink-3">
                 {t('integ.resolution')}
-                <Input type="number" step="0.01" value={mapDraft.resolution} onChange={(e) => setMapDraft({ ...mapDraft, resolution: Number(e.target.value) })} className="mono ml-1 h-auto w-16 bg-surface-2 px-1.5 py-1 text-[11px]" />
+                <Input type="number" step="0.01" value={mapDraft.resolution} onChange={(e) => setMapDraft({ ...mapDraft, resolution: Number(e.target.value) })} className="mono ml-1 h-auto w-16 bg-surface-2 px-1.5 py-1 text-[12px]" />
               </label>
-              <label className="mono flex items-center text-[10.5px] text-ink-3">
+              <label className="mono flex items-center text-[12px] text-ink-3">
                 {t('integ.originX')}
-                <Input type="number" step="0.5" value={mapDraft.originX} onChange={(e) => setMapDraft({ ...mapDraft, originX: Number(e.target.value) })} className="mono ml-1 h-auto w-16 bg-surface-2 px-1.5 py-1 text-[11px]" />
+                <Input type="number" step="0.5" value={mapDraft.originX} onChange={(e) => setMapDraft({ ...mapDraft, originX: Number(e.target.value) })} className="mono ml-1 h-auto w-16 bg-surface-2 px-1.5 py-1 text-[12px]" />
               </label>
-              <label className="mono flex items-center text-[10.5px] text-ink-3">
+              <label className="mono flex items-center text-[12px] text-ink-3">
                 {t('integ.originZ')}
-                <Input type="number" step="0.5" value={mapDraft.originZ} onChange={(e) => setMapDraft({ ...mapDraft, originZ: Number(e.target.value) })} className="mono ml-1 h-auto w-16 bg-surface-2 px-1.5 py-1 text-[11px]" />
+                <Input type="number" step="0.5" value={mapDraft.originZ} onChange={(e) => setMapDraft({ ...mapDraft, originZ: Number(e.target.value) })} className="mono ml-1 h-auto w-16 bg-surface-2 px-1.5 py-1 text-[12px]" />
               </label>
               <Button
                 variant="outline"
                 disabled={!mapFile || busy}
                 onClick={uploadMap}
-                className="mono h-auto py-1.5 text-[11px] normal-case tracking-[0.1em] disabled:opacity-30"
+                className="h-auto py-1.5 text-[12px] normal-case tracking-normal disabled:opacity-30"
               >
                 {t('integ.upload')}
               </Button>
@@ -320,7 +365,7 @@ export function Integrations() {
         } />
         <div className="overflow-x-auto p-1.5">
           {!sum?.orders.length ? (
-            <p className="mono p-2 text-[11px] text-ink-3/80">—</p>
+            <p className="mono p-2 text-[12px] text-ink-3">—</p>
           ) : (
             <Table className="text-[12px]">
               <TableBody>
@@ -348,13 +393,13 @@ export function Integrations() {
               href={`${BASE}/api-docs.html`}
               target="_blank"
               rel="noopener"
-              className="mono text-[11px] tracking-[0.08em] text-accent underline decoration-line-2 underline-offset-2 hover:opacity-80"
+              className="mono text-[12px] tracking-normal text-accent underline decoration-line-2 underline-offset-2 hover:opacity-80"
             >
               {t('integ.apiRef')} ↗
             </a>
           }
         />
-        <pre className="mono overflow-x-auto p-3 text-[11px] leading-relaxed text-ink-3">
+        <pre className="mono overflow-x-auto p-3 text-[12px] leading-relaxed text-ink-3">
 {`# register a robot (factsheet)   levels: state-only | dispatchable
 curl -X POST ${curlBase}/robots -H 'authorization: Bearer ${demoKey}' \\
   -H 'content-type: application/json' \\
@@ -386,7 +431,7 @@ curl -X POST ${curlBase}/events -H 'authorization: Bearer ${demoKey}' \\
 
 const STATUS_DOT: Record<string, string> = {
   running: 'var(--color-ok)',
-  backoff: 'var(--color-warn, #e0a400)',
+  backoff: 'var(--color-warn)',
   stopped: 'var(--color-ink-3)',
 }
 
@@ -397,22 +442,40 @@ function ConnectorsPanel({ siteId }: { siteId: string }) {
   const [catalog, setCatalog] = useState<ConnectorCatalogEntry[]>([])
   const [creating, setCreating] = useState(false)
   const [logsFor, setLogsFor] = useState<Connector | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const request = useRef(0)
 
   const reload = useCallback(() => {
-    api
+    const id = ++request.current
+    return api
       .connectors(siteId)
       .then((d: { connectors?: Connector[]; catalog?: ConnectorCatalogEntry[]; error?: string }) => {
-        if (d.error) return
+        if (id !== request.current) return
+        if (d.error) throw new Error(d.error)
         setConnectors(d.connectors ?? [])
         setCatalog(d.catalog ?? [])
+        setLoadError(false)
       })
-      .catch(() => {})
+      .catch(() => { if (id === request.current) setLoadError(true) })
+      .finally(() => { if (id === request.current) setLoading(false) })
   }, [siteId])
 
   useEffect(() => {
-    reload()
-    const timer = setInterval(reload, 8000) // runtime status drifts (backoff → running)
-    return () => clearInterval(timer)
+    let stopped = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    setConnectors([])
+    setCatalog([])
+    setLoading(true)
+    setLoadError(false)
+    // Schedule after completion: slow responses must get a chance to render.
+    const poll = () => {
+      void reload().finally(() => {
+        if (!stopped) timer = setTimeout(poll, 8000)
+      })
+    }
+    poll()
+    return () => { stopped = true; clearTimeout(timer); request.current++ }
   }, [reload])
 
   const act = async (c: Connector, action: 'start' | 'stop' | 'restart') => {
@@ -434,21 +497,26 @@ function ConnectorsPanel({ siteId }: { siteId: string }) {
         label={
           <span className="flex items-center gap-2">
             <Cpu size={13} /> {t('conn.title')}
-            <Button variant="ghost" size="iconSm" onClick={reload} className="ml-auto size-6 hover:bg-transparent" aria-label="refresh">
+            <Button variant="ghost" size="iconSm" onClick={reload} className="ml-auto size-6 hover:bg-transparent" aria-label={t('c.refresh')}>
               <RefreshCw size={12} />
             </Button>
           </span>
         }
       />
       <div className="space-y-2 p-3">
-        <p className="text-[12.5px] leading-relaxed text-ink-3">{t('conn.sub')}</p>
+        <p className="text-[14px] leading-relaxed text-ink-3">{t('conn.sub')}</p>
+        {loadError && <div role="alert" className="flex flex-wrap items-center justify-between gap-2 border border-crit/40 p-3 text-sm text-ink-2">
+          <span>{t('c.loadFailed')}</span>
+          <Button variant="outline" onClick={reload}>{t('c.refresh')}</Button>
+        </div>}
+        {loading && <div role="status" className="min-h-16 py-4 text-sm text-ink-3">{t('c.loading')}…</div>}
         {connectors.map((c) => (
           <div key={c.id} className="flex flex-wrap items-center gap-2.5 border border-line bg-surface-2 p-2.5">
             <span className="live-dot shrink-0" style={{ background: STATUS_DOT[c.runtime.status] }} />
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline gap-2">
-                <span className="mono text-[12.5px] text-ink">{c.name}</span>
-                <span className="truncate text-[11.5px] text-ink-3">
+                <span className="mono text-[14px] text-ink">{c.name}</span>
+                <span className="truncate text-[12px] text-ink-3">
                   {catalog.find((v) => v.vendor === c.vendor)?.model ?? c.vendor} · {String(c.config.serial ?? c.config.sn ?? '')}
                 </span>
               </div>
@@ -462,29 +530,29 @@ function ConnectorsPanel({ siteId }: { siteId: string }) {
             <div className="flex shrink-0 items-center gap-1">
               {c.enabled ? (
                 <>
-                  <Button variant="ghost" size="sm" onClick={() => act(c, 'restart')} className="mono h-auto px-1.5 py-0.5 text-[10.5px] normal-case tracking-normal hover:bg-transparent">
+                  <Button variant="ghost" size="sm" onClick={() => act(c, 'restart')} className="h-auto px-1.5 py-0.5 text-[12px] normal-case tracking-normal hover:bg-transparent">
                     {t('conn.restart')}
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => act(c, 'stop')} className="mono h-auto px-1.5 py-0.5 text-[10.5px] normal-case tracking-normal hover:bg-transparent">
+                  <Button variant="ghost" size="sm" onClick={() => act(c, 'stop')} className="h-auto px-1.5 py-0.5 text-[12px] normal-case tracking-normal hover:bg-transparent">
                     {t('conn.stop')}
                   </Button>
                 </>
               ) : (
-                <Button variant="ghost" size="sm" onClick={() => act(c, 'start')} className="mono h-auto px-1.5 py-0.5 text-[10.5px] normal-case tracking-normal hover:bg-transparent text-accent">
+                <Button variant="ghost" size="sm" onClick={() => act(c, 'start')} className="h-auto px-1.5 py-0.5 text-[12px] normal-case tracking-normal hover:bg-transparent text-accent">
                   {t('conn.start')}
                 </Button>
               )}
-              <Button variant="ghost" size="sm" onClick={() => setLogsFor(c)} className="mono h-auto px-1.5 py-0.5 text-[10.5px] normal-case tracking-normal hover:bg-transparent">
+              <Button variant="ghost" size="sm" onClick={() => setLogsFor(c)} className="h-auto px-1.5 py-0.5 text-[12px] normal-case tracking-normal hover:bg-transparent">
                 {t('conn.logs')}
               </Button>
-              <Button variant="ghost" size="iconSm" onClick={() => remove(c)} aria-label="delete" className="hover:text-crit">
+              <Button variant="ghost" size="iconSm" onClick={() => remove(c)} aria-label={t('c.delete')} className="hover:text-crit">
                 <Trash2 size={13} />
               </Button>
             </div>
           </div>
         ))}
-        {!connectors.length && <p className="mono text-[11.5px] text-ink-3">{t('conn.none')}</p>}
-        <Button variant="signal" size="sm" onClick={() => setCreating(true)} className="mono h-auto px-3 py-1.5 text-[11px]">
+        {!loading && !loadError && !connectors.length && <p className="mono text-[12px] text-ink-3">{t('conn.none')}</p>}
+        <Button variant="signal" size="sm" onClick={() => setCreating(true)} className="h-auto px-3 py-1.5 text-[12px]">
           + {t('conn.new')}
         </Button>
       </div>
@@ -505,20 +573,23 @@ function ConnectorsPanel({ siteId }: { siteId: string }) {
 }
 
 function FieldInput({ f, value, onChange }: { f: ConnectorField; value: string; onChange: (v: string) => void }) {
+  const id = useId()
   return (
     <div>
-      <div className="microlabel mb-1">
+      <Label htmlFor={id} className="mb-1">
         {f.label}
         {f.required && <span className="text-crit"> *</span>}
-      </div>
+      </Label>
       <Input
+        id={id}
+        required={f.required}
         type={f.type === 'password' ? 'password' : f.type === 'number' ? 'number' : 'text'}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={f.placeholder}
         className="mono h-auto bg-surface-2 py-1.5 text-[12px]"
       />
-      {f.hint && <div className="mt-0.5 text-[10.5px] leading-snug text-ink-3">{f.hint}</div>}
+      {f.hint && <div className="mt-0.5 text-[12px] leading-snug text-ink-3">{f.hint}</div>}
     </div>
   )
 }
@@ -572,7 +643,7 @@ function NewConnectorModal({
       <div className="flex max-h-[86dvh] flex-col">
         <div className="flex items-center justify-between border-b border-line px-4 py-3">
           <span className="microlabel">{t('conn.new')}</span>
-          <Button variant="ghost" size="iconSm" onClick={onClose} aria-label="close">
+          <Button variant="ghost" size="iconSm" onClick={onClose} aria-label={t('c.close')}>
             <X size={16} />
           </Button>
         </div>
@@ -582,18 +653,19 @@ function NewConnectorModal({
             {catalog.map((v) => {
               const sel = vendor?.vendor === v.vendor
               return (
-                <button
+                <Button variant="ghost"
                   key={v.vendor}
+                      aria-pressed={sel}
                   onClick={() => setVendor(v)}
-                  className="panel-hover border p-3 text-left"
+                  className="panel-hover block h-auto whitespace-normal border p-3 text-left font-normal"
                   style={{ borderColor: sel ? 'var(--color-accent)' : 'var(--color-line)' }}
                 >
                   <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-[13.5px] font-medium text-ink">{v.model}</span>
+                    <span className="text-[14px] font-medium text-ink">{v.model}</span>
                     {sel && <Check size={13} className="shrink-0 text-accent" />}
                   </div>
                   <div className="microlabel mt-0.5">{v.title}</div>
-                </button>
+                </Button>
               )
             })}
           </div>
@@ -602,7 +674,7 @@ function NewConnectorModal({
             <>
               <div>
                 <div className="microlabel mb-1">{t('conn.name')}</div>
-                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={`${vendor.model} · west wing`} className="mono h-auto bg-surface-2 py-1.5 text-[12px]" />
+                <Input aria-label={t('conn.name')} value={name} onChange={(e) => setName(e.target.value)} placeholder={`${vendor.model} · west wing`} className="mono h-auto bg-surface-2 py-1.5 text-[12px]" />
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {[...vendor.identity, ...vendor.fields].map((f) => (
@@ -614,27 +686,27 @@ function NewConnectorModal({
               <div>
                 <div className="mb-1 flex items-center justify-between">
                   <span className="microlabel">{t('conn.streams')}</span>
-                  <Button variant="outline" size="sm" onClick={() => setStreams((s) => [...s, { id: `s${streamSeq.current++}`, name: '', url: '', kind: 'camera' }])} className="mono h-auto px-2 py-0.5 text-[10px] normal-case tracking-[0.1em]">
+                  <Button variant="outline" size="sm" onClick={() => setStreams((s) => [...s, { id: `s${streamSeq.current++}`, name: '', url: '', kind: 'camera' }])} className="h-auto px-2 py-0.5 text-[12px] normal-case tracking-normal">
                     + {t('conn.addStream')}
                   </Button>
                 </div>
                 {streams.map((s, i) => (
-                  <div key={s.id} className="mb-1.5 flex items-center gap-1.5">
-                    <Input value={s.name} onChange={(e) => setStreams((all) => all.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} placeholder={t('conn.streamName')} className="mono h-auto w-32 bg-surface-2 py-1.5 text-[11.5px]" />
-                    <Input value={s.url} onChange={(e) => setStreams((all) => all.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)))} placeholder="rtsp://user:pass@10.0.0.9:554/ch1" className="mono h-auto min-w-0 flex-1 bg-surface-2 py-1.5 text-[11.5px]" />
+                  <div key={s.id} className="mb-1.5 flex flex-wrap items-center gap-1.5">
+                    <Input aria-label={`${t('conn.streamName')} ${i + 1}`} value={s.name} onChange={(e) => setStreams((all) => all.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} placeholder={t('conn.streamName')} className="mono h-auto w-32 bg-surface-2 py-1.5 text-[12px]" />
+                    <Input aria-label={`${t('live.camRtsp')} ${i + 1}`} value={s.url} onChange={(e) => setStreams((all) => all.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)))} placeholder="rtsp://user:pass@10.0.0.9:554/ch1" className="mono h-auto min-w-0 flex-1 bg-surface-2 py-1.5 text-[12px]" />
                     <Select value={s.kind} onValueChange={(v) => setStreams((all) => all.map((x, j) => (j === i ? { ...x, kind: v } : x)))}>
-                      <SelectTrigger size="sm" className="mono w-28 bg-surface-2 text-[11px]"><SelectValue /></SelectTrigger>
+                      <SelectTrigger aria-label={`${t('ev.model')} ${i + 1}`} size="sm" className="mono w-28 bg-surface-2 text-[12px]"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="camera">camera</SelectItem>
                         <SelectItem value="thermal">thermal</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Button variant="ghost" size="iconSm" onClick={() => setStreams((all) => all.filter((_, j) => j !== i))} aria-label="remove stream">
+                    <Button variant="ghost" size="iconSm" onClick={() => setStreams((all) => all.filter((_, j) => j !== i))} aria-label={`${t('c.delete')} ${t('conn.streamName')} ${i + 1}`}>
                       <Trash2 size={12} />
                     </Button>
                   </div>
                 ))}
-                <div className="text-[10.5px] leading-snug text-ink-3">{t('conn.streamsHint')}</div>
+                <div className="text-[12px] leading-snug text-ink-3">{t('conn.streamsHint')}</div>
               </div>
 
               {err && <div className="mono border border-crit/40 bg-crit/10 px-2.5 py-1.5 text-[12px]" style={{ color: 'var(--color-crit)' }}>{err}</div>}
@@ -642,8 +714,8 @@ function NewConnectorModal({
           )}
         </div>
         <div className="flex items-center justify-end gap-2 border-t border-line px-4 py-3">
-          <Button variant="ghost" onClick={onClose} className="mono h-auto px-3 py-1.5 text-[11px]">{t('c.cancel')}</Button>
-          <Button variant="signal" disabled={!vendor || busy} onClick={create} className="mono h-auto px-4 py-1.5 text-[11px] disabled:opacity-30">
+          <Button variant="ghost" onClick={onClose} className="h-auto px-3 py-1.5 text-[12px]">{t('c.cancel')}</Button>
+          <Button variant="signal" disabled={!vendor || busy} onClick={create} className="h-auto px-4 py-1.5 text-[12px] disabled:opacity-30">
             {t('conn.create')}
           </Button>
         </div>
@@ -668,9 +740,9 @@ function ConnectorLogsModal({ siteId, connector, onClose }: { siteId: string; co
       <div className="flex max-h-[80dvh] flex-col">
         <div className="flex items-center justify-between border-b border-line px-4 py-3">
           <span className="microlabel">{connector.name} · {t('conn.logs')}</span>
-          <Button variant="ghost" size="iconSm" onClick={onClose} aria-label="close"><X size={16} /></Button>
+          <Button variant="ghost" size="iconSm" onClick={onClose} aria-label={t('c.close')}><X size={16} /></Button>
         </div>
-        <pre className="mono min-h-40 flex-1 overflow-auto bg-black/40 p-3 text-[10.5px] leading-relaxed text-ink-2">
+        <pre className="mono min-h-40 flex-1 overflow-auto bg-surface-2 p-3 text-[12px] leading-relaxed text-ink-2">
           {lines.length ? lines.join('\n') : t('conn.noLogs')}
         </pre>
       </div>

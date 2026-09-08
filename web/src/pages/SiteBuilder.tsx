@@ -5,9 +5,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { toast } from 'sonner'
-import { ArrowLeft, Check, Copy, Crosshair, MapIcon, MousePointer2, Move3D, Plus, Trash2, Upload, Video } from 'lucide-react'
+import { ArrowLeft, Checkmark as Check, Copy, LocationCurrent as Crosshair, Map as MapIcon, Cursor_1 as MousePointer2, TransformInstructions as Move3D, Add as Plus, TrashCan as Trash2, Upload, Video } from '@carbon/icons-react'
 import { api } from '../lib/store'
-import { useT } from '../lib/i18n'
+import { useT, useLang } from '../lib/i18n'
 import { useConfirm } from '../components/ConfirmDialog'
 import { Panel } from '../components/ui'
 import { Button } from '@/components/ui/button'
@@ -483,6 +483,7 @@ function layoutLabels(p: {
 
 export function SiteBuilder() {
   const t = useT()
+  const zh = useLang((s) => s.lang === 'zh')
   const confirm = useConfirm()
   const { siteId = '' } = useParams()
   const [site, setSite] = useState<SiteInfo | null>(null)
@@ -670,17 +671,17 @@ export function SiteBuilder() {
     : null
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-w-0 flex-col">
       {/* header */}
       <div className="flex flex-wrap items-center gap-3 border-b border-line px-3 py-2.5 md:px-4">
-        <Link to="/sites" className="text-ink-3 transition-colors hover:text-ink">
+        <Link to="/sites" aria-label={t('nav.sites')} className="text-ink-3 transition-colors hover:text-ink">
           <ArrowLeft size={16} />
         </Link>
         <div>
           <div className="microlabel">{t('sb.title')} · {site.id}</div>
-          <div className="mono text-[14px] text-ink">{site.name}</div>
+          <h1 className="text-xl font-medium text-ink">{site.name}</h1>
         </div>
-        <div className="mono ml-2 hidden items-center gap-3 text-[10.5px] text-ink-3 lg:flex">
+        <div className="mono ml-2 hidden items-center gap-3 text-[12px] text-ink-3 lg:flex">
           <span>{waypoints.length} {t('sb.waypoints')}</span>
           <span>{zones.length} {t('sb.zones')}</span>
           <span>{cameras.length} {t('sb.cameras')}</span>
@@ -688,15 +689,15 @@ export function SiteBuilder() {
           <span style={{ color: dockWp ? 'var(--color-ok)' : 'var(--color-warn)' }}>{dockWp ? `DOCK ${dockWp}` : t('sb.noDock')}</span>
         </div>
         <div className="ml-auto flex items-center gap-2">
-          {dirty ? <span className="mono text-[10.5px] text-warn">{t('sb.unsaved')}</span> : savedAt ? <span className="mono text-[10.5px] text-ok">{t('sb.saved')}</span> : null}
-          <Button variant="signal" disabled={!dirty || saving} onClick={save} className="mono text-[11.5px] normal-case tracking-[0.12em] disabled:opacity-35">
+          {dirty ? <span className="mono text-[12px] text-warn">{t('sb.unsaved')}</span> : savedAt ? <span className="mono text-[12px] text-ok">{t('sb.saved')}</span> : null}
+          <Button variant="signal" disabled={!dirty || saving} onClick={save} className="text-[12px] normal-case tracking-normal disabled:opacity-35">
             {saving ? '…' : t('sb.save')}
           </Button>
         </div>
       </div>
 
       {/* tools */}
-      <div className="flex items-center gap-2 border-b border-line px-3 py-2 md:px-4">
+      <div className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2 md:px-4">
         <ToggleGroup
           type="single"
           value={tool}
@@ -717,17 +718,17 @@ export function SiteBuilder() {
               ['calib', Copy, t('sb.toolCalib')],
             ] as const
           ).map(([v, Icon, label]) => (
-            <ToggleGroupItem key={v} value={v} className="mono gap-1.5 text-[10px] tracking-[0.08em]">
+            <ToggleGroupItem key={v} value={v} className="mono gap-1.5 text-[12px] tracking-normal">
               <Icon size={12} /> {label}
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
         {tool === 'zone' && zoneDraft.length > 0 && (
-          <Button variant="outline" size="sm" onClick={closeZone} disabled={zoneDraft.length < 3} className="mono h-auto px-2 py-1 text-[10.5px] normal-case tracking-[0.1em] disabled:opacity-40">
+          <Button variant="outline" size="sm" onClick={closeZone} disabled={zoneDraft.length < 3} className="h-auto px-2 py-1 text-[12px] normal-case tracking-normal disabled:opacity-40">
             <Check size={11} /> {t('sb.closeZone')} ({zoneDraft.length})
           </Button>
         )}
-        <span className="mono ml-auto hidden text-[10px] text-ink-3 md:block">{t(`sb.hint.${tool}`)}</span>
+        <span className="mono ml-auto hidden text-[12px] text-ink-3 md:block">{t(`sb.hint.${tool}`)}</span>
       </div>
 
       {/* main split */}
@@ -763,6 +764,7 @@ export function SiteBuilder() {
                         variant="ghost"
                         size="iconSm"
                         className="text-ink-3 hover:text-crit"
+                        aria-label={`${t('c.delete')} · ${selWp.name}`}
                         onClick={() => {
                           setWaypoints((ws) => ws.filter((w) => w.id !== selWp.id))
                           if (dockWp === selWp.id) setDockWp('')
@@ -774,7 +776,8 @@ export function SiteBuilder() {
                       </Button>
                     </div>
                     <Input
-                      className="bg-surface-2 py-1.5 text-[12.5px]"
+                      aria-label={zh ? '航点名称' : 'Waypoint name'}
+                      className="bg-surface-2 py-1.5 text-[14px]"
                       value={selWp.name}
                       onChange={(e) => {
                         setWaypoints((ws) => ws.map((w) => (w.id === selWp.id ? { ...w, name: e.target.value } : w)))
@@ -790,7 +793,7 @@ export function SiteBuilder() {
                           mark()
                         }}
                       >
-                        <SelectTrigger className="mono h-8 flex-1 bg-surface-2 text-[11px] normal-case tracking-normal">
+                        <SelectTrigger aria-label={zh ? '航点类型' : 'Waypoint type'} className="h-8 flex-1 bg-surface-2 text-[12px] normal-case tracking-normal">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -804,7 +807,7 @@ export function SiteBuilder() {
                       <Button
                         variant={dockWp === selWp.id ? 'signal' : 'outline'}
                         size="sm"
-                        className="mono h-8 px-2 text-[10px] normal-case tracking-[0.08em]"
+                        className="h-8 px-2 text-[12px] normal-case tracking-normal"
                         onClick={() => {
                           setDockWp(selWp.id)
                           setWaypoints((ws) => ws.map((w) => (w.id === selWp.id ? { ...w, kind: 'dock' } : w.kind === 'dock' ? { ...w, kind: 'nav' } : w)))
@@ -814,7 +817,7 @@ export function SiteBuilder() {
                         {t('sb.setDock')}
                       </Button>
                     </div>
-                    <div className="mono text-[10.5px] text-ink-3">
+                    <div className="mono text-[12px] text-ink-3">
                       x {selWp.x.toFixed(2)} · z {selWp.z.toFixed(2)} — {t('sb.dragHint')}
                     </div>
                   </div>
@@ -829,6 +832,7 @@ export function SiteBuilder() {
                         variant="ghost"
                         size="iconSm"
                         className="text-ink-3 hover:text-crit"
+                        aria-label={`${t('c.delete')} · ${selZone.name}`}
                         onClick={() => {
                           setZones((zs) => zs.filter((z) => z.id !== selZone.id))
                           setSel(null)
@@ -839,7 +843,8 @@ export function SiteBuilder() {
                       </Button>
                     </div>
                     <Input
-                      className="bg-surface-2 py-1.5 text-[12.5px]"
+                      aria-label={zh ? '区域名称' : 'Zone name'}
+                      className="bg-surface-2 py-1.5 text-[14px]"
                       value={selZone.name}
                       onChange={(e) => {
                         setZones((zs) => zs.map((z) => (z.id === selZone.id ? { ...z, name: e.target.value } : z)))
@@ -853,7 +858,7 @@ export function SiteBuilder() {
                         mark()
                       }}
                     >
-                      <SelectTrigger className="mono h-8 w-full bg-surface-2 text-[11px] normal-case tracking-normal">
+                      <SelectTrigger aria-label={zh ? '区域类型' : 'Zone type'} className="h-8 w-full bg-surface-2 text-[12px] normal-case tracking-normal">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -871,17 +876,18 @@ export function SiteBuilder() {
                 <div className="microlabel mb-1.5">{t('sb.waypoints')}</div>
                 <div className="max-h-56 space-y-px overflow-y-auto">
                   {waypoints.map((w) => (
-                    <button
+                    <Button variant="ghost"
                       key={w.id}
+                      aria-pressed={sel?.kind === 'wp' && sel.id === w.id}
                       onClick={() => setSel({ kind: 'wp', id: w.id })}
-                      className={`mono flex w-full items-center gap-2 px-2 py-1 text-left text-[11px] ${sel?.kind === 'wp' && sel.id === w.id ? 'bg-surface-2 text-ink' : 'text-ink-2 hover:bg-surface-2/60'}`}
+                      className={`mono flex h-auto min-h-8 w-full min-w-0 items-center justify-start gap-2 px-2 py-1 text-left text-[12px] ${sel?.kind === 'wp' && sel.id === w.id ? 'bg-surface-2 text-ink' : 'text-ink-2 hover:bg-surface-2/60'}`}
                     >
                       <span className="w-14 shrink-0">{w.id}</span>
-                      <span className="truncate">{w.name}</span>
+                      <span className="min-w-0 flex-1 truncate">{w.name}</span>
                       <span className="ml-auto shrink-0 text-ink-3">{w.id === dockWp ? 'DOCK' : w.kind}</span>
-                    </button>
+                    </Button>
                   ))}
-                  {!waypoints.length && <div className="px-2 py-2 text-[11.5px] text-ink-3">{t('sb.noWaypoints')}</div>}
+                  {!waypoints.length && <div className="px-2 py-2 text-[12px] text-ink-3">{t('sb.noWaypoints')}</div>}
                 </div>
               </div>
             </div>
@@ -896,13 +902,14 @@ export function SiteBuilder() {
           {tool === 'map' && (
             <div className="space-y-3 p-3">
               <div className="microlabel">{t('sb.mapUpload')}</div>
-              <label className="flex cursor-pointer flex-col items-center gap-1.5 border border-dashed border-line-2 p-4 text-ink-3 transition-colors hover:border-ink-3 hover:text-ink-2">
+              <label className="flex cursor-pointer flex-col items-center gap-1.5 border border-dashed border-line-2 p-4 text-ink-3 transition-colors hover:border-ink-3 hover:text-ink-2 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ring">
                 <Upload size={16} />
-                <span className="mono text-[10.5px]">{mapDataUrl ? t('sb.mapReady') : t('sb.mapDrop')}</span>
+                <span className="mono text-[12px]">{mapDataUrl ? t('sb.mapReady') : t('sb.mapDrop')}</span>
                 <input
+                  aria-label={t('sb.mapDrop')}
                   type="file"
                   accept="image/png"
-                  className="hidden"
+                  className="sr-only"
                   onChange={(e) => {
                     const f = e.target.files?.[0]
                     if (!f) return
@@ -915,25 +922,25 @@ export function SiteBuilder() {
               </label>
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <Label className="mb-1 text-[10px]">{t('sb.resolution')}</Label>
-                  <Input type="number" step="0.001" className="mono bg-surface-2 py-1.5 text-[11.5px]" value={mapMeta.resolution} onChange={(e) => setMapMeta((m) => ({ ...m, resolution: Number(e.target.value) }))} />
+                  <Label htmlFor="sb-map-resolution" className="mb-1 text-[12px]">{t('sb.resolution')}</Label>
+                  <Input id="sb-map-resolution" type="number" step="0.001" className="mono bg-surface-2 py-1.5 text-[12px]" value={mapMeta.resolution} onChange={(e) => setMapMeta((m) => ({ ...m, resolution: Number(e.target.value) }))} />
                 </div>
                 <div>
-                  <Label className="mb-1 text-[10px]">origin x</Label>
-                  <Input type="number" step="0.1" className="mono bg-surface-2 py-1.5 text-[11.5px]" value={mapMeta.originX} onChange={(e) => setMapMeta((m) => ({ ...m, originX: Number(e.target.value) }))} />
+                  <Label htmlFor="sb-map-origin-x" className="mb-1 text-[12px]">{t('integ.originX')}</Label>
+                  <Input id="sb-map-origin-x" type="number" step="0.1" className="mono bg-surface-2 py-1.5 text-[12px]" value={mapMeta.originX} onChange={(e) => setMapMeta((m) => ({ ...m, originX: Number(e.target.value) }))} />
                 </div>
                 <div>
-                  <Label className="mb-1 text-[10px]">origin z</Label>
-                  <Input type="number" step="0.1" className="mono bg-surface-2 py-1.5 text-[11.5px]" value={mapMeta.originZ} onChange={(e) => setMapMeta((m) => ({ ...m, originZ: Number(e.target.value) }))} />
+                  <Label htmlFor="sb-map-origin-z" className="mb-1 text-[12px]">{t('integ.originZ')}</Label>
+                  <Input id="sb-map-origin-z" type="number" step="0.1" className="mono bg-surface-2 py-1.5 text-[12px]" value={mapMeta.originZ} onChange={(e) => setMapMeta((m) => ({ ...m, originZ: Number(e.target.value) }))} />
                 </div>
               </div>
-              <Button variant="signal" disabled={!mapDataUrl} onClick={uploadMap} className="mono w-full text-[11px] normal-case tracking-[0.12em] disabled:opacity-35">
+              <Button variant="signal" disabled={!mapDataUrl} onClick={uploadMap} className="w-full text-[12px] normal-case tracking-normal disabled:opacity-35">
                 {t('sb.applyMap')}
               </Button>
-              <div className="mono text-[10px] leading-relaxed text-ink-3">{t('sb.mapConvention')}</div>
+              <div className="mono text-[12px] leading-relaxed text-ink-3">{t('sb.mapConvention')}</div>
               <div className="space-y-2 border-t border-line pt-3">
                 <div className="microlabel">{t('sb.helpers')}</div>
-                <Button variant="outline" size="sm" disabled={!site.map} onClick={fitBounds} className="mono w-full text-[10.5px] normal-case tracking-[0.1em] disabled:opacity-35">
+                <Button variant="outline" size="sm" disabled={!site.map} onClick={fitBounds} className="w-full text-[12px] normal-case tracking-normal disabled:opacity-35">
                   {t('sb.fitBounds')}
                 </Button>
                 <Button
@@ -941,7 +948,7 @@ export function SiteBuilder() {
                   size="sm"
                   disabled={!site.map}
                   onClick={() => (measure && measure.length === 2 ? applyMeasure() : setMeasure(measure ? null : []))}
-                  className="mono w-full text-[10.5px] normal-case tracking-[0.1em] disabled:opacity-35"
+                  className="w-full text-[12px] normal-case tracking-normal disabled:opacity-35"
                 >
                   {measure ? (measure.length === 2 ? t('sb.measureApply') : t('sb.measureActive')) : t('sb.measureStart')}
                 </Button>
@@ -953,59 +960,64 @@ export function SiteBuilder() {
           {tool === 'calib' && (
             <div className="space-y-3 p-3">
               <div className="microlabel">{t('sb.calibTitle')}</div>
-              <div className="text-[11.5px] leading-relaxed text-ink-3">{t('sb.calibHint')}</div>
+              <div className="text-[12px] leading-relaxed text-ink-3">{t('sb.calibHint')}</div>
               <div className="flex items-center gap-2">
-                <Input className="mono h-8 flex-1 bg-surface-2 text-[11px]" value={calibFrom} onChange={(e) => setCalibFrom(e.target.value)} />
-                <span className="mono text-[10px] text-ink-3">→ world</span>
+                <Input aria-label={zh ? '厂商坐标系' : 'Vendor coordinate frame'} className="mono h-8 flex-1 bg-surface-2 text-[12px]" value={calibFrom} onChange={(e) => setCalibFrom(e.target.value)} />
+                <span className="mono text-[12px] text-ink-3">→ world</span>
               </div>
               <div className="flex items-center gap-2">
                 <Switch id="calib-flipy" checked={flipY} onCheckedChange={setFlipY} />
-                <Label htmlFor="calib-flipy" className="mono cursor-pointer text-[10.5px] text-ink-2">
+                <Label htmlFor="calib-flipy" className="mono cursor-pointer text-[12px] text-ink-2">
                   {t('sb.flipY')}
                 </Label>
               </div>
               <div className="space-y-1.5">
                 {pairs.map((p, i) => (
                   <div key={i} className="flex items-center gap-1.5">
-                    <span className="mono w-4 text-[10px] text-signal">{i + 1}</span>
-                    <span className="mono w-[86px] shrink-0 text-[10px] text-ink-3">
+                    <span className="mono w-4 text-[12px] text-signal">{i + 1}</span>
+                    <span className="mono w-[86px] shrink-0 text-[12px] text-ink-3">
                       {p.world ? `${p.world.x.toFixed(1)}, ${p.world.z.toFixed(1)}` : t('sb.clickMap')}
                     </span>
-                    <Input type="number" placeholder="x" className="mono h-7 bg-surface-2 px-1.5 text-[10.5px]" value={p.vendor.x} onChange={(e) => setPairs((ps) => ps.map((q, j) => (j === i ? { ...q, vendor: { ...q.vendor, x: Number(e.target.value) } } : q)))} />
-                    <Input type="number" placeholder="y" className="mono h-7 bg-surface-2 px-1.5 text-[10.5px]" value={p.vendor.y} onChange={(e) => setPairs((ps) => ps.map((q, j) => (j === i ? { ...q, vendor: { ...q.vendor, y: Number(e.target.value) } } : q)))} />
-                    <Button variant="ghost" size="iconSm" className="shrink-0 text-ink-3 hover:text-crit" onClick={() => setPairs((ps) => ps.filter((_, j) => j !== i))}>
+                    <Input aria-label={`${zh ? '厂商坐标 x' : 'Vendor coordinate x'} ${i + 1}`} type="number" placeholder="x" className="mono h-7 bg-surface-2 px-1.5 text-[12px]" value={p.vendor.x} onChange={(e) => setPairs((ps) => ps.map((q, j) => (j === i ? { ...q, vendor: { ...q.vendor, x: Number(e.target.value) } } : q)))} />
+                    <Input aria-label={`${zh ? '厂商坐标 y' : 'Vendor coordinate y'} ${i + 1}`} type="number" placeholder="y" className="mono h-7 bg-surface-2 px-1.5 text-[12px]" value={p.vendor.y} onChange={(e) => setPairs((ps) => ps.map((q, j) => (j === i ? { ...q, vendor: { ...q.vendor, y: Number(e.target.value) } } : q)))} />
+                    <Button variant="ghost" size="iconSm" aria-label={`${t('c.delete')} ${i + 1}`} className="shrink-0 text-ink-3 hover:text-crit" onClick={() => setPairs((ps) => ps.filter((_, j) => j !== i))}>
                       <Trash2 size={12} />
                     </Button>
                   </div>
                 ))}
-                <Button variant="outline" size="sm" onClick={() => setPairs((ps) => [...ps, { world: null, vendor: { x: 0, y: 0 } }])} className="mono w-full text-[10.5px] normal-case tracking-[0.1em]">
+                <Button variant="outline" size="sm" onClick={() => setPairs((ps) => [...ps, { world: null, vendor: { x: 0, y: 0 } }])} className="w-full text-[12px] normal-case tracking-normal">
                   <Plus size={11} /> {t('sb.addPair')}
                 </Button>
               </div>
               {solved && (
                 <Panel>
-                  <div className="mono space-y-1 p-2.5 text-[10.5px] text-ink-2">
+                  <div className="mono space-y-1 p-2.5 text-[12px] text-ink-2">
                     <div>s = {solved.s.toFixed(5)} · θ = {((solved.thetaRad * 180) / Math.PI).toFixed(2)}°</div>
                     <div>t = [{solved.t[0].toFixed(2)}, {solved.t[1].toFixed(2)}]</div>
                     <div style={{ color: solved.rms < 0.5 ? 'var(--color-ok)' : 'var(--color-warn)' }}>rms = {solved.rms.toFixed(3)} m</div>
                     {gosuncnEnv && (
-                      <button className="flex w-full items-center gap-1 border border-line px-1.5 py-1 text-left text-signal hover:border-line-2" onClick={() => copy(gosuncnEnv, 'env')}>
-                        <Copy size={10} /> {copied === 'env' ? t('fl.wiz.copied') : gosuncnEnv}
-                      </button>
+                      <Button variant="ghost" className="flex h-auto min-h-8 w-full min-w-0 items-start justify-start gap-1 whitespace-normal border border-line px-1.5 py-1 text-left text-ink-2 hover:border-line-2" onClick={() => copy(gosuncnEnv, 'env')}>
+                        <Copy size={12} className="mt-0.5 shrink-0" /> <span className="min-w-0 break-all">{copied === 'env' ? t('fl.wiz.copied') : gosuncnEnv}</span>
+                      </Button>
                     )}
                   </div>
                 </Panel>
               )}
-              <Button variant="signal" disabled={!solved} onClick={saveCalib} className="mono w-full text-[11px] normal-case tracking-[0.12em] disabled:opacity-35">
+              <Button variant="signal" disabled={!solved} onClick={saveCalib} className="w-full text-[12px] normal-case tracking-normal disabled:opacity-35">
                 {t('sb.saveCalib')}
               </Button>
               {transforms.length > 0 && (
                 <div className="space-y-1 border-t border-line pt-2.5">
                   <div className="microlabel">{t('sb.storedTransforms')}</div>
                   {transforms.map((tr) => (
-                    <div key={tr.id} className="mono flex items-center gap-2 text-[10px] text-ink-3">
+                    <div key={tr.id} className="mono flex items-center gap-2 text-[12px] text-ink-3">
                       <span className="truncate">{tr.from} → {tr.to} · s {tr.params.s.toFixed(4)}</span>
-                      <Button variant="ghost" size="iconSm" className="ml-auto shrink-0 text-ink-3 hover:text-crit" onClick={async () => (await api.deleteTransform(siteId, tr.id), api.transforms(siteId).then((x) => setTransforms(x.transforms ?? [])))}>
+                      <Button variant="ghost" size="iconSm" className="ml-auto shrink-0 text-ink-3 hover:text-crit" aria-label={`${t('c.delete')} ${tr.from} → ${tr.to}`} onClick={async () => {
+                        if (!await confirm({ title: t('c.delete'), message: `${tr.from} → ${tr.to}`, destructive: true })) return
+                        await api.deleteTransform(siteId, tr.id)
+                        const next = await api.transforms(siteId)
+                        setTransforms(next.transforms ?? [])
+                      }}>
                         <Trash2 size={11} />
                       </Button>
                     </div>
@@ -1042,22 +1054,22 @@ function CameraPanel({ cameras, onChange }: { cameras: SiteCamera[]; onChange: (
       {cameras.map((c) => (
         <div key={c.id} className="space-y-1 border border-line p-2">
           <div className="flex items-center justify-between">
-            <span className="text-[12.5px] text-ink">{c.name}</span>
-            <Button variant="ghost" size="iconSm" className="text-ink-3 hover:text-crit" onClick={() => onChange(cameras.filter((x) => x.id !== c.id))}>
+            <span className="text-[14px] text-ink">{c.name}</span>
+            <Button variant="ghost" size="iconSm" aria-label={`${t('c.delete')} ${c.name}`} className="text-ink-3 hover:text-crit" onClick={() => onChange(cameras.filter((x) => x.id !== c.id))}>
               <Trash2 size={12} />
             </Button>
           </div>
-          <div className="mono truncate text-[10px] text-ink-3">{c.rtsp ?? c.file ?? '—'}</div>
+          <div className="mono truncate text-[12px] text-ink-3">{c.rtsp ?? c.file ?? '—'}</div>
         </div>
       ))}
       <div className="space-y-2 border-t border-line pt-3">
-        <Input placeholder={t('sb.cameraName')} className="bg-surface-2 py-1.5 text-[12px]" value={name} onChange={(e) => setName(e.target.value)} />
-        <Input placeholder="rtsp://user:pass@10.0.0.4:554/stream1" className="mono bg-surface-2 py-1.5 text-[11px]" value={rtsp} onChange={(e) => setRtsp(e.target.value)} />
-        <Input placeholder={t('sb.cameraPlace')} className="bg-surface-2 py-1.5 text-[12px]" value={place} onChange={(e) => setPlace(e.target.value)} />
-        <Button variant="outline" size="sm" disabled={!name.trim()} onClick={add} className="mono w-full text-[10.5px] normal-case tracking-[0.1em] disabled:opacity-35">
+        <Input aria-label={t('sb.cameraName')} placeholder={t('sb.cameraName')} className="bg-surface-2 py-1.5 text-[12px]" value={name} onChange={(e) => setName(e.target.value)} />
+        <Input aria-label={t('live.camRtsp')} placeholder="rtsp://user:pass@10.0.0.4:554/stream1" className="mono bg-surface-2 py-1.5 text-[12px]" value={rtsp} onChange={(e) => setRtsp(e.target.value)} />
+        <Input aria-label={t('sb.cameraPlace')} placeholder={t('sb.cameraPlace')} className="bg-surface-2 py-1.5 text-[12px]" value={place} onChange={(e) => setPlace(e.target.value)} />
+        <Button variant="outline" size="sm" disabled={!name.trim()} onClick={add} className="w-full text-[12px] normal-case tracking-normal disabled:opacity-35">
           <Plus size={11} /> {t('sb.addCamera')}
         </Button>
-        <div className="mono text-[9.5px] leading-relaxed text-ink-3">{t('sb.rtspHint')}</div>
+        <div className="mono text-[12px] leading-relaxed text-ink-3">{t('sb.rtspHint')}</div>
       </div>
     </div>
   )

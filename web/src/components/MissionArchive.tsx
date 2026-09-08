@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { CalendarDays, ChevronLeft, ChevronRight, Download, FileText, RefreshCw } from 'lucide-react'
+import { Calendar as CalendarDays, ChevronLeft, ChevronRight, Download, Document as FileText, Renew as RefreshCw } from '@carbon/icons-react'
 import { sfetch, useApp, useSite } from '../lib/store'
 import { useLang, useT } from '../lib/i18n'
 import { BASE } from '../lib/base'
@@ -380,12 +380,12 @@ export function MissionArchive({
                           {d.getDate()}
                         </span>
                         {actual > 0 && (
-                          <span className="text-[11px]">
+                          <span className="text-[12px]">
                             {actual} {l('actual', '实际')}
                           </span>
                         )}
                         {planned > 0 && (
-                          <span className="text-[11px] text-ink-3">
+                          <span className="text-[12px] text-ink-3">
                             {planned} {l('planned', '计划')}
                           </span>
                         )}

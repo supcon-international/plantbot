@@ -2,7 +2,7 @@
 // create a site here, then model it in the Site Builder (/sites/:id).
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { Plus, MapPinned, Users as UsersIcon, Trash2, KeyRound, ArrowUpRight } from 'lucide-react'
+import { Add as Plus, MapCenter as MapPinned, UserMultiple as UsersIcon, TrashCan as Trash2, Key as KeyRound, ArrowUpRight } from '@carbon/icons-react'
 import { useApp, useSite, api, reconnectRealtime } from '../lib/store'
 import { useT } from '../lib/i18n'
 import { useConfirm } from '../components/ConfirmDialog'
@@ -47,24 +47,24 @@ function NewSiteModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
           <Label className="mb-1.5">{t('sb.siteName')}</Label>
           <Input
             autoFocus
-            className="bg-surface-2 py-2 text-[13px]"
+            className="bg-surface-2 py-2 text-[14px]"
             placeholder={t('sb.siteNamePh')}
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && submit()}
           />
-          {id && <div className="mono mt-1 text-[10.5px] text-ink-3">id: {id}</div>}
+          {id && <div className="mono mt-1 text-[12px] text-ink-3">id: {id}</div>}
         </div>
         <div>
           <Label className="mb-1.5">{t('sb.operator')}</Label>
-          <Input className="bg-surface-2 py-2 text-[13px]" placeholder="Plantbot Operations" value={operator} onChange={(e) => setOperator(e.target.value)} />
+          <Input className="bg-surface-2 py-2 text-[14px]" placeholder="Plantbot Operations" value={operator} onChange={(e) => setOperator(e.target.value)} />
         </div>
-        {err && <div className="mono text-[11.5px] text-crit">{err}</div>}
+        {err && <div className="mono text-[12px] text-crit">{err}</div>}
         <div className="flex justify-end gap-2 border-t border-line pt-3">
-          <Button variant="ghost" onClick={onClose} className="mono text-[11.5px] normal-case tracking-[0.1em]">
+          <Button variant="ghost" onClick={onClose} className="text-[12px] normal-case tracking-normal">
             {t('c.cancel')}
           </Button>
-          <Button variant="signal" disabled={!name.trim() || busy} onClick={submit} className="mono text-[11.5px] normal-case tracking-[0.12em] disabled:opacity-40">
+          <Button variant="signal" disabled={!name.trim() || busy} onClick={submit} className="text-[12px] normal-case tracking-normal disabled:opacity-40">
             {busy ? '…' : t('sb.create')}
           </Button>
         </div>
@@ -115,18 +115,18 @@ function UserModal({ user, onClose, onSaved }: { user: UserRow | null; onClose: 
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label className="mb-1.5">{t('login.user')}</Label>
-            <Input className="mono bg-surface-2 py-2 text-[13px]" value={username} disabled={!!user} onChange={(e) => setUsername(e.target.value)} />
+            <Input className="mono bg-surface-2 py-2 text-[14px]" value={username} disabled={!!user} onChange={(e) => setUsername(e.target.value)} />
           </div>
           <div>
             <Label className="mb-1.5">{t('users.display')}</Label>
-            <Input className="bg-surface-2 py-2 text-[13px]" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+            <Input className="bg-surface-2 py-2 text-[14px]" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label className="mb-1.5">{t('users.scope')}</Label>
             <Select value={scope} onValueChange={setScope}>
-              <SelectTrigger className="mono w-full bg-surface-2 text-[12px] normal-case tracking-normal">
+              <SelectTrigger className="w-full bg-surface-2 text-[12px] normal-case tracking-normal">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -142,7 +142,7 @@ function UserModal({ user, onClose, onSaved }: { user: UserRow | null; onClose: 
           <div>
             <Label className="mb-1.5">{t('users.role')}</Label>
             <Select value={role} onValueChange={setRole}>
-              <SelectTrigger className="mono w-full bg-surface-2 text-[12px] normal-case tracking-normal">
+              <SelectTrigger className="w-full bg-surface-2 text-[12px] normal-case tracking-normal">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -159,22 +159,22 @@ function UserModal({ user, onClose, onSaved }: { user: UserRow | null; onClose: 
           <Label className="mb-1.5">{t(user ? 'users.newPass' : 'login.pass')}</Label>
           <Input
             type="password"
-            className="mono bg-surface-2 py-2 text-[13px]"
+            className="mono bg-surface-2 py-2 text-[14px]"
             placeholder={user ? t('users.keepPass') : '≥ 8 chars'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
         </div>
-        {err && <div className="mono text-[11.5px] text-crit">{err}</div>}
+        {err && <div className="mono text-[12px] text-crit">{err}</div>}
         <div className="flex justify-end gap-2 border-t border-line pt-3">
-          <Button variant="ghost" onClick={onClose} className="mono text-[11.5px] normal-case tracking-[0.1em]">
+          <Button variant="ghost" onClick={onClose} className="text-[12px] normal-case tracking-normal">
             {t('c.cancel')}
           </Button>
           <Button
             variant="signal"
             disabled={!username || (!user && password.length < 8)}
             onClick={submit}
-            className="mono text-[11.5px] normal-case tracking-[0.12em] disabled:opacity-40"
+            className="text-[12px] normal-case tracking-normal disabled:opacity-40"
           >
             {t('sb.save')}
           </Button>
@@ -204,7 +204,7 @@ function UsersPanel() {
           </span>
         }
         right={
-          <Button variant="outline" size="sm" onClick={() => setCreating(true)} className="mono h-auto gap-1 px-2 py-1 text-[10.5px] normal-case tracking-[0.1em]">
+          <Button variant="outline" size="sm" onClick={() => setCreating(true)} className="h-auto gap-1 px-2 py-1 text-[12px] normal-case tracking-normal">
             <Plus size={11} /> {t('users.new')}
           </Button>
         }
@@ -221,16 +221,16 @@ function UsersPanel() {
         <TableBody>
           {users.map((u) => (
             <TableRow key={u.username} className="border-line/60 last:border-0">
-              <TableCell className="mono px-3.5 py-2.5 text-[12.5px] text-ink">{u.username}</TableCell>
-              <TableCell className="py-2.5 text-[12.5px] text-ink-2">{u.displayName}</TableCell>
+              <TableCell className="mono px-3.5 py-2.5 text-[14px] text-ink">{u.username}</TableCell>
+              <TableCell className="py-2.5 text-[14px] text-ink-2">{u.displayName}</TableCell>
               <TableCell className="py-2.5">
                 <span className="flex flex-wrap gap-1">
                   {Object.entries(u.roles).map(([sc, r]) => (
-                    <Badge key={sc} variant="outline" className="mono text-[9.5px] tracking-[0.08em]">
+                    <Badge key={sc} variant="outline" className="mono text-[12px] tracking-normal">
                       {sc === '*' ? t('users.allSites') : sc} · {r}
                     </Badge>
                   ))}
-                  {u.seeded && <Badge variant="outline" className="mono text-[9.5px] tracking-[0.08em] opacity-60">seed</Badge>}
+                  {u.seeded && <Badge variant="outline" className="mono text-[12px] tracking-normal">seed</Badge>}
                 </span>
               </TableCell>
               <TableCell className="py-2.5">
@@ -281,18 +281,19 @@ export function Sites() {
 
   return (
     <div className="mx-auto max-w-[1300px] space-y-4 p-3 md:p-4">
-      <div className="flex items-center justify-between">
-        <div className="mono text-[14px] text-ink-2">
-          {sites.length} {t('sb.sitesCount')}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-medium text-ink">{t('nav.sitesTitle')}</h1>
+          <p className="mt-1 text-sm text-ink-3">{sites.length} {t('sb.sitesCount')}</p>
         </div>
-        <Button variant="signal" onClick={() => setCreating(true)} className="mono text-[11.5px] normal-case tracking-[0.12em]">
+        <Button variant="signal" onClick={() => setCreating(true)} className="text-[12px] normal-case tracking-normal">
           <Plus size={13} /> {t('sb.newSite')}
         </Button>
       </div>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
         {sites.map((s, i) => (
-          <Panel key={s.id} className={`panel-hover cursor-pointer rise rise-${Math.min(i + 1, 5)}`} onClick={() => nav(`/sites/${s.id}`)}>
+          <Panel key={s.id} ariaLabel={`${s.name} · ${t('sb.openBuilder')}`} className={`panel-hover cursor-pointer rise rise-${Math.min(i + 1, 5)}`} onClick={() => nav(`/sites/${s.id}`)}>
             <div className="space-y-3 p-4">
               <div className="flex items-start justify-between gap-2">
                 <div>
@@ -301,18 +302,18 @@ export function Sites() {
                 </div>
                 <MapPinned size={16} className="shrink-0 text-ink-3" />
               </div>
-              <div className="mono flex items-center gap-3 text-[11px] text-ink-3">
+              <div className="mono flex items-center gap-3 text-[12px] text-ink-3">
                 <span>id {s.id}</span>
                 <span>{s.robots ?? 0} {t('c.units')}</span>
                 {(s.openAlerts ?? 0) > 0 && <span className="text-warn">{s.openAlerts} {t('sb.openAlerts')}</span>}
-                {(s as { demo?: boolean }).demo && <Badge variant="outline" className="mono text-[9px]">DEMO</Badge>}
+                {(s as { demo?: boolean }).demo && <Badge variant="outline" className="mono text-[12px]">DEMO</Badge>}
               </div>
               <div className="flex items-center gap-2 border-t border-line/70 pt-2.5">
                 <span className="microlabel">{t('sb.openBuilder')}</span>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="mono ml-auto h-auto gap-1 px-1.5 py-0.5 text-[10px] normal-case tracking-[0.1em] text-ink-3 hover:text-ink"
+                  className="ml-auto h-auto min-h-8 gap-1 px-1.5 py-1 text-[12px] normal-case tracking-normal text-ink-3 hover:text-ink"
                   onClick={(e) => {
                     e.stopPropagation()
                     setSite(s.id)

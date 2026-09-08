@@ -4,5 +4,7 @@ packages:
   - integrations
   - sdk/adapter-sdk-ts
 allowBuilds:
+  '@carbon/icon-helpers': false
+  '@carbon/icons-react': false
   esbuild: true
   protobufjs: true

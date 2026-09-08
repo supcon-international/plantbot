@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
-import { Plus, Download, Pencil, LayoutGrid, Table2, Trash2 } from 'lucide-react'
+import { Add as Plus, Download, Edit as Pencil, Dashboard as LayoutGrid, Table as Table2, TrashCan as Trash2 } from '@carbon/icons-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -468,7 +468,7 @@ export default function Assets() {
     <div className="space-y-4 p-4 md:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="font-condensed text-3xl text-ink">{l('Equipment & tags', '设备与位号')}</h1>
+          <h1 className="font-sans text-3xl text-ink">{l('Equipment & tags', '设备与位号')}</h1>
           <p className="mt-1 text-sm text-ink-3">
             {l(
               'Equipment records, inspection points and the data collected at each point.',

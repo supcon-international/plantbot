@@ -1,23 +1,6 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router'
-import {
-  BookOpen,
-  Bot,
-  Building2,
-  Cctv,
-  LayoutGrid,
-  Warehouse,
-  LogIn,
-  LogOut,
-  Map as MapIcon,
-  Moon,
-  Plug,
-  Plus,
-  Route,
-  Settings2,
-  ShieldAlert,
-  Sun,
-} from 'lucide-react'
+import { Book as BookOpen, Bot, Building as Building2, Video as Cctv, Dashboard as LayoutGrid, InventoryManagement as Warehouse, Login as LogIn, Logout as LogOut, Map as MapIcon, Moon, Plug, Add as Plus, Roadmap as Route, SettingsAdjust as Settings2, WarningAlt as ShieldAlert, Sun, OverflowMenuHorizontal as MoreHorizontal } from '@carbon/icons-react'
 import { useApp, useAuth, useCan, useSite } from '../../lib/store'
 import { Login } from '../../pages/Login'
 import { useTheme } from '../../lib/theme'
@@ -64,8 +47,8 @@ function Brand({ compact = false }: { compact?: boolean }) {
     <div className={`flex items-center ${compact ? 'gap-2' : 'gap-3'}`}>
       <BrandMark size={compact ? 22 : 26} />
       <span className={compact ? '' : 'hidden xl:block'}>
-        <span className="block text-[13px] font-semibold tracking-[0.18em] text-ink">PLANTBOT</span>
-        {!compact && <span className="mono mt-0.5 block text-[9px] tracking-[0.16em] text-ink-3">{t('shell.brand')}</span>}
+        <span className="block text-sm font-medium tracking-normal text-ink">PLANTBOT</span>
+        {!compact && <span className="mt-0.5 block text-xs text-ink-3">{t('shell.brand')}</span>}
       </span>
     </div>
   )
@@ -77,17 +60,14 @@ function NavItem({ to, label, icon: Icon, badge, mobile = false }: { to: string;
       {({ isActive }) => (
         <>
           <span className="nav-item-icon">
-            <Icon size={18} strokeWidth={isActive ? 1.9 : 1.55} />
+            <Icon size={18} />
             {badge > 0 && (
               <span className="nav-badge">
                 {badge > 9 ? '9+' : badge}
               </span>
             )}
           </span>
-          {/* mobile bottom-nav: only the active tab shows its label (icon-only
-              otherwise). title + aria-label keep every tab named for a11y even
-              when the visible label is hidden. */}
-          <span className="nav-item-label" style={mobile ? { display: isActive ? 'block' : 'none' } : undefined}>
+          <span className="nav-item-label" style={mobile ? { display: 'block' } : undefined}>
             {label}
           </span>
           <span className="nav-item-signal" />
@@ -98,6 +78,7 @@ function NavItem({ to, label, icon: Icon, badge, mobile = false }: { to: string;
 }
 
 function LangSwitch() {
+  const t = useT()
   const lang = useLang((s) => s.lang)
   const setLang = useLang((s) => s.setLang)
   const langs: { id: Lang; label: string }[] = [
@@ -105,9 +86,9 @@ function LangSwitch() {
     { id: 'zh', label: '中' },
   ]
   return (
-    <ToggleGroup type="single" value={lang} onValueChange={(v) => v && setLang(v as Lang)} aria-label="language">
+    <ToggleGroup type="single" value={lang} onValueChange={(v) => v && setLang(v as Lang)} aria-label={t('shell.language')}>
       {langs.map((l) => (
-        <ToggleGroupItem key={l.id} value={l.id} className="mono text-[9px] tracking-normal normal-case">
+        <ToggleGroupItem key={l.id} value={l.id} aria-label={l.id === 'en' ? 'English' : '中文'} className="text-xs tracking-normal normal-case">
           {l.label}
         </ToggleGroupItem>
       ))}
@@ -116,15 +97,16 @@ function LangSwitch() {
 }
 
 function SiteSwitch() {
+  const t = useT()
   const sites = useApp((s) => s.sites)
   const siteId = useSite((s) => s.siteId)
   const setSite = useSite((s) => s.setSite)
   if (sites.length < 2) return null
   return (
     <label className="site-switch">
-      <span className="utility-label">SITE</span>
+      <span className="utility-label">{t('shell.site')}</span>
       <Select value={siteId} onValueChange={setSite}>
-        <SelectTrigger size="bare" aria-label="site">
+        <SelectTrigger size="bare" aria-label={t('shell.site')}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent align="end">
@@ -153,7 +135,8 @@ function AuthChip() {
     )
   return (
     <span className="flex items-center gap-2">
-      <Button variant="utility" size="icon" onClick={() => logout()} title={t('shell.signOut')}>
+      <span className="max-w-28 truncate text-xs text-ink-2" title={me.user.username}>{me.user.username}</span>
+      <Button variant="utility" size="icon" onClick={() => logout()} title={t('shell.signOut')} aria-label={t('shell.signOut')}>
         <LogOut size={13} />
       </Button>
     </span>
@@ -197,13 +180,44 @@ function MobileUtilityMenu() {
 }
 
 function RouteStage({ routeKey }: { routeKey: string }) {
-  // key-remount replays the pure-CSS sweep/enter animations on every route
-  // change; prefers-reduced-motion is handled by the global CSS gate
   return (
     <div key={routeKey} className="relative h-full">
-      <span className="route-signal" aria-hidden />
       <div className="route-content h-full"><Outlet /></div>
     </div>
+  )
+}
+
+/** Keep frequent operations visible; every other module has a named, keyboard-accessible entry. */
+function MobileNav({ nav, critCount }: { nav: typeof NAV_ADMIN; critCount: number }) {
+  const t = useT()
+  const location = useLocation()
+  const [open, setOpen] = useState(false)
+  const primary = nav.slice(0, 4)
+  const more = nav.slice(4)
+  const moreActive = more.some((n) => location.pathname === n.to || location.pathname.startsWith(`${n.to}/`))
+  useEffect(() => setOpen(false), [location.pathname])
+  return (
+    <nav className="mobile-nav" aria-label={t('shell.navigation')}>
+      {primary.map((n) => <NavItem key={n.to} to={n.to} label={t(n.key)} icon={n.icon} badge={0} mobile />)}
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button variant="ghost" className={`nav-item mobile-more-trigger ${moreActive ? 'is-active' : ''}`} aria-label={t('shell.more')}>
+            <span className="nav-item-icon"><MoreHorizontal size={20} />{critCount > 0 && <span className="nav-badge">{critCount > 9 ? '9+' : critCount}</span>}</span>
+            <span className="nav-item-label">{t('shell.more')}</span>
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent side="top" align="end" sideOffset={12} className="w-[min(320px,calc(100vw-24px))] p-2">
+          <nav className="mobile-more-nav grid gap-1" aria-label={t('shell.more')}>
+            {more.map(({ to, key, icon: Icon }) => (
+              <NavLink key={to} to={to} onClick={() => setOpen(false)} className={({ isActive }) => `flex min-h-11 items-center gap-3 rounded px-3 text-sm ${isActive ? 'bg-surface-3 text-ink' : 'text-ink-2 hover:bg-surface-2'}`}>
+                <Icon size={18} /><span>{t(key)}</span>
+                {to === '/events' && critCount > 0 && <span className="ml-auto text-crit">{critCount}</span>}
+              </NavLink>
+            ))}
+          </nav>
+        </PopoverContent>
+      </Popover>
+    </nav>
   )
 }
 
@@ -243,7 +257,7 @@ function useEmbedState(): { embedded: boolean; navPos: EmbedNavPos } {
 function EmbedNav({ nav, critCount, pos }: { nav: typeof NAV_ADMIN; critCount: number; pos: 'top' | 'bottom' }) {
   const t = useT()
   return (
-    <nav className={`embed-nav ${pos === 'bottom' ? 'is-bottom' : 'is-top'}`}>
+    <nav aria-label={t('shell.navigation')} className={`embed-nav ${pos === 'bottom' ? 'is-bottom' : 'is-top'}`}>
       {nav.map((n) => (
         <NavItem key={n.to} to={n.to} label={t(n.key)} icon={n.icon} badge={n.to === '/events' ? critCount : 0} />
       ))}
@@ -259,15 +273,15 @@ function NoSitesHero() {
   return (
     <div className="flex h-full items-center justify-center p-6">
       <div className="max-w-md space-y-4 border border-line bg-surface p-8 text-center">
-        <Building2 size={28} strokeWidth={1.2} className="mx-auto text-ink-3" />
+        <Building2 size={28} className="mx-auto text-ink-3" />
         <div className="text-[16px] font-medium text-ink">{t('sb.emptyTitle')}</div>
         <p className="text-[13px] leading-relaxed text-ink-3">{t('sb.emptyDesc')}</p>
         {isAdmin ? (
-          <Button variant="signal" onClick={() => nav('/sites')} className="mono text-[11.5px] normal-case tracking-[0.12em]">
+          <Button variant="signal" onClick={() => nav('/sites')}>
             <Plus size={13} /> {t('sb.newSite')}
           </Button>
         ) : (
-          <p className="mono text-[11px] text-ink-3">{t('sb.emptyNeedAdmin')}</p>
+          <p className="text-[12px] text-ink-3">{t('sb.emptyNeedAdmin')}</p>
         )}
       </div>
     </div>
@@ -288,6 +302,7 @@ export function Shell() {
   const authLoaded = useAuth((s) => s.loaded)
   const publicView = useAuth((s) => s.publicView)
   const authedUser = useAuth((s) => s.me?.user ?? null)
+  const connected = useApp((s) => s.connected)
   const critCount = useApp((s) => s.events.filter((e) => !e.acked && (e.severity === 'critical' || e.severity === 'high')).length)
 
   const page = useMemo(() => {
@@ -313,6 +328,9 @@ export function Shell() {
   useEffect(() => {
     document.documentElement.lang = lang
   }, [lang])
+  useEffect(() => {
+    document.title = `${page.title} · Plantbot`
+  }, [page.title])
 
   // PB_PUBLIC_VIEW=0 deployments: nothing renders before sign-in
   if (authLoaded && !publicView && !authedUser) {
@@ -336,8 +354,8 @@ export function Shell() {
           <div className="flex items-center gap-3">
             <BrandMark size={24} />
             <span className="leading-tight">
-              <span className="block text-[13px] font-semibold tracking-[0.18em] text-ink">PLANTBOT</span>
-              <span className="mono block text-[9px] tracking-[0.16em] text-ink-3">{t('shell.brand')}</span>
+              <span className="block text-sm font-medium tracking-normal text-ink">PLANTBOT</span>
+              <span className="block text-xs text-ink-3">{t('shell.brand')}</span>
             </span>
           </div>
           <div className="ml-auto flex items-center gap-2">
@@ -363,7 +381,7 @@ export function Shell() {
       <div className={`app-shell embed-shell embed-nav-${navPos}`}>
         <Toaster />
         {navPos !== 'hidden' && <EmbedNav nav={nav} critCount={critCount} pos={navPos} />}
-        <main className="app-main embed-main">
+        <main id="main-content" tabIndex={-1} className="app-main embed-main">
           {emptyPlatform ? <NoSitesHero /> : <RouteStage routeKey={`${location.pathname}${location.search}`} />}
         </main>
       </div>
@@ -372,21 +390,26 @@ export function Shell() {
 
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#main-content">{t('shell.skip')}</a>
       <aside className="side-rail">
         <div className="side-brand"><Brand /></div>
         <div className="side-rail-label">{t('shell.workspace')}</div>
-        <nav className="side-nav">
+        <nav className="side-nav" aria-label={t('shell.navigation')}>
           {nav.map((n) => <NavItem key={n.to} to={n.to} label={t(n.key)} icon={n.icon} badge={n.to === '/events' ? critCount : 0} />)}
         </nav>
       </aside>
 
       <header className="top-bar">
-        <div className="md:hidden"><Brand compact /></div>
+        <div role="img" className="shrink-0 md:hidden" aria-label="Plantbot"><BrandMark size={26} /></div>
         <div className="page-context">
           <span className="page-context-accent" aria-hidden />
           <h1>{page.title}</h1>
         </div>
         <div className="top-utilities">
+          <span className="connection-status flex items-center gap-1.5 text-xs text-ink-3" role="status">
+            <span className={`h-1.5 w-1.5 rounded-full ${connected ? 'bg-accent' : 'bg-warn'}`} />
+            {t(connected ? 'shell.connected' : 'shell.reconnecting')}
+          </span>
           <SiteSwitch />
           <AuthChip />
           <ThemeToggle />
@@ -397,13 +420,11 @@ export function Shell() {
         </div>
       </header>
 
-      <nav className="mobile-nav">
-        {nav.map((n) => <NavItem key={n.to} to={n.to} label={t(n.key)} icon={n.icon} badge={n.to === '/events' ? critCount : 0} mobile />)}
-      </nav>
+      <MobileNav nav={nav} critCount={critCount} />
 
       <Toaster />
 
-      <main className="app-main">
+      <main id="main-content" tabIndex={-1} className="app-main">
         {emptyPlatform ? <NoSitesHero /> : <RouteStage routeKey={`${location.pathname}${location.search}`} />}
       </main>
     </div>

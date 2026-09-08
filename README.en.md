@@ -16,7 +16,7 @@ Plantbot is a multi-site inspection robot management platform for managing mixed
 - **Equipment and issues:** equipment records, industrial tag registers, sensor readings, alarm evidence and defect resolution history.
 - **Administration and integration:** site permissions, users and organizations, audit logs, OIDC single sign-on, HTTP APIs, a TypeScript SDK and Node-RED nodes.
 
-The interface supports English and Chinese, light and dark themes, and iframe embedding. Camera controls are under **LIVE → PTZ inspection**. Robot controls are under **FLEET → robot → Teleoperation**.
+The interface follows the [Tier0 product design guidelines](docs/ui-design-audit.md), with English and Chinese, light and dark themes, and iframe embedding. New sessions default to light; additional mobile modules are available under More. Camera controls are under **Live → PTZ inspection**. Robot controls are under **Fleet → robot → Teleoperation**.
 
 ## Quick start
 

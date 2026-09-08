@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import { Link } from 'react-router'
-import { BookOpen, ChevronRight, Cpu, Download, ExternalLink, KeyRound, Plug, Puzzle } from 'lucide-react'
+import { Book as BookOpen, ChevronRight, Chip as Cpu, Download, Launch as ExternalLink, Key as KeyRound, Plug, Application as Puzzle } from '@carbon/icons-react'
 import { apiFetch } from '../lib/store'
 import { BASE } from '../lib/base'
 import { useT, useLang } from '../lib/i18n'
 import { Panel } from '../components/ui'
+import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
 // The API reference renders live from the two OpenAPI specs the platform
@@ -37,8 +38,11 @@ type Row = { method: string; path: string; op: OpenAPIOp }
 function useSpec(url: string) {
   const [spec, setSpec] = useState<OpenAPISpec | null>(null)
   const [err, setErr] = useState(false)
+  const [revision, setRevision] = useState(0)
   useEffect(() => {
     let dead = false
+    setSpec(null)
+    setErr(false)
     apiFetch(url)
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((s) => !dead && setSpec(s))
@@ -46,8 +50,8 @@ function useSpec(url: string) {
     return () => {
       dead = true
     }
-  }, [url])
-  return { spec, err }
+  }, [url, revision])
+  return { spec, err, retry: () => setRevision((n) => n + 1) }
 }
 
 /** group a spec's operations by their first tag, preserving the spec's tag order */
@@ -78,7 +82,7 @@ function grouped(spec: OpenAPISpec | null): { tag: string; desc?: string; rows: 
 function MethodBadge({ method }: { method: string }) {
   return (
     <span
-      className="mono inline-block w-[52px] shrink-0 text-center text-[10px] font-semibold uppercase tracking-[0.08em]"
+      className="mono inline-block w-[52px] shrink-0 text-center text-[12px] font-semibold uppercase tracking-normal"
       style={{ color: METHOD_COLOR[method] ?? 'var(--color-ink-2)' }}
     >
       {method}
@@ -88,22 +92,29 @@ function MethodBadge({ method }: { method: string }) {
 
 function EndpointRow({ row }: { row: Row }) {
   const [open, setOpen] = useState(false)
-  const hasDetail = !!(row.op.description || row.op.summary)
+  const detailId = useId()
+  const zh = useLang((s) => s.lang === 'zh')
+  const hasDetail = !!row.op.description
   const publicEp = Array.isArray(row.op.security) && row.op.security.length === 0
   return (
     <div className="border-b border-line/50 last:border-0">
-      <button
+      <Button variant="ghost"
         onClick={() => hasDetail && setOpen((o) => !o)}
-        className={`flex w-full items-center gap-2 px-3 py-2 text-left ${hasDetail ? 'hover:bg-surface-2' : 'cursor-default'}`}
+        disabled={!hasDetail}
+        aria-expanded={hasDetail ? open : undefined}
+        aria-controls={hasDetail ? detailId : undefined}
+        className="flex h-auto w-full min-w-0 items-start justify-start gap-2 whitespace-normal px-3 py-3 text-left disabled:opacity-100"
       >
         <MethodBadge method={row.method} />
-        <code className="mono shrink-0 text-[12px] text-ink">{row.path}</code>
-        <span className="truncate text-[12px] text-ink-3">{row.op.summary}</span>
-        {publicEp && <span className="mono ml-auto shrink-0 border border-ok/40 bg-ok/10 px-1 text-[9px] tracking-[0.1em] text-ok">PUBLIC</span>}
+        <span className="min-w-0 flex-1">
+          <code className="mono block break-all text-[12px] text-ink">{row.path}</code>
+          {row.op.summary && <span className="mt-1 block break-words text-sm font-normal text-ink-3">{row.op.summary}</span>}
+        </span>
+        {publicEp && <span className="shrink-0 border border-line px-1 text-[12px] text-ink-2">{zh ? '公开' : 'Public'}</span>}
         {hasDetail && <ChevronRight size={13} className={`ml-auto shrink-0 text-ink-3 transition-transform ${open ? 'rotate-90' : ''} ${publicEp ? '' : 'ml-auto'}`} />}
-      </button>
+      </Button>
       {open && row.op.description && (
-        <div className="border-t border-line/40 bg-surface-2/40 px-3 py-2 pl-[64px] text-[12px] leading-relaxed text-ink-2">
+        <div id={detailId} className="break-words border-t border-line/40 bg-surface-2/40 px-3 py-3 text-sm leading-relaxed text-ink-2 sm:pl-[76px]">
           {row.op.description}
         </div>
       )}
@@ -112,23 +123,28 @@ function EndpointRow({ row }: { row: Row }) {
 }
 
 function SpecBrowser({ url }: { url: string }) {
-  const { spec, err } = useSpec(url)
+  const { spec, err, retry } = useSpec(url)
+  const t = useT()
+  const zh = useLang((s) => s.lang === 'zh')
   const groups = useMemo(() => grouped(spec), [spec])
-  if (err) return <p className="mono px-3 py-6 text-[12px] text-ink-3">spec unavailable — is the server running?</p>
-  if (!spec) return <div className="skeleton h-40 w-full opacity-20" />
+  if (err) return <div role="alert" className="flex min-h-40 flex-col items-start justify-center gap-3 border border-line p-4 text-sm text-ink-2">
+    <p>{zh ? '接口规范加载失败，请重试。' : 'The API specification could not be loaded. Retry to reconnect.'}</p>
+    <Button variant="outline" onClick={retry}>{t('c.refresh')}</Button>
+  </div>
+  if (!spec) return <div role="status" className="flex min-h-40 items-center border border-line p-4 text-sm text-ink-3">{t('c.loading')}…</div>
   const count = groups.reduce((n, g) => n + g.rows.length, 0)
   return (
     <div>
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <div className="text-[14px] font-medium text-ink">{spec.info?.title}</div>
-          <div className="mono text-[11px] text-ink-3">{count} endpoints · OpenAPI {spec.info?.version}</div>
+          <div className="text-[12px] text-ink-3">{count} {zh ? '个接口' : 'endpoints'} · OpenAPI {spec.info?.version}</div>
         </div>
         <a
           href={BASE + url}
           target="_blank"
           rel="noreferrer"
-          className="mono flex items-center gap-1.5 border border-line-2 px-2 py-1 text-[10.5px] tracking-[0.1em] text-ink-3 transition-colors hover:text-ink-2"
+          className="mono flex items-center gap-1.5 border border-line-2 px-2 py-1 text-[12px] tracking-normal text-ink-3 transition-colors hover:text-ink-2"
         >
           <Download size={12} /> JSON
         </a>
@@ -137,8 +153,8 @@ function SpecBrowser({ url }: { url: string }) {
         {groups.map((g) => (
           <Panel key={g.tag} className="overflow-hidden p-0">
             <div className="flex items-baseline gap-2 border-b border-line bg-surface-2/60 px-3 py-2">
-              <span className="mono text-[12px] font-semibold uppercase tracking-[0.12em] text-ink">{g.tag}</span>
-              {g.desc && <span className="truncate text-[11.5px] text-ink-3">{g.desc}</span>}
+              <span className="text-sm font-medium text-ink">{g.tag}</span>
+              {g.desc && <span className="truncate text-[12px] text-ink-3">{g.desc}</span>}
             </div>
             {g.rows.map((r) => (
               <EndpointRow key={`${r.method}-${r.path}`} row={r} />
@@ -155,9 +171,9 @@ function GuideCard({ icon: Icon, title, children }: { icon: any; title: string; 
     <Panel className="p-4">
       <div className="mb-2 flex items-center gap-2 text-ink">
         <Icon size={15} className="text-ink-3" />
-        <span className="text-[13.5px] font-medium">{title}</span>
+        <span className="text-[14px] font-medium">{title}</span>
       </div>
-      <div className="space-y-1.5 text-[12.5px] leading-relaxed text-ink-2">{children}</div>
+      <div className="space-y-1.5 text-[14px] leading-relaxed text-ink-2">{children}</div>
     </Panel>
   )
 }
@@ -173,8 +189,8 @@ export function Docs() {
       <div className="mb-5 flex items-center gap-3">
         <BookOpen size={22} className="text-ink-2" />
         <div>
-          <h1 className="text-[19px] font-semibold text-ink">{t('docs.title')}</h1>
-          <p className="text-[13px] text-ink-3">{t('docs.sub')}</p>
+          <h1 className="text-2xl font-medium text-ink">{t('docs.title')}</h1>
+          <p className="text-[14px] text-ink-3">{t('docs.sub')}</p>
         </div>
       </div>
 
@@ -187,7 +203,7 @@ export function Docs() {
           <p>{zh
             ? '外部 adapter：签发场站 API Key，用 HTTP 契约自建，适合跨网或内置三型号之外的机器人。'
             : 'External adapter: issue a site API key and build against the HTTP contract — for cross-network or any other model.'}</p>
-          <Link to="/robots" className="mono inline-flex items-center gap-1 pt-0.5 text-[11px] tracking-[0.08em] text-ink-3 hover:text-ink-2">
+          <Link to="/robots" className="mono inline-flex items-center gap-1 pt-0.5 text-[12px] tracking-normal text-ink-3 hover:text-ink-2">
             {zh ? '接入向导' : 'Connect wizard'} <ChevronRight size={11} />
           </Link>
         </GuideCard>
@@ -196,12 +212,12 @@ export function Docs() {
           <p>{zh
             ? 'TypeScript @plantbot/adapter-sdk（零依赖，约 50 行接一台机器人）与 Node-RED 四节点包，南向随意接 Modbus / MQTT / OPC UA。'
             : 'TypeScript @plantbot/adapter-sdk (zero-dep, ~50 lines per robot) and a Node-RED four-node package — southbound speaks Modbus / MQTT / OPC UA.'}</p>
-          <p className="mono text-[11.5px] text-ink-3">sdk/adapter-sdk-ts · sdk/node-red-contrib-plantbot</p>
+          <p className="mono text-[12px] text-ink-3">sdk/adapter-sdk-ts · sdk/node-red-contrib-plantbot</p>
         </GuideCard>
 
         <GuideCard icon={Puzzle} title={zh ? '嵌入你的系统 (iframe)' : 'Embed in your app (iframe)'}>
-          <p><code className="mono text-[11.5px] text-ink">?embed=1</code> {zh ? '无壳嵌入（保留紧凑模块导航）。' : 'chrome-less embed (keeps a compact module nav).'}</p>
-          <p><code className="mono text-[11.5px] text-ink">?site=</code> {zh ? '钉定场站' : 'pins the site'} · <code className="mono text-[11.5px] text-ink">?embednav=top|bottom|hidden</code> {zh ? '控制导航条位置。' : 'positions the nav strip.'}</p>
+          <p><code className="mono text-[12px] text-ink">?embed=1</code> {zh ? '无壳嵌入（保留紧凑模块导航）。' : 'chrome-less embed (keeps a compact module nav).'}</p>
+          <p><code className="mono text-[12px] text-ink">?site=</code> {zh ? '钉定场站' : 'pins the site'} · <code className="mono text-[12px] text-ink">?embednav=top|bottom|hidden</code> {zh ? '控制导航条位置。' : 'positions the nav strip.'}</p>
           <p>{zh ? '跨站需 PB_COOKIE_SAMESITE=none（HTTPS）+ CSP frame-ancestors 白名单。' : 'Cross-site needs PB_COOKIE_SAMESITE=none (HTTPS) + a CSP frame-ancestors allowlist.'}</p>
         </GuideCard>
 
@@ -220,21 +236,21 @@ export function Docs() {
             href={`${BASE}/api-docs.html`}
             target="_blank"
             rel="noreferrer"
-            className="mono flex items-center gap-1 text-[11px] tracking-[0.08em] text-ink-3 transition-colors hover:text-(--signal)"
+            className="mono flex items-center gap-1 text-[12px] tracking-normal text-ink-3 transition-colors hover:text-(--signal)"
           >
             {zh ? '完整交互文档 (Redoc)' : 'Full reference (Redoc)'} <ExternalLink size={11} />
           </a>
         </div>
         <ToggleGroup type="single" value={face} onValueChange={(v) => v && setFace(v as typeof face)}>
-          <ToggleGroupItem value="integration" className="mono px-2.5 py-1.5 text-[10.5px] tracking-[0.08em]">
+          <ToggleGroupItem value="integration" className="mono px-2.5 py-1.5 text-[12px] tracking-normal">
             {zh ? '集成面 (Bearer key)' : 'Integration (Bearer key)'}
           </ToggleGroupItem>
-          <ToggleGroupItem value="platform" className="mono px-2.5 py-1.5 text-[10.5px] tracking-[0.08em]">
+          <ToggleGroupItem value="platform" className="mono px-2.5 py-1.5 text-[12px] tracking-normal">
             {zh ? '会话面 (Cookie)' : 'Platform (Cookie)'}
           </ToggleGroupItem>
         </ToggleGroup>
       </div>
-      <p className="mb-4 text-[12.5px] leading-relaxed text-ink-3">
+      <p className="mb-4 text-[14px] leading-relaxed text-ink-3">
         {face === 'integration'
           ? (zh ? '机器人上报 + 只读运营数据，用场站 API Key（Authorization: Bearer pbk_…）。' : 'Robot reporting + read-only operational data, authorized with a site API key (Authorization: Bearer pbk_…).')
           : (zh ? '控制台的全部会话面操作，用登录 Cookie（含 SSO）。' : 'Every console operation, authorized with the login session cookie (SSO included).')}
@@ -246,11 +262,11 @@ export function Docs() {
 
       <div className="mt-6 flex flex-wrap gap-2 border-t border-line pt-4">
         <a href="https://github.com/supcon-international/plantbot/blob/main/docs/integration.md" target="_blank" rel="noreferrer"
-           className="mono flex items-center gap-1.5 border border-line-2 px-2.5 py-1.5 text-[11px] tracking-[0.08em] text-ink-3 hover:text-ink-2">
+           className="mono flex items-center gap-1.5 border border-line-2 px-2.5 py-1.5 text-[12px] tracking-normal text-ink-3 hover:text-ink-2">
           integration.md <ExternalLink size={11} />
         </a>
         <a href="https://github.com/supcon-international/plantbot/tree/main/.claude/skills/robot-adapter" target="_blank" rel="noreferrer"
-           className="mono flex items-center gap-1.5 border border-line-2 px-2.5 py-1.5 text-[11px] tracking-[0.08em] text-ink-3 hover:text-ink-2">
+           className="mono flex items-center gap-1.5 border border-line-2 px-2.5 py-1.5 text-[12px] tracking-normal text-ink-3 hover:text-ink-2">
           robot-adapter skill <ExternalLink size={11} />
         </a>
       </div>

@@ -3,7 +3,7 @@ import { useSyncExternalStore } from 'react'
 
 import { useTheme } from '@/lib/theme'
 
-// Console notification rail: toast.custom() renders our own Carbon card
+// Console notification rail: toast.custom() renders the shared notification card
 // (see lib/notify.tsx), so the Toaster only positions/unstyles the stack.
 //
 // Desktop: bottom-right — the top-right corner holds every page's action

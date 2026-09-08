@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Download, Play, RefreshCw, Trash2 } from 'lucide-react'
+import { Download, Play, Renew as RefreshCw, TrashCan as Trash2 } from '@carbon/icons-react'
 import { toast } from 'sonner'
 import { apiFetch, useApp, useCan, useSite } from '../lib/store'
 import { useLang } from '../lib/i18n'

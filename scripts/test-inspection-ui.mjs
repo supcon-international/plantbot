@@ -178,7 +178,7 @@ try {
   await page.waitForURL((url) => url.pathname === '/robots' || url.pathname === '/robots/')
   checks.push('Real login and hydration at /robots/')
 
-  await page.getByRole('link', { name: 'ASSETS', exact: true }).first().click()
+  await page.getByRole('link', { name: 'Assets', exact: true }).first().click()
   await page.getByRole('button', { name: 'Add asset', exact: true }).click()
   await page.getByLabel('Equipment name').fill('QA Transformer')
   await page.getByLabel('Equipment type').fill('Transformer')
@@ -223,7 +223,7 @@ try {
   await page.keyboard.press('Escape')
   checks.push('Defect creation, assignment, in-progress treatment, closure and durable history')
 
-  await page.getByRole('link', { name: 'LIVE', exact: true }).first().click()
+  await page.getByRole('link', { name: 'Live', exact: true }).first().click()
   await page.getByRole('tab', { name: 'Recordings', exact: true }).click()
   await page.getByLabel('Recording channel').click()
   await page.getByRole('option').nth(1).click()
@@ -374,7 +374,7 @@ try {
   await page.getByRole('option', { name: /Plant 07/ }).click()
   checks.push('Delayed manual archive refresh cannot overwrite another site after switching')
 
-  await page.getByRole('radio', { name: '中', exact: true }).click()
+  await page.getByRole('radio', { name: '中文', exact: true }).click()
   await page.goto(`${base}/assets`)
   await bodyHas('设备与位号')
   await screenshot('07-assets-zh')

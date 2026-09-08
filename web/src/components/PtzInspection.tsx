@@ -1,17 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import {
-  ChevronDown,
-  ChevronUp,
-  Crosshair,
-  Download,
-  Pencil,
-  Play,
-  Plus,
-  RotateCcw,
-  Square,
-  Trash2,
-  X,
-} from 'lucide-react'
+import { ChevronDown, ChevronUp, LocationCurrent as Crosshair, Download, Edit as Pencil, Play, Add as Plus, RotateCounterclockwise as RotateCcw, Stop as Square, TrashCan as Trash2, Close as X } from '@carbon/icons-react'
 import { toast } from 'sonner'
 import { apiFetch, useCan, useSite } from '../lib/store'
 import { useLang } from '../lib/i18n'
@@ -596,7 +584,7 @@ function PtzPanel({ siteId }: { siteId: string }) {
                           ))}
                         </ol>
                         {p.enabled && (
-                          <p className="mb-3 text-[11px] text-ink-3">
+                          <p className="mb-3 text-[12px] text-ink-3">
                             {l('Next: ', '下次：')}
                             {date(p.nextRunAt)}
                           </p>
@@ -699,14 +687,14 @@ function PtzPanel({ siteId }: { siteId: string }) {
                         <TableRow key={r.id}>
                           <TableCell>
                             {r.name}
-                            <div className="text-[11px] text-ink-3">
+                            <div className="text-[12px] text-ink-3">
                               {r.steps.filter((s) => s.completedAt).length}/{r.steps.length} {l('stops', '个点位')}
                             </div>
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline">{status(r)}</Badge>
                           </TableCell>
-                          <TableCell className="mono text-[11px]">{date(r.startedAt)}</TableCell>
+                          <TableCell className="mono text-[12px]">{date(r.startedAt)}</TableCell>
                           <TableCell>{r.by === 'schedule' ? l('Schedule', '定时计划') : r.by}</TableCell>
                           <TableCell>
                             <Button variant="ghost" onClick={() => setRecord(r)}>
@@ -739,7 +727,7 @@ function PtzPanel({ siteId }: { siteId: string }) {
             }}
           >
             <div className="flex items-center justify-between">
-              <h2 className="font-(family-name:--font-condensed) text-xl">
+              <h2 className="font-sans text-xl">
                 {preset.id ? l('Edit preset', '编辑预置点') : l('New preset', '新建预置点')}
               </h2>
               {iconButton(l('Close', '关闭'), <X />, () => setPreset(null))}
@@ -810,7 +798,7 @@ function PtzPanel({ siteId }: { siteId: string }) {
             }}
           >
             <div className="flex items-center justify-between">
-              <h2 className="font-(family-name:--font-condensed) text-xl">
+              <h2 className="font-sans text-xl">
                 {plan.id ? l('Edit inspection plan', '编辑巡检计划') : l('New inspection plan', '新建巡检计划')}
               </h2>
               {iconButton(l('Close', '关闭'), <X />, () => setPlan(null))}
@@ -831,7 +819,7 @@ function PtzPanel({ siteId }: { siteId: string }) {
               </div>
               {plan.steps?.map((s, index) => (
                 <div key={index} className="flex items-center gap-2">
-                  <span className="mono text-[11px] text-ink-3">{index + 1}</span>
+                  <span className="mono text-[12px] text-ink-3">{index + 1}</span>
                   <div className="min-w-0 flex-1">
                     <Choice
                       label={l(`Stop ${index + 1} preset`, `第 ${index + 1} 个预置点`)}
@@ -1025,7 +1013,7 @@ function PtzPanel({ siteId }: { siteId: string }) {
             <Modal wide title={l('Inspection record', '巡检记录')} onClose={() => setRecord(null)}>
               <div className="max-h-[82vh] space-y-4 overflow-auto p-5">
                 <div className="flex items-center justify-between gap-2">
-                  <h2 className="font-(family-name:--font-condensed) text-xl">{r.name}</h2>
+                  <h2 className="font-sans text-xl">{r.name}</h2>
                   {iconButton(l('Close', '关闭'), <X />, () => setRecord(null))}
                 </div>
                 <div className="flex flex-wrap gap-3 text-[12px]">
@@ -1035,12 +1023,12 @@ function PtzPanel({ siteId }: { siteId: string }) {
                   </span>
                   <span>{r.by}</span>
                 </div>
-                <p className="break-all mono text-[10px] text-ink-3">{r.id}</p>
+                <p className="break-all mono text-[12px] text-ink-3">{r.id}</p>
                 {r.note && <p className="border border-line p-3 text-[12px] leading-relaxed">{r.note}</p>}
                 <div className="space-y-3">
                   {r.steps.map((s, i) => (
                     <div key={i} className="border border-line p-3">
-                      <div className="flex justify-between gap-3 text-[13px]">
+                      <div className="flex justify-between gap-3 text-[14px]">
                         <span>
                           {i + 1}. {s.name}
                         </span>
@@ -1054,7 +1042,7 @@ function PtzPanel({ siteId }: { siteId: string }) {
                                 : l('Not started', '未开始')}
                         </Badge>
                       </div>
-                      <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-ink-3">
+                      <div className="mt-2 grid grid-cols-2 gap-2 text-[12px] text-ink-3">
                         <span>
                           {l('Sent: ', '下发：')}
                           {date(s.sentAt)}
@@ -1073,7 +1061,7 @@ function PtzPanel({ siteId }: { siteId: string }) {
                         </span>
                       </div>
                       {s.note && <p className="mt-2 text-[12px]">{s.note}</p>}
-                      {s.orderId && <p className="mt-2 mono text-[10px] text-ink-3">{s.orderId}</p>}
+                      {s.orderId && <p className="mt-2 mono text-[12px] text-ink-3">{s.orderId}</p>}
                     </div>
                   ))}
                 </div>

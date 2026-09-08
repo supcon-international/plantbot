@@ -38,12 +38,13 @@ const Ctx = React.createContext<Ask | null>(null)
 /**
  * App-level provider for the shared confirm / prompt dialog. Replaces the
  * native window.confirm / window.prompt (which the sandboxed iframe embed and
- * some browsers suppress) with a Carbon-skinned Radix dialog.
+ * some browsers suppress) with a Tier0-styled Radix dialog.
  */
 export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   const t = useT()
   const [state, setState] = React.useState<{ opts: ConfirmOptions; resolve: (r: Result) => void } | null>(null)
   const [value, setValue] = React.useState('')
+  const inputRef = React.useRef<HTMLInputElement>(null)
 
   const ask = React.useCallback<Ask>((opts) => {
     setValue(opts.defaultValue ?? '')
@@ -66,6 +67,12 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
       <Dialog open={!!state} onOpenChange={(open) => !open && cancel()}>
         <DialogContent
           showCloseButton={false}
+          onOpenAutoFocus={(event) => {
+            if (isInput && inputRef.current) {
+              event.preventDefault()
+              inputRef.current.focus()
+            }
+          }}
           className="md:max-w-md"
           {...(opts?.message ? {} : { 'aria-describedby': undefined })}
         >
@@ -78,7 +85,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
             </DialogHeader>
             {isInput && (
               <Input
-                autoFocus
+                ref={inputRef}
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
                 placeholder={opts?.placeholder}
@@ -88,21 +95,22 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                     accept()
                   }
                 }}
-                className="mono bg-surface-2 py-2 text-[13px]"
+                aria-label={opts?.title ?? t('c.confirm')}
+                className="bg-surface-2 py-2 text-sm"
               />
             )}
             <DialogFooter className="gap-2">
               <Button
                 variant="outline"
                 onClick={cancel}
-                className="mono h-auto px-4 py-2 text-[11px] normal-case tracking-[0.1em]"
+                className="h-auto px-4 py-2 text-sm"
               >
                 {opts?.cancelText ?? t('c.cancel')}
               </Button>
               <Button
-                variant={opts?.destructive ? 'destructive' : 'signal'}
+                variant={opts?.destructive ? 'destructive' : 'default'}
                 onClick={accept}
-                className="mono h-auto px-4 py-2 text-[11px] normal-case tracking-[0.1em]"
+                className="h-auto px-4 py-2 text-sm"
               >
                 {opts?.confirmText ?? t('c.confirm')}
               </Button>

@@ -13,6 +13,7 @@
     "test:vision": "integrations/vision/.venv/bin/python -m unittest discover -s integrations/vision/tests -v"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "concurrently": "^10.0.3",
     "playwright": "^1.61.1"
   }

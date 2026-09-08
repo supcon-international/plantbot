@@ -4,22 +4,24 @@
 
 Plantbot is a **multi-site inspection-robot operations platform**: bring robots of different brands and fixed cameras into one console — watch the site, dispatch patrols, manage alarms. The robots handle walking and obstacle avoidance themselves; the platform handles *where to patrol today, who goes, what was found, and where the evidence is*.
 
+The interface defaults to light and preserves saved theme and language preferences. On phones, Overview, Live, Tasks and Fleet stay in the bottom bar; More contains the other modules. Keyboard users can Tab between controls, press Enter to open resources and Escape to close dialogs.
+
 ## 1 · What each module does
 
-Ten entries on the left rail (INTEG / SITES / DOCS are admin-only):
+Ten entries on the left rail (Integrations / Sites / Documentation are admin-only):
 
 | Module | The question it answers |
 | --- | --- |
-| **OPS** | What does the site look like right now? — robots and alarms on a 3D plant map; tap a waypoint to send a robot there |
-| **LIVE** | Live video, recording search/playback/download, camera presets, inspection plans and execution records |
-| **TASKS** | Templates, schedules, week/month calendars, archived results and related events, CSV and printable reports |
-| **FLEET** | How are the robots doing? — battery, speed, current job for every unit, with 3D models; the "connect a robot" wizard lives here too |
-| **MAP** | What does the plant look like? — the full working map: base layer, zones, waypoints and live robot positions |
-| **EVENTS** | Alarm review and evidence; equipment defects with severity, category, submitter, assignee, treatment history and resolution |
-| **ASSETS** | Inspected equipment records in cards or tables; equipment–tag–inspection point–data type–unit–address register |
-| **INTEG** (admin) | How do external systems plug in? — managed connectors, API keys, the event vocabulary and map upload, all on one page |
-| **SITES** (admin) | Sites and Site Builder, user accounts, factory/department/position membership, login and operation audit logs |
-| **DOCS** (admin) | How do I use the APIs? — the "API & Integration" reference: both OpenAPI specs rendered live from the running platform (never drifts) + the connect/embed guide |
+| **Overview** | What does the site look like right now? — robots and alarms on a 3D plant map; tap a waypoint to send a robot there |
+| **Live** | Live video, recording search/playback/download, camera presets, inspection plans and execution records |
+| **Tasks** | Templates, schedules, week/month calendars, archived results and related events, CSV and printable reports |
+| **Fleet** | How are the robots doing? — battery, speed, current job for every unit, with 3D models; the "connect a robot" wizard lives here too |
+| **Map** | What does the plant look like? — the full working map: base layer, zones, waypoints and live robot positions |
+| **Events** | Alarm review and evidence; equipment defects with severity, category, submitter, assignee, treatment history and resolution |
+| **Assets** | Inspected equipment records in cards or tables; equipment–tag–inspection point–data type–unit–address register |
+| **Integrations** (admin) | How do external systems plug in? — managed connectors, API keys, the event vocabulary and map upload, all on one page |
+| **Sites** (admin) | Sites and Site Builder, user accounts, factory/department/position membership, login and operation audit logs |
+| **Documentation** (admin) | How do I use the APIs? — the "API & Integration" reference: both OpenAPI specs rendered live from the running platform (never drifts) + the connect/embed guide |
 
 ## 2 · Why the platform is site-centric
 
@@ -39,7 +41,7 @@ Pick by your network layout:
 
 ### Route A — platform-managed (recommended when platform and robots share a network)
 
-In **INTEG → Managed connectors**, click *New*, pick the robot's brand, and fill in three things: the robot's IP address, its login credentials, and (optionally) the rtsp URLs of its onboard cameras. Click *Create & start* — done.
+In **Integrations → Managed connectors**, click *New*, pick the robot's brand, and fill in three things: the robot's IP address, its login credentials, and (optionally) the rtsp URLs of its onboard cameras. Click *Create & start* — done.
 
 The platform runs the integration program for you: it restarts on crashes, its logs are one click away, and it comes back automatically after a platform restart. The robot shows up in the fleet within seconds, and its onboard cameras become live channels on the video wall.
 
@@ -54,11 +56,11 @@ Two ready-made toolkits help you write it:
 - **TypeScript** (`sdk/adapter-sdk-ts`): about 50 lines per robot;
 - **Node-RED** (`sdk/node-red-contrib-plantbot`): no code — wire four nodes into a flow; handy where Modbus/MQTT devices already live in Node-RED.
 
-Either way, authentication is a single *site key* (issued on the INTEG page; the plaintext is shown exactly once).
+Either way, authentication is a single *site key* (issued on the Integrations page; the plaintext is shown exactly once).
 
 ### How the robot lands on the map
 
-Once connected, the robot appears on the OPS / MAP scene at its **real reported position**. If the robot navigates in its own mapping frame (most real robots do), calibrate once on the Site Builder's CALIB page — click two or more matching points on the map and the platform solves the conversion — then paste the result into the connector form. From then on the robot's position lines up with the plant map exactly.
+Once connected, the robot appears on the Overview / Map scene at its **real reported position**. If the robot navigates in its own mapping frame (most real robots do), calibrate once on the Site Builder's Calibration page — click two or more matching points on the map and the platform solves the conversion — then paste the result into the connector form. From then on the robot's position lines up with the plant map exactly.
 
 ## 4 · The data is open
 
@@ -78,9 +80,9 @@ Fields that contain video source addresses (with embedded credentials) never lea
 
 ## 5 · Inspection operations
 
-To start recording, an administrator enables each channel in LIVE → Recordings and selects 1–30 days of retention. Earlier footage is not recovered. For camera inspections, save named presets, arrange their order and set dwell times. Execution requires an adapter that supports absolute positioning and confirms arrival; weekly camera schedules use UTC. The current F2 adapter only supports reset because its directional stop protocol is unverified; Spot CAM supports measured positioning and patrols; X30 robotserver does not expose camera positioning. After an interrupted move, an operator must verify that the camera has stopped before releasing its reservation.
+To start recording, an administrator enables each channel in Live → Recordings and selects 1–30 days of retention. Earlier footage is not recovered. For camera inspections, save named presets, arrange their order and set dwell times. Execution requires an adapter that supports absolute positioning and confirms arrival; weekly camera schedules use UTC. The current F2 adapter only supports reset because its directional stop protocol is unverified; Spot CAM supports measured positioning and patrols; X30 robotserver does not expose camera positioning. After an interrupted move, an operator must verify that the camera has stopped before releasing its reservation.
 
-Administrators maintain equipment and tags. A tag can bind to a metric from a registered robot; device protocols and credentials stay in adapters/connectors. Operators report, assign and treat defects in EVENTS → Defects; closure requires a resolution and reopening preserves the history. Organization membership does not grant access: site roles remain separate. Event types are managed in INTEG → Event types. Camera patrols do not automatically capture images or run AI; external algorithms use the existing event, reading and evidence interfaces.
+Administrators maintain equipment and tags. A tag can bind to a metric from a registered robot; device protocols and credentials stay in adapters/connectors. Operators report, assign and treat defects in Events → Defects; closure requires a resolution and reopening preserves the history. Organization membership does not grant access: site roles remain separate. Event types are managed in Integrations → Event types. Camera patrols do not automatically capture images or run AI; external algorithms use the existing event, reading and evidence interfaces.
 
 ## 6 · Further reading
 
@@ -91,8 +93,9 @@ Administrators maintain equipment and tags. A tag can bind to a metric from a re
 - The three-layer integration architecture (simulator ⇄ adapter ⇄ platform): [adapter-sim-architecture.md](adapter-sim-architecture.md)
 - Connecting robots with a code agent (Claude Code etc.): the repo ships an Agent Skill at [.claude/skills/robot-adapter](../.claude/skills/robot-adapter/SKILL.md) — hand the folder to your agent
 
-Open FLEET → robot → Teleoperation for manual driving, and LIVE → PTZ inspection for camera controls. See [manual-control.md](manual-control.md) for ownership, stopping behavior, supported hardware and adapter configuration.
+Open Fleet → robot → Teleoperation for manual driving, and Live → PTZ inspection for camera controls. See [manual-control.md](manual-control.md) for ownership, stopping behavior, supported hardware and adapter configuration.
 
 ## Vision inspection
 
-Open LIVE → Vision inspection to view Adapter sources, choose one of eleven presets, preview the scene and configure regions, lines, thresholds and UTC schedules. Enabled rules produce observations with original images, annotations, readings and configuration versions; anomalies enter the existing event history. Continuous rules require a fixed view. Mobile OCR requires device-confirmed stationary feedback. See [release.md](release.md) and [vision.md](vision.md) for the separate Server and Adapter packages.
+Open Live → Vision inspection to view Adapter sources, choose one of eleven presets, preview the scene and configure regions, lines, thresholds and UTC schedules. Enabled rules produce observations with original images, annotations, readings and configuration versions; anomalies enter the existing event history. Continuous rules require a fixed view. Mobile OCR requires device-confirmed stationary feedback. See [release.md](release.md) and [vision.md](vision.md) for the separate Server and Adapter packages.
+
