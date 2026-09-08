@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
-import { ChevronLeft, ChevronRight, Grid2X2, Focus, Pencil, Plus, Radio, Trash2, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Grid as Grid2X2, CenterToFit as Focus, Edit as Pencil, Add as Plus, Connect as Radio, TrashCan as Trash2, Close as X } from '@carbon/icons-react'
 import { toast } from 'sonner'
 import { useApp, useCan, useSite, api } from '../lib/store'
 import { useT, useLang } from '../lib/i18n'
@@ -117,22 +117,22 @@ function PlayerOverlay({ feed, session }: { feed: Feed; session: StreamSession |
   const t = useT()
   return (
     <>
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/55 to-transparent px-3 pb-6 pt-2.5">
+      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between gap-2 bg-black/80 px-3 py-2.5">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="shrink-0 live-dot" style={{ background: feed.live ? 'var(--color-ok)' : 'var(--color-accent)' }} />
-          <span className="mono truncate text-[12px] font-medium tracking-[0.08em] text-white/90">{feed.name}</span>
+          <span className={`size-1.5 shrink-0 ${session && session.relayOnline !== false ? 'bg-highlight' : 'bg-white/60'}`} />
+          <span className="mono truncate text-[12px] font-medium tracking-normal text-white/90">{feed.name}</span>
           {feed.live && (
-            <span className="mono shrink-0 whitespace-nowrap border border-ok/40 bg-ok/10 px-1 py-0.5 text-[10px] tracking-[0.12em] text-ok">
+            <span className="shrink-0 whitespace-nowrap border border-highlight/40 px-1 py-0.5 text-[12px] text-highlight">
               {t('live.publicRtsp')}
             </span>
           )}
         </div>
-        <span className="mono hidden text-[11px] text-white/60 sm:block">{utcClock(clock)}</span>
+        <span className="mono hidden shrink-0 text-[12px] text-white/90 sm:block">{utcClock(clock)}</span>
       </div>
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/55 to-transparent px-3 pb-2.5 pt-6">
-        <span className="mono truncate text-[11px] text-white/55">{feed.origin}</span>
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-wrap items-center justify-between gap-2 bg-black/80 px-3 py-2.5">
+        <span className="mono truncate text-[12px] text-white/90">{feed.origin}</span>
         {session && (
-          <span className="mono shrink-0 text-[11px] text-white/45" title={t('live.sessionHint')}>
+          <span className="mono min-w-0 truncate text-[12px] text-white/90" title={t('live.sessionHint')}>
             {session.id} · {session.expiresAt === null ? t('live.loop') : `${Math.max(0, Math.round((session.expiresAt - clock) / 1000))}s`}
           </span>
         )}
@@ -163,9 +163,9 @@ function FeedTile({ feed }: { feed: Feed }) {
   if (session?.protocol === 'mse' && session.relayOnline === false)
     return (
       <>
-        <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 bg-black text-ink-3">
-          <span className="mono text-[11px] tracking-[0.14em]">{t('live.relayOffline')}</span>
-          <span className="mono text-[9.5px] text-ink-3/70">MEDIA_RELAY (go2rtc)</span>
+        <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 bg-black text-white/90">
+          <span className="mono text-[12px] tracking-normal">{t('live.relayOffline')}</span>
+          <span className="mono text-[12px]">MEDIA_RELAY (go2rtc)</span>
         </div>
         <PlayerOverlay feed={feed} session={session} />
       </>
@@ -275,7 +275,7 @@ function LiveFeeds() {
         {isAdmin ? (
           <div className="flex h-64 flex-col items-center justify-center gap-3 border border-line">
             <span className="mono text-[12px] text-ink-3">{t('live.noFeeds')}</span>
-            <Button variant="signal" size="sm" onClick={() => setAdding(true)} className="mono h-auto gap-1 px-3 py-1.5 text-[11px]">
+            <Button variant="signal" size="sm" onClick={() => setAdding(true)} className="h-auto gap-1 px-3 py-1.5 text-[12px]">
               <Plus size={12} /> {t('live.addCamera')}
             </Button>
           </div>
@@ -297,16 +297,16 @@ function LiveFeeds() {
         <div className="flex shrink-0 items-center gap-2">
           {isAdmin && mode === 'focus' && fixedCamId && (
             <>
-              <Button variant="ghost" size="sm" onClick={openEdit} className="mono h-auto gap-1 px-2 py-1.5 text-[11px] normal-case tracking-[0.08em] hover:bg-transparent">
+              <Button variant="ghost" size="sm" onClick={openEdit} className="h-auto gap-1 px-2 py-1.5 text-[12px] normal-case tracking-normal hover:bg-transparent">
                 <Pencil size={11} /> {t('live.editCamera')}
               </Button>
-              <Button variant="ghost" size="sm" onClick={removeCamera} className="mono h-auto gap-1 px-2 py-1.5 text-[11px] normal-case tracking-[0.08em] hover:bg-transparent hover:text-crit">
+              <Button variant="ghost" size="sm" onClick={removeCamera} className="h-auto gap-1 px-2 py-1.5 text-[12px] normal-case tracking-normal hover:bg-transparent hover:text-crit">
                 <Trash2 size={11} /> {t('c.delete')}
               </Button>
             </>
           )}
           {isAdmin && (
-            <Button variant="outline" size="sm" onClick={() => setAdding(true)} className="mono h-auto gap-1 px-2.5 py-1.5 text-[11px] normal-case tracking-[0.08em]">
+            <Button variant="outline" size="sm" onClick={() => setAdding(true)} className="h-auto gap-1 px-2.5 py-1.5 text-[12px] normal-case tracking-normal">
               <Plus size={12} /> {t('live.addCamera')}
             </Button>
           )}
@@ -318,8 +318,8 @@ function LiveFeeds() {
               ] as const
             ).map(([m, Icon, label]) => (
               <ToggleGroupItem key={m} value={m} className="gap-1.5 px-3 data-[state=on]:bg-surface-2 data-[state=on]:text-ink">
-                <Icon size={13} strokeWidth={1.5} />
-                <span className="mono text-[12px] tracking-[0.08em]">{label}</span>
+                <Icon size={13} />
+                <span className="mono text-[12px] tracking-normal">{label}</span>
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
@@ -334,7 +334,7 @@ function LiveFeeds() {
               >
                 <ChevronLeft size={14} />
               </Button>
-              <span className="mono min-w-10 text-center text-[11px] text-ink-3">
+              <span className="mono min-w-10 text-center text-[12px] text-ink-3">
                 {wallPage + 1} / {wallPages}
               </span>
               <Button
@@ -377,10 +377,12 @@ function LiveFeeds() {
             {feeds.map((f) => {
               const sel = f.stream === feed?.stream
               return (
-                <button
+                <Button variant="ghost"
                   key={f.stream}
+                  aria-pressed={sel}
+                  aria-label={f.name}
                   onClick={() => setParams({ src: f.stream }, { replace: true })}
-                  className={`group relative aspect-video w-36 shrink-0 overflow-hidden border transition-colors md:w-auto ${
+                  className={`group relative block h-auto aspect-video w-36 whitespace-normal p-0 shrink-0 overflow-hidden border transition-colors md:w-auto ${
                     sel ? 'border-accent' : 'border-line hover:border-line-2'
                   }`}
                 >
@@ -389,18 +391,18 @@ function LiveFeeds() {
                     className="h-full w-full object-cover opacity-80 transition-opacity group-hover:opacity-100"
                   />
                   <span className="absolute inset-x-0 bottom-0 truncate bg-black/60 px-1.5 py-1 text-left">
-                    <span className="mono block truncate text-[10px] tracking-[0.06em] text-white/85">
+                    <span className="mono block truncate text-[12px] tracking-normal text-white/85">
                       {f.name}
                     </span>
                   </span>
                   {f.live && (
-                    <span className="absolute right-1 top-1 flex items-center gap-1 bg-black/60 px-1 py-0.5">
-                      <Radio size={9} className="text-ok" />
-                      <span className="mono text-[8px] text-ok">{t('live.live')}</span>
+                    <span className="absolute right-1 top-1 flex items-center gap-1 bg-black/80 px-1 py-0.5">
+                      <Radio size={12} className="text-highlight" />
+                      <span className="text-[12px] text-highlight">{t('live.live')}</span>
                     </span>
                   )}
                   {sel && <span className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-accent/60" />}
-                </button>
+                </Button>
               )
             })}
           </div>
@@ -443,7 +445,7 @@ function CameraModal({ edit, onClose }: { edit?: { id: string; name: string; rts
       <div className="flex flex-col">
         <div className="flex items-center justify-between border-b border-line px-4 py-3">
           <span className="microlabel">{title}</span>
-          <Button variant="ghost" size="iconSm" onClick={onClose} aria-label="close">
+          <Button variant="ghost" size="iconSm" onClick={onClose} aria-label={t('c.close')}>
             <X size={16} />
           </Button>
         </div>
@@ -455,7 +457,7 @@ function CameraModal({ edit, onClose }: { edit?: { id: string; name: string; rts
           <div>
             <div className="microlabel mb-1">{t('live.camRtsp')}</div>
             <Input value={rtsp} onChange={(e) => setRtsp(e.target.value)} placeholder="rtsp://user:pass@10.0.0.4:554/stream1" className="mono h-auto bg-surface-2 py-1.5 text-[12px]" />
-            <div className="mt-0.5 text-[10.5px] leading-snug text-ink-3">{t('live.camRtspHint')}</div>
+            <div className="mt-0.5 text-[12px] leading-snug text-ink-3">{t('live.camRtspHint')}</div>
           </div>
           <div>
             <div className="microlabel mb-1">{t('live.camPlace')}</div>
@@ -464,8 +466,8 @@ function CameraModal({ edit, onClose }: { edit?: { id: string; name: string; rts
           {err && <div className="mono border border-crit/40 bg-crit/10 px-2.5 py-1.5 text-[12px]" style={{ color: 'var(--color-crit)' }}>{err}</div>}
         </div>
         <div className="flex items-center justify-end gap-2 border-t border-line px-4 py-3">
-          <Button variant="ghost" onClick={onClose} className="mono h-auto px-3 py-1.5 text-[11px]">{t('c.cancel')}</Button>
-          <Button variant="signal" disabled={!name.trim() || busy} onClick={save} className="mono h-auto px-4 py-1.5 text-[11px] disabled:opacity-30">
+          <Button variant="ghost" onClick={onClose} className="h-auto px-3 py-1.5 text-[12px]">{t('c.cancel')}</Button>
+          <Button variant="signal" disabled={!name.trim() || busy} onClick={save} className="h-auto px-4 py-1.5 text-[12px] disabled:opacity-30">
             {edit ? t('c.save') : t('live.addCamera')}
           </Button>
         </div>

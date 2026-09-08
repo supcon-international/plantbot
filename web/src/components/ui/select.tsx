@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
+import { Checkmark as CheckIcon, ChevronDown as ChevronDownIcon, ChevronUp as ChevronUpIcon } from '@carbon/icons-react'
 import { Select as SelectPrimitive } from 'radix-ui'
 
 import { cn } from '@/lib/cn'
@@ -16,8 +16,7 @@ function SelectValue({ ...props }: React.ComponentProps<typeof SelectPrimitive.V
   return <SelectPrimitive.Value data-slot="select-value" {...props} />
 }
 
-// Trigger matches the utility-button chrome; `bare` size is the top-bar
-// site-switch look (borderless, condensed, uppercase).
+// `bare` is used by the top-bar site switch; options keep normal casing.
 function SelectTrigger({
   className,
   size = 'default',
@@ -31,10 +30,10 @@ function SelectTrigger({
       data-slot="select-trigger"
       data-size={size}
       className={cn(
-        'flex w-fit items-center justify-between gap-2 whitespace-nowrap font-(family-name:--font-condensed) text-[11px] font-medium uppercase tracking-[0.08em] transition-colors outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink disabled:cursor-not-allowed disabled:opacity-50 data-[placeholder]:text-ink-3 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*=size-])]:size-3.5',
+        'flex rounded-md min-w-0 w-fit items-center justify-between gap-2 whitespace-nowrap font-sans text-[13px] font-medium transition-colors outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--signal) disabled:cursor-not-allowed disabled:opacity-50 data-[placeholder]:text-ink-3 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*=size-])]:size-3.5',
         size === 'bare'
-          ? 'h-8 border-0 bg-transparent px-1 text-ink hover:text-(--signal)'
-          : 'border border-line bg-surface text-ink-2 hover:border-ink-2 hover:bg-surface-2 hover:text-ink data-[size=default]:h-8 data-[size=default]:px-2.5 data-[size=sm]:h-7 data-[size=sm]:px-2',
+          ? 'h-8 border-0 bg-transparent px-1 text-ink hover:text-ink'
+          : 'border border-line bg-surface text-ink-2 hover:border-ink-2 hover:bg-surface-2 hover:text-ink data-[size=default]:h-9 data-[size=default]:px-2.5 data-[size=sm]:h-8 data-[size=sm]:px-2',
         className,
       )}
       {...props}
@@ -58,7 +57,7 @@ function SelectContent({
       <SelectPrimitive.Content
         data-slot="select-content"
         className={cn(
-          'relative z-50 max-h-(--radix-select-content-available-height) min-w-[8rem] origin-(--radix-select-content-transform-origin) overflow-x-hidden overflow-y-auto border border-line-2 bg-surface text-ink shadow-[6px_6px_0_rgba(0,0,0,0.28)] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[side=bottom]:slide-in-from-top-1',
+          'relative z-50 max-h-(--radix-select-content-available-height) min-w-[8rem] origin-(--radix-select-content-transform-origin) overflow-x-hidden overflow-y-auto border border-line-2 bg-surface text-ink rounded-md shadow-(--shadow-popover) data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0',
           position === 'popper' && 'data-[side=bottom]:translate-y-1 data-[side=top]:-translate-y-1',
           className,
         )}
@@ -89,14 +88,14 @@ function SelectItem({ className, children, ...props }: React.ComponentProps<type
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        'relative flex w-full cursor-default select-none items-center gap-2 py-1.5 pr-8 pl-2 font-(family-name:--font-condensed) text-[11.5px] uppercase tracking-[0.06em] text-ink-2 outline-hidden focus:bg-surface-2 focus:text-ink data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[state=checked]:text-ink [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*=size-])]:size-3.5',
+        'relative flex w-full cursor-default select-none items-center gap-2 min-h-8 rounded-sm py-1.5 pr-8 pl-2 font-sans text-[13px] text-ink-2 outline-hidden focus:bg-surface-2 focus:text-ink data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[state=checked]:text-ink [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*=size-])]:size-3.5',
         className,
       )}
       {...props}
     >
       <span data-slot="select-item-indicator" className="absolute right-2 flex size-3.5 items-center justify-center">
         <SelectPrimitive.ItemIndicator>
-          <CheckIcon className="size-3.5 text-(--signal)" />
+          <CheckIcon className="size-3.5 text-accent" />
         </SelectPrimitive.ItemIndicator>
       </span>
       <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>

@@ -16,14 +16,29 @@ export function Panel({
   className = '',
   style,
   onClick,
+  ariaLabel,
 }: {
   children: ReactNode
   className?: string
   style?: CSSProperties
   onClick?: () => void
+  ariaLabel?: string
 }) {
   return (
-    <Card onClick={onClick} style={style} className={`panel ${className}`}>
+    <Card
+      onClick={onClick}
+      role={onClick ? 'link' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      aria-label={ariaLabel}
+      onKeyDown={onClick ? (event) => {
+        if (event.target === event.currentTarget && event.key === 'Enter') {
+          event.preventDefault()
+          onClick()
+        }
+      } : undefined}
+      style={style}
+      className={`panel ${onClick ? 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring' : ''} ${className}`}
+    >
       {children}
     </Card>
   )
@@ -194,7 +209,12 @@ export function Spark({
   )
 }
 
-export function BatteryBar({ value, w = 64 }: { value: number; w?: number }) {
+export function BatteryBar({ value, w = 64 }: { value?: number; w?: number }) {
+  const t = useT()
+  if (value == null || !Number.isFinite(value)) {
+    return <span className="text-[12px] text-ink-3">{t('c.battery')} · {t('c.unknown')}</span>
+  }
+  value = Math.max(0, Math.min(100, value))
   // greyscale by default; colour only when the level itself is the news
   const tone = value > 40 ? 'var(--color-ink-2)' : value > 20 ? 'var(--color-warn)' : 'var(--color-crit)'
   return (
@@ -216,7 +236,7 @@ export function BatteryBar({ value, w = 64 }: { value: number; w?: number }) {
 export function EmptyNote({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
     <div className="flex min-h-24 flex-col items-center justify-center gap-2 px-6 py-5 text-center">
-      <span className="max-w-[40ch] text-[13px] leading-snug text-ink-3">{children}</span>
+      <span className="max-w-[40ch] text-[14px] leading-relaxed text-ink-3">{children}</span>
       {action}
     </div>
   )

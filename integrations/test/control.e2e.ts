@@ -101,7 +101,15 @@ test('cancelling native camera motion waits for stop before unlocking', {timeout
  const camera=(await api(vs.stack,'GET',path)).body.cameras.find((c:any)=>c.ptz?.manual)
  const preset=(await api(vs.stack,'POST',`/api/sites/${SITE}/ptz/presets`,{name:'Cancel test',channelId:camera.id,pan:330,tilt:80,zoom:20})).body.preset
  const run=(await api(vs.stack,'POST',`/api/sites/${SITE}/ptz/presets/${preset.id}/recall`,{})).body.run
- await new Promise(r=>setTimeout(r,650))
+ // Cancel a delivered motion, not a still-pending order. Under parallel browser
+ // and adapter tests a fixed delay can expire before the adapter acknowledges it.
+ await waitFor(async()=>{
+  const current=(await api(vs.stack,'GET',`/api/sites/${SITE}/ptz`)).body.runs.find((r:any)=>r.id===run.id)
+  const orderId=current?.steps[current.stepIndex]?.orderId
+  if(!orderId)return false
+  const orders=(await api(vs.stack,'GET',`/api/sites/${SITE}/integrations`)).body.orders
+  return orders.some((o:any)=>o.id===orderId&&o.state==='acked')
+ },5000,'camera motion acknowledged before cancellation',50)
  const cancelled=await api(vs.stack,'POST',`/api/sites/${SITE}/ptz/runs/${run.id}/cancel`,{})
  assert.equal(cancelled.body.run.status,'cancelled')
  assert.ok(cancelled.body.run.stopOrderId)

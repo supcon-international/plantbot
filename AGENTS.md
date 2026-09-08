@@ -3,7 +3,7 @@
 Plantbot：多场站巡检机器人运营平台——**纯集成层**，机器人全部经 adapter 接入，平台管「巡哪里、谁去巡、发现了什么、证据在哪」。生产实例跑在 https://m3rcyzzz.club/robots（子路径，见下）。pnpm workspace 四块：
 
 - `server/` — Fastify 5 平台：会话面 `/api/sites/:siteId/*`（RBAC）+ 开放面 `/api/integration/v1`（Bearer 场站 key）；node:sqlite 持久化；一个场站一个 `World` 实例（`server/src/world.ts`）
-- `web/` — Vite 8 + React 19 SPA（shadcn/ui 皮肤化为 Carbon 工业控制台 + R3F 3D）
+- `web/` — Vite 8 + React 19 SPA（shadcn/ui 对齐 Tier0 产品设计规范 + R3F 3D）
 - `integrations/` — 三厂商 **adapter**（Spot·gRPC / 云深处 X30·TCP+XML / 高新兴 F2·REST+WS），经 profile 起五个 adapter 进程。**simulator 层已剥离到独立仓库 [plantbotsimulator](https://github.com/supcon-international/plantbotsimulator)**（三家仿真机器人 + 自带 RTSP 视频）——adapter 指向它=仿真,指向真机=生产
 - `sdk/` — adapter SDK 双形态：TypeScript `@plantbot/adapter-sdk`（workspace 包，零依赖，**构建产物 `dist/`**——`pnpm install` 经包内 `prepare` + 根 `postinstall` 自动构建，`exports` 指向 dist；`integrations/shared` 是薄 re-export——内置 adapter 用的就是这个包，不会漂移）+ Node-RED `node-red-contrib-plantbot`（config/robot/orders/event 四节点 + 示例 flow，凭证存 Node-RED credential store；`plantbot-client.js` 是 SDK 的手抄 JS 副本，改 SDK 契约要同步）。SDK `pumpOrders` 语义：按 `order.id` 去重（重启重放不重复执行）；`goto/mission` 运动类对同一 serial 串行 FIFO，新运动到达先调可选 `preempt(inflight, incoming)` 钩子再等在飞单结束；`pause/resume/abort/announce/ptz` 干预类立即执行不排队；exec 处理运动类必须返回「运动真正完成才 resolve」的 Promise。
 
@@ -73,7 +73,13 @@ node scripts/test-inspection-ui.mjs                 # 巡检运营 UI 回归（�
 
 ## 前端约定
 
-- **组件基座 = shadcn/ui**（Tailwind v4，`web/src/components/ui/*`，别名 `@/`），已**皮肤化为 Carbon 工业控制台**：直角（`--radius:0`）、硬偏移阴影、IBM Plex 三字重分工——Condensed 只做标题、Sans 做标签与正文、Mono 只做数据（id/坐标/数值/时间/通道名）。**酸绿 signal 只用于两处：主动作按钮与「在线/活动」指示**（live-dot、导航当前项、选中态）；状态胶囊/电量条/火花线/面板头一律中性令牌（`.microlabel` 是句首大写 Sans，不是全大写 mono；Badge 基类同样句首大写，只有 `micro` 变体保留 mono 大写给 id）。没有页面级网格纹理（只有 3D 地图自己画的 4 m 栅格）；空态用 `EmptyNote` 写成句子（可带 action），不用全大写占位语；火花线在数据平直时由 `Spark` 自动显示「steady」。shadcn 语义变量（`--background`/`--primary`…）在 `app.css` 里**派生自 Carbon 令牌**（`--color-*`），改设计只动 Carbon 令牌，双主题自动翻。写页面用 `Button`(variant utility/signal/outline/ghost)/`Dialog`/`Select`/`Tabs|ToggleGroup`(段控)/`Table`/`Input`/`Switch`/`Slider`/`Progress`/`Badge`，不要手搓原生 `<button>/<select>/<input type=checkbox>`；确认/输入框用 `components/ConfirmDialog.tsx` 的 `useConfirm()`（返回 Promise，删除类传 `destructive`），禁止 `window.confirm/prompt`。`components/ui.tsx` 的 `Panel/PanelHead/Modal/SevTag/ModeChip` 是包在 shadcn 之上的领域封装。Toast 走 sonner（`lib/notify.tsx` 渲染 Carbon 卡片）。重后台页（SiteBuilder/Integrations/Docs/Sites）在 `App.tsx` 走 `React.lazy` + 骨架 fallback，新增重页照此分包。`useT()` 返回的 `t` 按 lang 稳定（可安全进 memo 依赖）。**iframe 嵌入**：`?embed=1` 去壳模式（隐藏顶栏/侧栏，**保留一条紧凑模块导航条** `EmbedNav`，`?embednav=top|bottom|hidden` 控制其位置或隐藏；tab 会话粘滞，`?embed=0` 退出）+ `?site=` 钉场站（main.tsx 在 WS 连接前应用）。**坑：`.panel` 类带 `position:relative`，别加到需要 `fixed` 的元素（Dialog 已规避）；React 必须单副本（19.2.7），重复副本会触发 Invalid hook call。**
+- **设计来源**：[Tier0-Design-System 的 tier0-design skill](https://github.com/FREEZONEX/Tier0-Design-System/blob/52e01e94c18188668f47dfe7664f27cfde1690f6/SKILL.md)，使用 `tier0-product` surface；已对照真实 Tier0-Frontend 的 `packages/theme`。来源版本、适配边界和验收见 `docs/ui-design-audit.md`。保留本项目 React/Vite/shadcn，不引入另一套组件框架。
+- **视觉约定**：默认浅色并尊重已保存主题；`app.css` 的 Tier0 语义 token 是色彩事实源，现有 `--color-*` 与 shadcn 变量从中派生。近黑主操作，FX Green 只做选中/活动/进度，浅色高亮填充 `#CCF368`；状态色独立。控件圆角 4px、细边框、弹层轻阴影；无硬偏移阴影、玻璃背景和装饰性切页/呼吸动画。IBM Plex Sans/SC 用于标题与正文，Mono 只用于 id/坐标/数值/时间；辅助文字不小于 12px（地图坐标等专门画布标注除外）。产品图标统一 `@carbon/icons-react`，禁止混入 Lucide。
+- **组件与交互**：使用 `web/src/components/ui/*` 的 `Button`（default/signal=主操作，highlight=强调，utility/outline/ghost=次操作）、`Dialog`、`Select`、`Tabs|ToggleGroup`、`Table`、`Input`、`Switch`、`Slider`、`Progress`、`Badge`。确认框使用 `useConfirm()`，禁止原生 `window.confirm/prompt`。`components/ui.tsx` 保留领域封装。页面采用 Header + Controls + Content，空态用 `EmptyNote`；点击面板须支持键盘，表单有可访问名称，危险动作保留确认。所有用户文案中英双语，按钮正常句首大小写。移动导航为四个常用模块加“更多”，不得隐藏管理模块的入口；表格可以局部横滚，页面不能横向裁切。
+- **数据与性能**：未知电量显示未知，离线不显示在线指示；“在线空闲”只描述已上报的空闲/电量条件，不承诺一定可调度。3D 场站网格保留真实空间含义；平直火花线显示 steady。重后台页仍走 React.lazy + 骨架；`useT()` 的 t 按 lang 稳定。
+- **iframe 嵌入**：`?embed=1` 隐藏壳层，保留 `EmbedNav`；`?embednav=top|bottom|hidden` 控制导航，tab 会话粘滞，`?embed=0` 退出；`?site=` 在 WS 连接前固定场站。`.panel` 含 position:relative，不能加到 fixed 弹层；React 必须保持单副本。
+- **UI 验证**：生产子路径构建后运行 `node scripts/test-tier0-ui.mjs`、`node scripts/test-inspection-ui.mjs`、`node scripts/test-control-ui.mjs`；截图在 demos 下。新设计不能只凭 HTTP 200 验收，必须检查真实内容、导航、对话框、权限、错误恢复、375/768/1440px、中英双语与双主题。
+
 
 ## 文档地图（改动时的同步义务）
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Minus, Plus, RotateCcw, RotateCw, Square, Gamepad2 } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Subtract as Minus, Add as Plus, RotateCounterclockwise as RotateCcw, RotateClockwise as RotateCw, Stop as Square, GameConsole as Gamepad2 } from '@carbon/icons-react'
 import { apiFetch, useApp, useCan, useSite } from '../lib/store'
 import { useLang } from '../lib/i18n'
 import { Panel, PanelHead, EmptyNote } from './ui'
@@ -187,7 +187,7 @@ function ControlPanel({ siteId, robotId, channelId, onCapture }: { siteId: strin
           <div className="grid grid-cols-3 gap-2">{controls.map(c => <Button key={c.key} type="button" variant={pressed === c.key ? 'signal' : 'utility'} className="h-14 touch-none select-none" aria-label={c.title} title={c.title} disabled={!ready || !Object.values(c.axes).some(Boolean)}
             onPointerDown={e => { if (e.button !== 0) return; e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); root.current?.focus({ preventScroll: true }); move(c.key, c.axes) }}
             onPointerUp={stop} onPointerCancel={stop} onLostPointerCapture={stop} onContextMenu={e => e.preventDefault()}>
-            <c.icon size={19} /><span className="mono text-[10px]">{c.key.length === 1 ? c.key.toUpperCase() : ''}</span>
+            <c.icon size={19} /><span className="mono text-[12px]">{c.key.length === 1 ? c.key.toUpperCase() : ''}</span>
           </Button>)}</div>
           <Button variant="outline" className="w-full" disabled={!owned} onClick={stop}><Square size={15} />{l('Stop · Space', '停止 · 空格')}</Button>
           <p className="text-xs leading-relaxed text-ink-3">{target === 'drive'

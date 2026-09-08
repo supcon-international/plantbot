@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { Plus, X, Camera, Flame, Radar, Wind, AudioWaveform, Compass, ScanEye, Dog, Car, Check, Copy, ArrowUpRight } from 'lucide-react'
+import { Add as Plus, Close as X, Camera, Fire as Flame, Radar, Windy as Wind, Waveform as AudioWaveform, Compass, View as ScanEye, Bot as Dog, Car, Checkmark as Check, Copy, ArrowUpRight } from '@carbon/icons-react'
 import { useApp, api, useCan } from '../lib/store'
 import { useT, useLang, IDX } from '../lib/i18n'
 import { BASE } from '../lib/base'
@@ -92,17 +92,17 @@ setInterval(async () => {
       <div className="flex max-h-[86dvh] flex-col">
         <div className="flex items-center justify-between border-b border-line px-4 py-3">
           <span className="microlabel">{t('fl.wiz.title')}</span>
-          <div className="mono hidden items-center gap-2 text-[11px] tracking-[0.1em] text-ink-3 sm:flex">
+          <div className="mono hidden items-center gap-2 text-[12px] tracking-normal text-ink-3 sm:flex">
             {steps.map((s, i) => (
               <span key={s} className="flex items-center gap-2">
                 {i > 0 && <span className="h-px w-4 bg-line-2" />}
                 <span style={{ color: i === step ? 'var(--color-accent)' : i < step ? 'var(--color-ink-2)' : undefined }}>
-                  {i + 1} {s.toUpperCase()}
+                  {i + 1} {s}
                 </span>
               </span>
             ))}
           </div>
-          <Button variant="ghost" size="iconSm" onClick={onClose} aria-label="close">
+          <Button variant="ghost" size="iconSm" onClick={onClose} aria-label={t('c.close')}>
             <X size={16} />
           </Button>
         </div>
@@ -110,7 +110,7 @@ setInterval(async () => {
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
           {step === 0 && (
             <div className="space-y-3">
-              <div className="text-[12.5px] leading-relaxed text-ink-3">{t('fl.wiz.modeIntro')}</div>
+              <div className="text-[14px] leading-relaxed text-ink-3">{t('fl.wiz.modeIntro')}</div>
               <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                 {(
                   [
@@ -120,10 +120,11 @@ setInterval(async () => {
                 ).map(([m, title, desc]) => {
                   const sel = mode === m
                   return (
-                    <button
+                    <Button variant="ghost"
                       key={m}
+                      aria-pressed={sel}
                       onClick={() => setMode(m)}
-                      className="panel-hover border p-3.5 text-left"
+                      className="panel-hover block h-auto whitespace-normal border p-3.5 text-left font-normal"
                       style={{ borderColor: sel ? 'var(--color-accent)' : 'var(--color-line)' }}
                     >
                       <div className="flex items-baseline justify-between gap-2">
@@ -131,7 +132,7 @@ setInterval(async () => {
                         {sel && <Check size={13} className="shrink-0 text-accent" />}
                       </div>
                       <div className="mt-1.5 text-[12px] leading-relaxed text-ink-3">{desc}</div>
-                    </button>
+                    </Button>
                   )
                 })}
               </div>
@@ -140,15 +141,16 @@ setInterval(async () => {
 
           {step === 1 && (
             <div className="space-y-3">
-              <div className="text-[12.5px] leading-relaxed text-ink-3">{t('fl.wiz.guideIntro')}</div>
+              <div className="text-[14px] leading-relaxed text-ink-3">{t('fl.wiz.guideIntro')}</div>
               <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                 {models.map((m) => {
                   const sel = model?.model === m.model
                   return (
-                    <button
+                    <Button variant="ghost"
                       key={m.model}
+                      aria-pressed={sel}
                       onClick={() => setModel(m)}
-                      className="panel-hover border p-3 text-left"
+                      className="panel-hover block h-auto whitespace-normal border p-3 text-left font-normal"
                       style={{ borderColor: sel ? 'var(--color-accent)' : 'var(--color-line)' }}
                     >
                       <div className="flex items-baseline justify-between gap-2">
@@ -156,11 +158,11 @@ setInterval(async () => {
                         {sel && <Check size={13} className="shrink-0 text-accent" />}
                       </div>
                       <div className="microlabel mt-0.5">{m.vendor}</div>
-                      <div className="mono mt-2 text-[11.5px] text-ink-2">
+                      <div className="mono mt-2 text-[12px] text-ink-2">
                         {m.massKg} kg · {m.ipRating} · {m.maxSpeed} m/s · {m.enduranceMin} min
                       </div>
                       <div className="mt-1.5 text-[12px] leading-snug text-ink-3">{m.blurb[li]}</div>
-                    </button>
+                    </Button>
                   )
                 })}
               </div>
@@ -181,42 +183,42 @@ setInterval(async () => {
               </div>
               <div>
                 <div className="microlabel mb-1">1 · {t('fl.wiz.apiKey')}</div>
-                <div className="text-[12.5px] leading-relaxed text-ink-2">{t('fl.wiz.keyHint')}</div>
+                <div className="text-[14px] leading-relaxed text-ink-2">{t('fl.wiz.keyHint')}</div>
               </div>
               <div>
                 <div className="mb-1.5 flex items-center justify-between">
                   <span className="microlabel">2 · {t('fl.wiz.launch')}</span>
                   <CopyBtn text={launchCmd} tag="launch" copied={copied} setCopied={setCopied} t={t} />
                 </div>
-                <pre className="mono overflow-x-auto border border-line bg-surface-2 p-3 text-[11.5px] leading-relaxed text-ink-2">
+                <pre className="mono overflow-x-auto border border-line bg-surface-2 p-3 text-[12px] leading-relaxed text-ink-2">
                   {launchCmd}
                 </pre>
               </div>
               <div>
                 <div className="microlabel mb-1">3 · {t('fl.wiz.stepGuide')}</div>
-                <div className="text-[12.5px] leading-relaxed text-ink-2">{t('fl.wiz.autoAppear')}</div>
+                <div className="text-[14px] leading-relaxed text-ink-2">{t('fl.wiz.autoAppear')}</div>
               </div>
               <div>
                 <div className="microlabel mb-1">4 · {t('fl.wiz.sceneTitle')}</div>
-                <div className="text-[12.5px] leading-relaxed text-ink-2">{t('fl.wiz.sceneHint')}</div>
+                <div className="text-[14px] leading-relaxed text-ink-2">{t('fl.wiz.sceneHint')}</div>
               </div>
 
               {/* build-your-own adapter: the SDK in two flavors */}
               <div className="border-t border-line/60 pt-3">
                 <div className="microlabel mb-1">{t('fl.wiz.sdkTitle')}</div>
-                <div className="mb-2 text-[12.5px] leading-relaxed text-ink-3">{t('fl.wiz.sdkIntro')}</div>
+                <div className="mb-2 text-[14px] leading-relaxed text-ink-3">{t('fl.wiz.sdkIntro')}</div>
                 <div className="mb-1.5 flex items-center justify-between">
-                  <span className="mono text-[11px] tracking-[0.1em] text-ink-2">TYPESCRIPT · @plantbot/adapter-sdk</span>
+                  <span className="mono text-[12px] tracking-normal text-ink-2">TYPESCRIPT · @plantbot/adapter-sdk</span>
                   <CopyBtn text={SDK_TS} tag="sdkts" copied={copied} setCopied={setCopied} t={t} />
                 </div>
-                <pre className="mono mb-3 overflow-x-auto border border-line bg-surface-2 p-3 text-[10.5px] leading-relaxed text-ink-2">
+                <pre className="mono mb-3 overflow-x-auto border border-line bg-surface-2 p-3 text-[12px] leading-relaxed text-ink-2">
                   {SDK_TS}
                 </pre>
                 <div className="mb-1.5 flex items-center justify-between">
-                  <span className="mono text-[11px] tracking-[0.1em] text-ink-2">NODE-RED · node-red-contrib-plantbot</span>
+                  <span className="mono text-[12px] tracking-normal text-ink-2">NODE-RED · node-red-contrib-plantbot</span>
                   <CopyBtn text={SDK_NR} tag="sdknr" copied={copied} setCopied={setCopied} t={t} />
                 </div>
-                <pre className="mono overflow-x-auto border border-line bg-surface-2 p-3 text-[10.5px] leading-relaxed text-ink-2">
+                <pre className="mono overflow-x-auto border border-line bg-surface-2 p-3 text-[12px] leading-relaxed text-ink-2">
                   {SDK_NR}
                 </pre>
               </div>
@@ -228,7 +230,7 @@ setInterval(async () => {
           <Button
             variant="ghost"
             onClick={() => (step === 0 ? onClose() : setStep(step - 1))}
-            className="mono px-2 text-[11.5px] normal-case tracking-[0.1em]"
+            className="px-2 text-[12px] normal-case tracking-normal"
           >
             {step === 0 ? t('c.cancel') : t('fl.wiz.back')}
           </Button>
@@ -239,7 +241,7 @@ setInterval(async () => {
                 onClose()
                 nav('/integrations')
               }}
-              className="mono gap-1.5 px-3.5 text-[11.5px] normal-case tracking-[0.12em]"
+              className="gap-1.5 px-3.5 text-[12px] normal-case tracking-normal"
             >
               {t('fl.wiz.openConnectors')} <ArrowUpRight size={12} />
             </Button>
@@ -248,7 +250,7 @@ setInterval(async () => {
               variant="outline"
               disabled={!mode}
               onClick={() => setStep(1)}
-              className="mono px-3.5 text-[11.5px] normal-case tracking-[0.12em] text-ink disabled:opacity-40"
+              className="px-3.5 text-[12px] normal-case tracking-normal text-ink disabled:opacity-40"
             >
               {t('fl.wiz.next')}
             </Button>
@@ -257,7 +259,7 @@ setInterval(async () => {
               variant="outline"
               disabled={!model}
               onClick={() => setStep(2)}
-              className="mono px-3.5 text-[11.5px] normal-case tracking-[0.12em] text-ink disabled:opacity-40"
+              className="px-3.5 text-[12px] normal-case tracking-normal text-ink disabled:opacity-40"
             >
               {t('fl.wiz.next')}
             </Button>
@@ -265,12 +267,12 @@ setInterval(async () => {
             <Button
               variant="signal"
               onClick={() => nav('/integrations')}
-              className="mono gap-1.5 px-3.5 text-[11.5px] normal-case tracking-[0.12em]"
+              className="gap-1.5 px-3.5 text-[12px] normal-case tracking-normal"
             >
               {t('fl.wiz.openIntegrations')} <ArrowUpRight size={12} />
             </Button>
           ) : (
-            <Button variant="outline" onClick={onClose} className="mono px-3.5 text-[11.5px] normal-case tracking-[0.12em] text-ink">
+            <Button variant="outline" onClick={onClose} className="px-3.5 text-[12px] normal-case tracking-normal text-ink">
               {t('c.done')}
             </Button>
           )}
@@ -290,7 +292,7 @@ function CopyBtn({ text, tag, copied, setCopied, t }: { text: string; tag: strin
         setCopied(tag)
         setTimeout(() => setCopied(null), 1600)
       }}
-      className="mono h-auto gap-1 px-2 py-1 text-[10px] normal-case tracking-[0.1em]"
+      className="h-auto gap-1 px-2 py-1 text-[12px] normal-case tracking-normal"
     >
       <Copy size={10} /> {copied === tag ? t('fl.wiz.copied') : t('fl.wiz.copy')}
     </Button>
@@ -303,9 +305,10 @@ function RobotCard({ r }: { r: RobotSpec }) {
   const nav = useNavigate()
   const t = useT()
   const m = tel?.missionId ? missions.find((x) => x.id === tel.missionId) : undefined
+  const online = !!tel && tel.mode !== 'offline'
 
   return (
-    <Panel className="panel-hover cursor-pointer" onClick={() => nav(`/robots/${r.id}`)}>
+    <Panel className="panel-hover cursor-pointer" ariaLabel={`${r.callsign} · ${t('c.detail')}`} onClick={() => nav(`/robots/${r.id}`)}>
       <div className="relative h-44 overflow-hidden border-b border-line">
         <Suspense fallback={<div className="skeleton absolute inset-0 opacity-20" />}>
           {r.urdf ? (
@@ -316,8 +319,8 @@ function RobotCard({ r }: { r: RobotSpec }) {
         </Suspense>
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-bg/85 to-transparent" />
         <div className="absolute bottom-2.5 left-3 flex items-center gap-2.5">
-          <span className="live-dot" style={{ background: r.color }} />
-          <span className="mono text-[14px] font-medium tracking-[0.05em] text-ink">{r.callsign}</span>
+          <span className={online ? 'live-dot' : 'h-1.5 w-1.5 shrink-0 rounded-full bg-ink-3'} />
+          <span className="mono text-[14px] font-medium tracking-normal text-ink">{r.callsign}</span>
           <span className="microlabel">{r.model}</span>
         </div>
         <div className="absolute right-2.5 top-2.5">
@@ -326,18 +329,18 @@ function RobotCard({ r }: { r: RobotSpec }) {
       </div>
       <div className="space-y-3 p-3.5">
         <div className="flex items-center justify-between">
-          <BatteryBar value={tel?.battery ?? 0} w={130} />
-          <span className="mono text-[11px] text-ink-3">{tel?.speed.toFixed(2) ?? '—'} m/s</span>
+          <BatteryBar value={online ? tel.battery : undefined} w={130} />
+          <span className="mono text-[12px] text-ink-3">{online ? tel.speed.toFixed(2) : '—'} m/s</span>
         </div>
         <div className="flex items-center gap-2 border-t border-line/70 pt-2.5">
           <span className="microlabel shrink-0">{t('c.mission')}</span>
           {m ? (
             <>
-              <span className="truncate text-[12.5px] text-ink-2">{m.name}</span>
-              <span className="mono ml-auto shrink-0 text-[11px] text-ink-3">{Math.round(m.progress * 100)}%</span>
+              <span className="truncate text-[14px] text-ink-2">{m.name}</span>
+              <span className="mono ml-auto shrink-0 text-[12px] text-ink-3">{Math.round(m.progress * 100)}%</span>
             </>
           ) : (
-            <span className="text-[12.5px] text-ink-3">—</span>
+            <span className="text-[14px] text-ink-3">—</span>
           )}
         </div>
         <div className="flex items-center gap-1.5 border-t border-line/70 pt-2.5">
@@ -350,11 +353,11 @@ function RobotCard({ r }: { r: RobotSpec }) {
                 className="flex h-6 w-6 items-center justify-center border border-line text-ink-3"
                 style={p.stream ? { color: 'var(--color-ink-2)', borderColor: 'var(--color-line-2)' } : undefined}
               >
-                <Icon size={12} strokeWidth={1.5} />
+                <Icon size={12} />
               </span>
             )
           })}
-          <span className="mono ml-auto text-[10.5px] text-ink-3">
+          <span className="mono ml-auto text-[12px] text-ink-3">
             {r.ipRating} · {r.massKg} kg
           </span>
         </div>
@@ -382,11 +385,14 @@ export function Robots() {
 
   return (
     <div className="mx-auto max-w-[1300px] space-y-4 p-3 md:p-4">
-      <div className="flex items-center justify-between">
-        <div className="mono text-[14px] text-ink-2">
-          {robots.length} {t('c.units')} · {Object.values(telemetry).filter((x) => x.mode !== 'idle').length} {t('c.tasked')}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-medium text-ink">{t('fl.fleet')}</h1>
+          <p className="mt-1 text-sm text-ink-3">
+            {robots.length} {t('c.units')} · {robots.filter((r) => ['navigating', 'executing', 'teleop'].includes(telemetry[r.id]?.mode)).length} {t('c.tasked')}
+          </p>
         </div>
-        <Button variant="utility" onClick={() => setConnect(true)} className="mono text-[11.5px] normal-case tracking-[0.1em] text-ink-2">
+        <Button variant="signal" onClick={() => setConnect(true)}>
           <Plus size={13} /> {t('fl.connectRobot')}
         </Button>
       </div>
@@ -396,7 +402,7 @@ export function Robots() {
           <div className="mb-2 flex items-center gap-2">
             <g.icon size={13} strokeWidth={1.5} className="text-ink-3" />
             <span className="microlabel">{g.label}</span>
-            <span className="mono text-[11px] text-ink-3">{g.list.length}</span>
+            <span className="mono text-[12px] text-ink-3">{g.list.length}</span>
             <span className="h-px flex-1 bg-line" />
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -404,13 +410,13 @@ export function Robots() {
               <RobotCard key={r.id} r={r} />
             ))}
             {g.key === 'ugv' && canAdmin && (
-              <button
+              <Button variant="outline"
                 onClick={() => setConnect(true)}
-                className="flex min-h-[180px] flex-col items-center justify-center gap-2 border border-dashed border-line-2 text-ink-3 transition-colors hover:border-ink-3 hover:text-ink-2"
+                className="h-auto min-h-[180px] flex-col gap-2 border-dashed text-ink-3"
               >
-                <Plus size={18} strokeWidth={1.5} />
+                <Plus size={18} />
                 <span className="microlabel">{t('fl.provision')}</span>
-              </button>
+              </Button>
             )}
           </div>
         </div>
@@ -418,7 +424,7 @@ export function Robots() {
 
       {/* sensor coverage matrix */}
       <Panel className="rise rise-3">
-        <PanelHead label={t('fl.matrix')} right={<span className="mono text-[11px] text-ink-3">{t('fl.matrix.sub')}</span>} />
+        <PanelHead label={t('fl.matrix')} right={<span className="mono text-[12px] text-ink-3">{t('fl.matrix.sub')}</span>} />
         <Table className="min-w-[560px]">
           <TableHeader>
             <TableRow className="border-line">
@@ -428,7 +434,7 @@ export function Robots() {
                 return (
                   <TableHead key={k} className="h-auto px-2 py-2">
                     <div className="flex flex-col items-center gap-1">
-                      <Icon size={13} strokeWidth={1.5} className="text-ink-3" />
+                      <Icon size={13} className="text-ink-3" />
                       <span className="microlabel">{t(KIND_KEY[k])}</span>
                     </div>
                   </TableHead>
@@ -442,7 +448,7 @@ export function Robots() {
                 <TableCell className="px-3.5 py-2.5">
                   <div className="flex items-center gap-2">
                     <span style={{ width: 5, height: 5, borderRadius: r.family === 'ugv' ? 1 : 99, background: r.color, display: 'inline-block' }} />
-                    <span className="mono text-[12.5px] text-ink">{r.callsign}</span>
+                    <span className="mono text-[14px] text-ink">{r.callsign}</span>
                     <span className="microlabel hidden sm:inline">{r.family}</span>
                   </div>
                 </TableCell>
@@ -465,8 +471,8 @@ export function Robots() {
           </TableBody>
         </Table>
         <div className="flex items-center gap-4 border-t border-line px-3.5 py-2">
-          <span className="mono text-[10.5px] text-ink-3">{t('fl.streaming')}</span>
-          <span className="mono text-[10.5px] text-ink-3">{t('fl.telemetry')}</span>
+          <span className="mono text-[12px] text-ink-3">{t('fl.streaming')}</span>
+          <span className="mono text-[12px] text-ink-3">{t('fl.telemetry')}</span>
         </div>
       </Panel>
 

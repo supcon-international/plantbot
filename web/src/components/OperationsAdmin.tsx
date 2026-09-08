@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Building2, ChevronLeft, ChevronRight, Pencil, Plus, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react'
+import { Building as Building2, ChevronLeft, ChevronRight, Edit as Pencil, Add as Plus, Renew as RefreshCw, Security as ShieldCheck, TrashCan as Trash2 } from '@carbon/icons-react'
 import { apiFetch, useApp } from '../lib/store'
 import { useLang } from '../lib/i18n'
 import { useConfirm } from './ConfirmDialog'
@@ -539,7 +539,7 @@ function AuditLog() {
             <TableRow key={r.id}>
               <TableCell className="mono text-xs whitespace-nowrap">{new Date(r.ts).toLocaleString()}</TableCell>
               <TableCell>{r.actor}</TableCell>
-              <TableCell className="mono text-[11px]">{r.action}</TableCell>
+              <TableCell className="mono text-[12px]">{r.action}</TableCell>
               <TableCell>{[r.siteId, r.target].filter(Boolean).join(' · ') || '—'}</TableCell>
               <TableCell className={r.status >= 400 ? 'text-warn' : 'text-ink-2'}>
                 {r.status} · {r.status >= 400 ? l('Rejected', '未成功') : l('Success', '成功')}

@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { ArrowUpRight } from 'lucide-react'
+import { ArrowUpRight } from '@carbon/icons-react'
 import { useApp } from '../lib/store'
 import { useT, useAgo } from '../lib/i18n'
 import { OpsMap, type MapSel } from '../components/OpsMap'
 import { BatteryBar, SevTag, Panel, ModeChip } from '../components/ui'
+import { Button } from '@/components/ui/button'
 
 function SelectionCard({ sel }: { sel: MapSel }) {
   const robots = useApp((s) => s.robots)
@@ -21,18 +22,19 @@ function SelectionCard({ sel }: { sel: MapSel }) {
     const r = robots.find((x) => x.id === sel.id)
     const tel = telemetry[sel.id]
     if (!r) return null
+    const online = !!tel && tel.mode !== 'offline'
     const m = tel?.missionId ? missions.find((x) => x.id === tel.missionId) : undefined
     return (
       <Panel className="pointer-events-auto w-full max-w-[400px] p-3.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="live-dot" style={{ background: r.color }} />
-            <span className="mono text-[13px] font-medium tracking-[0.05em] text-ink">{r.callsign}</span>
+            <span className={online ? 'live-dot' : 'h-1.5 w-1.5 shrink-0 rounded-full bg-ink-3'} />
+            <span className="mono text-[14px] font-medium tracking-normal text-ink">{r.callsign}</span>
             <ModeChip mode={tel?.mode} />
           </div>
           <Link
             to={`/robots/${r.id}`}
-            className="mono flex items-center gap-1 border border-line-2 px-1.5 py-1 text-[10px] tracking-[0.1em] text-ink-3 transition-colors hover:text-ink-2"
+            className="mono flex items-center gap-1 border border-line-2 px-1.5 py-1 text-[12px] tracking-normal text-ink-3 transition-colors hover:text-ink-2"
           >
             {t('c.detail')} <ArrowUpRight size={10} />
           </Link>
@@ -40,17 +42,17 @@ function SelectionCard({ sel }: { sel: MapSel }) {
         {m && (
           <div className="mt-2.5 flex items-center gap-2 border-t border-line/70 pt-2.5">
             <span className="microlabel shrink-0">{t('c.mission')}</span>
-            <span className="truncate text-[13px] text-ink-2">{m.name}</span>
-            <span className="mono ml-auto shrink-0 text-[11px] text-ink-3">
+            <span className="truncate text-[14px] text-ink-2">{m.name}</span>
+            <span className="mono ml-auto shrink-0 text-[12px] text-ink-3">
               {m.currentStep}/{m.steps.length} · {Math.round(m.progress * 100)}%
             </span>
           </div>
         )}
         <div className="mt-2.5 flex items-center justify-between gap-3">
-          <BatteryBar value={tel?.battery ?? 0} w={100} />
-          <span className="mono text-[11.5px] text-ink-2">{tel?.speed.toFixed(2) ?? '—'} m/s</span>
-          <span className="mono text-[11.5px] text-ink-2">{tel?.rssi != null ? `${tel.rssi} dBm` : '—'}</span>
-          <span className="mono text-[11.5px] text-ink-3">
+          <BatteryBar value={online ? tel.battery : undefined} w={100} />
+          <span className="mono text-[12px] text-ink-2">{online ? tel.speed.toFixed(2) : '—'} m/s</span>
+          <span className="mono text-[12px] text-ink-2">{tel?.rssi != null ? `${tel.rssi} dBm` : '—'}</span>
+          <span className="mono text-[12px] text-ink-3">
             x{tel?.x.toFixed(1) ?? '—'} z{tel?.z.toFixed(1) ?? '—'}
           </span>
         </div>
@@ -64,11 +66,11 @@ function SelectionCard({ sel }: { sel: MapSel }) {
     return (
       <Panel className="pointer-events-auto w-full max-w-[400px] p-3.5">
         <div className="flex items-center gap-2.5">
-          <span className="mono text-[13px] text-ink">{wp.id}</span>
-          <span className="text-[13px] text-ink-2">{wp.name}</span>
+          <span className="mono text-[14px] text-ink">{wp.id}</span>
+          <span className="text-[14px] text-ink-2">{wp.name}</span>
           <span className="microlabel ml-auto">{wp.kind}</span>
         </div>
-        <div className="mono mt-1.5 text-[11.5px] text-ink-3">
+        <div className="mono mt-1.5 text-[12px] text-ink-3">
           x {wp.x.toFixed(1)} · z {wp.z.toFixed(1)} — {t('map.wpDispatch')}
         </div>
       </Panel>
@@ -83,10 +85,10 @@ function SelectionCard({ sel }: { sel: MapSel }) {
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <SevTag sev={ev.severity} />
-            <span className="mono text-[11px] text-ink-3">{ago(ev.ts, clock)}</span>
+            <span className="mono text-[12px] text-ink-3">{ago(ev.ts, clock)}</span>
             <Link
               to={`/events?ev=${ev.id}`}
-              className="mono flex items-center gap-1 border border-line-2 px-1.5 py-1 text-[10px] tracking-[0.1em] text-ink-3 transition-colors hover:text-ink-2"
+              className="mono flex items-center gap-1 border border-line-2 px-1.5 py-1 text-[12px] tracking-normal text-ink-3 transition-colors hover:text-ink-2"
             >
               {t('c.detail')} <ArrowUpRight size={10} />
             </Link>
@@ -117,22 +119,23 @@ export function MapPage() {
       </div>
 
       {/* top-left: site + fleet chips */}
-      <div className="pointer-events-none absolute left-3 top-3 z-10 space-y-2">
+      <div className="pointer-events-none absolute inset-x-3 top-3 z-10 space-y-2">
         <div className="text-[14px] font-medium text-ink">{site?.name ?? '—'}</div>
         <div className="pointer-events-auto flex flex-wrap gap-1.5">
           {robots.map((r) => {
             const active = sel?.kind === 'robot' && sel.id === r.id
             return (
-              <button
+              <Button variant="outline" size="sm"
                 key={r.id}
+                aria-pressed={active}
                 onClick={() => setSel(active ? null : { kind: 'robot', id: r.id })}
-                className={`mono flex items-center gap-1.5 border px-2 py-1 text-[11px] tracking-[0.08em] backdrop-blur transition-colors ${
-                  active ? 'border-(--signal) bg-(--signal) text-[#080808]' : 'border-line bg-bg/60 text-ink-2 hover:border-line-2'
+                className={`mono gap-1.5 ${
+                  active ? 'border-accent bg-accent-hover text-ink' : 'bg-surface text-ink-2'
                 }`}
               >
                 <span style={{ width: 5, height: 5, borderRadius: r.family === 'ugv' ? 1 : 99, background: r.color, display: 'inline-block' }} />
                 {r.callsign}
-              </button>
+              </Button>
             )
           })}
         </div>

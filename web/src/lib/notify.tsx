@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { NavLink } from 'react-router'
-import { X } from 'lucide-react'
+import { Close as X } from '@carbon/icons-react'
 import type { DetectionEvent } from './types'
 import { useT } from './i18n'
 import { SevDot } from '../components/ui'

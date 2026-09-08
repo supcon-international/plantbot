@@ -1,67 +1,92 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
-@theme {
-  /* IBM Carbon-style neutral layering; color is reserved for state. */
-  --color-bg: #080808;
-  --color-surface: #0d0d0d;
-  --color-surface-2: #141414;
-  --color-surface-3: #1c1c1c;
-  --color-line: #292929;
-  --color-line-2: #454545;
-  --color-ink: #f4f4f4;
-  --color-ink-2: #c6c6c6;
-  --color-ink-3: #8d8d8d;
-  --color-accent: #c8ff00;
-  --color-ok: #c8ff00;
-  --color-warn: #f1c21b;
-  --color-crit: #fa4d56;
-  --color-low: #6f6f6f;
-  --font-sans: 'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif;
+/* Tier0 product workbench. Palette follows Tier0-Frontend/packages/theme;
+   Plantbot aliases below preserve the existing component and map contracts. */
+:root {
+  color-scheme: light;
+  --tier0-bg-color: #ffffff;
+  --tier0-bg-secondary: #f3f3f3;
+  --tier0-bg-accent: #ebebeb;
+  --tier0-bg-tertiary: #f9f9f9;
+  --tier0-text-color: #050b14;
+  --tier0-text-secondary: #585c62;
+  /* Reuse Tier0 secondary ink: gray-500 falls below AA on gray panels. */
+  --tier0-text-tertiary: #585c62;
+  --tier0-border: #ebebeb;
+  --tier0-border-strong: #878787;
+  --tier0-primary: #050b14;
+  --tier0-primary-foreground: #ffffff;
+  --tier0-primary-hover: #1c1f1e;
+  --tier0-highlight: #b2ed1d;
+  --tier0-highlight-button: #ccf368;
+  --tier0-highlight-bg: #f0fbd2;
+  --tier0-highlight-text: #48640c;
+  --tier0-success-color: #2f7657;
+  --tier0-warning-color: #a35c00;
+  --tier0-error-color: #dc2626;
+  --tier0-error-foreground: #ffffff;
+  --tier0-radius: 4px;
+  --rail-width: 72px;
+  --top-height: 56px;
+  --signal: var(--tier0-highlight);
+  /* Legacy title alias: one Plex Sans face throughout the product. */
+  --font-condensed: var(--font-sans);
+  --shadow-popover: 0 4px 12px rgb(5 11 20 / 12%);
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+  --tier0-bg-color: #050b14;
+  --tier0-bg-secondary: #151a19;
+  --tier0-bg-accent: #242424;
+  --tier0-bg-tertiary: #1c1f1e;
+  --tier0-text-color: #ffffff;
+  --tier0-text-secondary: #d1d5db;
+  --tier0-text-tertiary: #9ca3af;
+  --tier0-border: #374151;
+  --tier0-border-strong: #6b7280;
+  --tier0-highlight-bg: #26320e;
+  --tier0-highlight-text: #ccf368;
+  --tier0-success-color: #8ee4ba;
+  --tier0-warning-color: #ffd16a;
+  --tier0-error-color: #f87171;
+  --tier0-error-foreground: #050b14;
+  --shadow-popover: 0 4px 12px rgb(0 0 0 / 28%);
+}
+
+@theme inline {
+  --color-bg: var(--tier0-bg-tertiary);
+  --color-surface: var(--tier0-bg-color);
+  --color-surface-2: var(--tier0-bg-secondary);
+  --color-surface-3: var(--tier0-bg-accent);
+  --color-line: var(--tier0-border);
+  --color-line-2: var(--tier0-border-strong);
+  --color-ink: var(--tier0-text-color);
+  --color-ink-2: var(--tier0-text-secondary);
+  --color-ink-3: var(--tier0-text-tertiary);
+  --color-accent: var(--tier0-highlight-text);
+  --color-ok: var(--tier0-success-color);
+  --color-warn: var(--tier0-warning-color);
+  --color-crit: var(--tier0-error-color);
+  --color-low: var(--tier0-text-tertiary);
+  --color-highlight: var(--tier0-highlight-button);
+  --color-highlight-soft: var(--tier0-highlight-bg);
+  --font-sans: 'IBM Plex Sans', 'Plantbot Sans SC UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --font-mono: 'IBM Plex Mono', Menlo, monospace;
 }
 
+/* shadcn bridge shares the same Tier0 semantic source. */
 :root {
-  color-scheme: dark;
-  --rail-width: 72px;
-  --top-height: 56px;
-  --signal: #c8ff00;
-  --font-condensed: 'IBM Plex Sans Condensed', 'IBM Plex Sans', sans-serif;
-}
-
-[data-theme='light'] {
-  color-scheme: light;
-  --color-bg: #f4f4f4;
-  --color-surface: #ffffff;
-  --color-surface-2: #e8e8e8;
-  --color-surface-3: #dcdcdc;
-  --color-line: #d6d6d6;
-  --color-line-2: #8d8d8d;
-  --color-ink: #161616;
-  --color-ink-2: #525252;
-  --color-ink-3: #6f6f6f;
-  --color-accent: #526d00;
-  --color-ok: #526d00;
-  --color-warn: #8e6a00;
-  --color-crit: #da1e28;
-  --color-low: #6f6f6f;
-}
-
-/* ---------- shadcn/ui token bridge ----------
-   shadcn semantic variables are DERIVED from the Carbon tokens above, so both
-   themes flip automatically and there is a single source of design truth.
-   Note: shadcn "accent" = hover tint (surface-3); the BRAND accent stays in
-   --color-accent / --signal. Radius is hard zero — Carbon has no curves. */
-:root {
-  --radius: 0rem;
+  --radius: var(--tier0-radius);
   --background: var(--color-bg);
   --foreground: var(--color-ink);
   --card: var(--color-surface);
   --card-foreground: var(--color-ink);
   --popover: var(--color-surface);
   --popover-foreground: var(--color-ink);
-  --primary: var(--color-ink);
-  --primary-foreground: var(--color-bg);
+  --primary: var(--tier0-primary);
+  --primary-foreground: var(--tier0-primary-foreground);
   --secondary: var(--color-surface-2);
   --secondary-foreground: var(--color-ink);
   --muted: var(--color-surface-2);
@@ -72,7 +97,7 @@
   --destructive-foreground: #ffffff;
   --border: var(--color-line);
   --input: var(--color-line-2);
-  --ring: var(--color-ink);
+  --ring: var(--signal);
 }
 
 @theme inline {
@@ -95,14 +120,14 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --radius-sm: 0;
-  --radius-md: 0;
-  --radius-lg: 0;
-  --radius-xl: 0;
+  --radius-sm: var(--tier0-radius);
+  --radius-md: var(--tier0-radius);
+  --radius-lg: var(--tier0-radius);
+  --radius-xl: var(--tier0-radius);
 }
 
 @media (min-width: 1280px) {
-  :root { --rail-width: 224px; }
+  :root { --rail-width: 220px; }
 }
 
 html,
@@ -118,39 +143,49 @@ body {
   font-size: 14px;
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
-  text-rendering: geometricPrecision;
+  text-rendering: optimizeLegibility;
   overscroll-behavior-y: none;
 }
 
 /* No page-level grid texture: the only grid in the product is the 4 m one the
    3D map draws for itself, where it means something. */
 
-::selection { background: var(--signal); color: #080808; }
+::selection { background: var(--tier0-highlight-button); color: var(--tier0-primary); }
 
 * { scrollbar-width: thin; scrollbar-color: var(--color-line-2) transparent; }
 *::-webkit-scrollbar { width: 7px; height: 7px; }
 *::-webkit-scrollbar-thumb { background: var(--color-line-2); border: 2px solid var(--color-bg); }
 *::-webkit-scrollbar-track { background: transparent; }
 
-button,
-input,
-select,
-textarea { border-radius: 0 !important; font: inherit; }
-button { cursor: pointer; }
-button:disabled { cursor: not-allowed; }
-img { border-radius: 0 !important; }
+/* Keep these in the base layer: a global font shorthand overrides Tailwind's
+   field sizes and corrupts compact tables / data controls. */
+@layer base {
+  button, input, select, textarea { font-family: inherit; border-radius: var(--tier0-radius); }
+  button { cursor: pointer; }
+  button:disabled { cursor: not-allowed; }
+  :focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+  input:focus-visible, select:focus-visible, textarea:focus-visible {
+    border-color: var(--tier0-primary);
+    outline: 2px solid var(--signal);
+    outline-offset: 2px;
+  }
+}
 
-:focus-visible {
-  outline: 2px solid var(--color-ink);
-  outline-offset: 2px;
+/* Two-color focus (WCAG C40): lime stays the brand outline; the neutral
+   2px edge provides contrast on white / highlighted surfaces. */
+:focus-visible { box-shadow: 0 0 0 2px var(--color-ink); }
+:is([data-slot='tabs-trigger'], [data-slot='toggle-group-item'], [data-slot='table-container']):focus-visible {
+  box-shadow: inset 0 0 0 2px var(--color-ink);
+  outline-offset: -4px;
 }
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
-  outline: none;
-  border-color: var(--signal) !important;
-  box-shadow: inset 3px 0 0 var(--signal);
+
+.skip-link {
+  position: fixed; z-index: 100; top: 8px; left: 8px;
+  padding: 10px 16px; border: 1px solid var(--color-line-2);
+  border-radius: var(--tier0-radius); background: var(--color-surface);
+  color: var(--color-ink); transform: translateY(-160%);
 }
+.skip-link:focus-visible { transform: none; }
 
 /* ---------- application frame ---------- */
 
@@ -164,9 +199,8 @@ textarea:focus-visible {
   width: var(--rail-width);
   flex-direction: column;
   border-right: 1px solid var(--color-line);
-  background: #0b0b0b;
+  background: var(--color-surface);
 }
-[data-theme='light'] .side-rail { background: #ffffff; }
 
 .side-brand {
   display: flex;
@@ -177,14 +211,14 @@ textarea:focus-visible {
   border-bottom: 1px solid var(--color-line);
 }
 
-.side-brand [class*='tracking'] { font-family: var(--font-condensed); }
+.side-brand [class*='tracking'] { font-family: var(--font-sans); letter-spacing: -.02em; }
 .side-rail-label {
   display: none;
   padding: 20px 16px 8px;
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: .16em;
-  text-transform: uppercase;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
   color: var(--color-ink-3);
 }
 
@@ -192,27 +226,27 @@ textarea:focus-visible {
 .nav-item {
   position: relative;
   display: flex;
-  min-height: 42px;
+  min-height: 44px;
   align-items: center;
   justify-content: center;
   gap: 10px;
   border: 1px solid transparent;
+  border-radius: var(--tier0-radius);
   color: var(--color-ink-3);
-  transition: color 110ms ease, background 110ms ease, border-color 110ms ease;
+  transition: color 150ms ease-out, background 150ms ease-out, border-color 150ms ease-out;
 }
 .nav-item:hover { border-color: var(--color-line); background: var(--color-surface-2); color: var(--color-ink); }
-.nav-item.is-active { border-color: var(--color-line-2); background: var(--color-surface-3); color: var(--color-ink); }
+.nav-item.is-active { border-color: transparent; background: var(--tier0-highlight-bg); color: var(--color-ink); }
 .nav-item-icon { position: relative; display: grid; width: 24px; height: 24px; flex: none; place-items: center; }
 .nav-item-label {
   display: none;
   overflow: hidden;
   flex: 1;
-  font-family: var(--font-condensed);
-  font-size: 12px;
+  font-family: var(--font-sans);
+  font-size: 14px;
   font-weight: 500;
-  letter-spacing: .09em;
+  letter-spacing: 0;
   text-overflow: ellipsis;
-  text-transform: uppercase;
   white-space: nowrap;
 }
 .nav-item-signal {
@@ -222,7 +256,7 @@ textarea:focus-visible {
   left: -1px;
   width: 0;
   background: var(--signal);
-  transition: width 130ms ease;
+  transition: width 150ms ease-out;
 }
 .nav-item.is-active .nav-item-signal { width: 3px; }
 .nav-badge {
@@ -230,16 +264,16 @@ textarea:focus-visible {
   top: -7px;
   right: -10px;
   display: flex;
-  min-width: 17px;
-  height: 15px;
+  min-width: 18px;
+  height: 18px;
   align-items: center;
   justify-content: center;
   padding: 0 3px;
   border: 1px solid #080808;
   background: var(--color-crit);
-  color: #fff;
+  color: var(--tier0-error-foreground);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .top-bar {
@@ -252,25 +286,14 @@ textarea:focus-visible {
   gap: 14px;
   padding: 0 12px;
   border-bottom: 1px solid var(--color-line);
-  background: color-mix(in srgb, var(--color-bg) 96%, transparent);
-  backdrop-filter: blur(8px);
+  background: var(--color-surface);
 }
-.top-bar::after {
-  content: '';
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  width: 48px;
-  height: 1px;
-  background: var(--signal);
-}
-
-.page-context { display: none; min-width: 0; align-items: center; gap: 10px; }
+.page-context { display: flex; min-width: 0; flex: 1; align-items: center; gap: 10px; }
 .page-context h1 {
   overflow: hidden;
   margin: 0;
   color: var(--color-ink);
-  font-family: var(--font-condensed);
+  font-family: var(--font-sans);
   font-size: 18px;
   font-weight: 500;
   letter-spacing: 0;
@@ -278,19 +301,18 @@ textarea:focus-visible {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.page-context-accent { width: 4px; height: 18px; flex: none; background: var(--color-ink-2); }
+.page-context-accent { display: none; }
 .utility-label {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  font-weight: 400;
-  letter-spacing: .14em;
-  text-transform: uppercase;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
 }
 .top-utilities { display: none; margin-left: auto; align-items: center; gap: 6px; }
 
 .site-switch {
   display: flex;
-  height: 32px;
+  height: 36px;
   align-items: center;
   gap: 7px;
   padding: 0 7px 0 9px;
@@ -301,8 +323,8 @@ textarea:focus-visible {
 .site-switch [data-slot='select-trigger'] {
   width: min(220px, 22vw);
   color: var(--color-ink-2);
-  font-family: var(--font-mono);
-  font-size: 10px;
+  font-family: var(--font-sans);
+  font-size: 13px;
   text-transform: none;
   letter-spacing: 0;
 }
@@ -310,28 +332,30 @@ textarea:focus-visible {
 
 /* (.utility-button / .icon-button / .segmented-control retired — Button and
    ToggleGroup from components/ui carry the same skin as CVA variants.) */
-/* mobile utility tray (shadcn Popover instance) — signal left edge + fluid site switch */
-.mobile-utility-popover-signal::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 2px; background: var(--signal); }
+/* Mobile utility tray keeps the current site visible at narrow widths. */
 .mobile-utility-popover-signal .site-switch { width: 100%; }
 .mobile-utility-popover-signal .site-switch [data-slot='select-trigger'] { width: auto; flex: 1; justify-content: space-between; }
 
-.app-main { height: 100%; overflow-y: auto; padding-top: var(--top-height); padding-bottom: 60px; }
+.app-main { height: 100%; overflow-y: auto; padding-top: var(--top-height); padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
 
 .mobile-nav {
   position: fixed;
   inset: auto 0 0;
   z-index: 42;
   display: flex;
-  height: 60px;
+  height: calc(64px + env(safe-area-inset-bottom));
   gap: 1px;
-  overflow-x: auto;
+  overflow: visible;
   padding: 5px max(5px, env(safe-area-inset-right)) max(5px, env(safe-area-inset-bottom)) max(5px, env(safe-area-inset-left));
   border-top: 1px solid var(--color-line);
   background: var(--color-surface);
 }
-.mobile-nav .nav-item { min-width: 50px; flex: 1 0 50px; flex-direction: column; gap: 1px; min-height: 49px; }
-.mobile-nav .nav-item-label { display: block; flex: none; max-width: 58px; font-size: 9px; text-align: center; }
-.mobile-nav .nav-item-signal { inset: -1px 0 auto; width: 0; height: 2px; transition: width 130ms ease; }
+.mobile-nav > .nav-item, .mobile-nav > .mobile-more-trigger { min-width: 0; flex: 1 1 0; flex-direction: column; gap: 2px; min-height: 48px; padding: 2px; }
+.mobile-nav .nav-item-label { display: block; flex: none; width: 100%; font-size: 12px; text-align: center; }
+.mobile-more-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+.mobile-more-nav .nav-item { justify-content: flex-start; padding: 8px; }
+.mobile-more-nav .nav-item-label { display: block; font-size: 13px; white-space: normal; }
+.mobile-nav .nav-item-signal { inset: -1px 0 auto; width: 0; height: 2px; transition: width 150ms ease-out; }
 .mobile-nav .nav-item.is-active .nav-item-signal { width: 100%; }
 
 /* --- embed (iframe) mode: compact module strip, no app chrome --- */
@@ -357,42 +381,17 @@ textarea:focus-visible {
   padding: 0 12px;
   border: 1px solid transparent;
 }
-.embed-nav .nav-item-label { display: block; flex: none; font-size: 10.5px; letter-spacing: 0.12em; }
-.embed-nav .nav-item-signal { inset: auto 0 -6px; width: 0; height: 2px; transition: width 130ms ease; }
+.embed-nav .nav-item-label { display: block; flex: none; font-size: 12px; letter-spacing: 0; }
+.embed-nav .nav-item-signal { inset: auto 0 -6px; width: 0; height: 2px; transition: width 150ms ease-out; }
 .embed-nav .nav-item.is-active .nav-item-signal { width: 100%; }
 .embed-main { padding-top: 0; padding-bottom: 0; margin-left: 0; flex: 1 1 auto; min-height: 0; }
 
-.route-signal {
-  position: absolute;
-  inset: 0 0 auto;
-  z-index: 35;
-  display: block;
-  height: 2px;
-  background: var(--signal);
-  pointer-events: none;
-  transform: scaleX(0);
-  animation: route-sweep 400ms cubic-bezier(.45, .05, .55, .95) both;
-}
-/* wipe in from the left, flip origin at full width, wipe out to the right —
-   the GSAP timeline this replaces, as one keyframe track */
-@keyframes route-sweep {
-  0% { transform: scaleX(0); transform-origin: left center; }
-  45% { transform: scaleX(1); transform-origin: left center; }
-  45.001% { transform-origin: right center; }
-  100% { transform: scaleX(0); transform-origin: right center; }
-}
-.route-content { animation: route-enter 220ms cubic-bezier(.25, .46, .45, .94) 100ms both; }
-@keyframes route-enter {
-  from { opacity: 0; transform: translateX(4px); }
-  to { opacity: 1; transform: none; }
-}
-.modal-backdrop-scrim { animation: modal-scrim-in 200ms ease-out both; }
-@keyframes modal-scrim-in { from { opacity: 0; } to { opacity: 1; } }
-.modal-surface { animation: modal-pop-in 360ms cubic-bezier(.215, .61, .355, 1) both; }
-@keyframes modal-pop-in {
-  from { opacity: 0; transform: translateY(18px) scale(.985); }
-  to { opacity: 1; transform: none; }
-}
+/* Page navigation is immediate; only transient surfaces fade. */
+.modal-backdrop-scrim, .modal-surface { animation: surface-in 150ms ease-out both; }
+@keyframes surface-in { from { opacity: 0; } to { opacity: 1; } }
+
+.connection-status { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+@media (max-width: 1100px) { .connection-status { display: none; } }
 
 @media (min-width: 768px) {
   .side-rail { display: flex; }
@@ -411,10 +410,12 @@ textarea:focus-visible {
   .nav-item { justify-content: flex-start; padding: 0 10px; }
 }
 
+/* Near-ink actions keep their Tier0 face in dark mode with a visible edge. */
+[data-theme='dark'] [data-slot='button']:is([data-variant='default'], [data-variant='signal']) { border-color: var(--color-line-2); }
+
 /* ---------- product primitives ---------- */
 
-/* Labels are plain sentence-case Plex Sans; monospace and uppercase are reserved
-   for data (ids, coordinates, timestamps, channel names) and hardware chrome. */
+/* Plex Sans labels; monospace is reserved for ids, coordinates and timestamps. */
 .microlabel {
   font-family: var(--font-sans);
   font-size: 12px;
@@ -430,7 +431,7 @@ textarea:focus-visible {
   position: relative;
   overflow: hidden;
   border: 1px solid var(--color-line);
-  border-radius: 0 !important;
+  border-radius: var(--tier0-radius);
   background: var(--color-surface);
   box-shadow: none;
 }
@@ -440,52 +441,34 @@ textarea:focus-visible {
   border-bottom: 1px solid var(--color-line);
   background: var(--color-surface-2);
 }
-.panel-head::before { content: ''; width: 3px; height: 12px; flex: none; background: var(--color-ink-3); }
 .panel-head > span:first-child { flex: 1; }
-.panel-hover { transition: border-color 110ms ease, background 110ms ease; }
+.panel-hover { transition: border-color 150ms ease-out, background 150ms ease-out; }
 .panel-hover:hover { border-color: var(--color-ink-3); background: var(--color-surface-2); }
 
 .kpi-tile { min-height: 98px; background: var(--color-surface); }
-.kpi-tile::before { content: ''; position: absolute; inset: 0 auto auto 0; width: 52px; height: 2px; background: var(--color-ink-2); animation: meter-load 520ms cubic-bezier(.2,.8,.2,1) both; }
-.kpi-tile > div:nth-child(2) { font-family: var(--font-condensed); font-weight: 400; letter-spacing: -.02em; }
-@keyframes meter-load { from { transform: scaleX(0); transform-origin: left; } to { transform: scaleX(1); transform-origin: left; } }
-
-.modal-surface { overflow-y: auto; border: 1px solid var(--color-line-2); border-radius: 0 !important; box-shadow: 10px 10px 0 rgba(0,0,0,.32); }
-.toast-card { border: 1px solid var(--color-line-2); background: var(--color-surface); box-shadow: 8px 8px 0 rgba(0,0,0,.32); }
-.toast-card::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--signal); }
+.kpi-tile > div:nth-child(2) { font-family: var(--font-sans); font-weight: 500; letter-spacing: -.02em; }
+.modal-surface { overflow-y: auto; border: 1px solid var(--color-line-2); border-radius: var(--tier0-radius); box-shadow: var(--shadow-popover); }
+.toast-card { border: 1px solid var(--color-line-2); border-radius: var(--tier0-radius); background: var(--color-surface); box-shadow: var(--shadow-popover); }
 .text-link { color: var(--color-ink-2); font-family: var(--font-sans); font-size: 12px; font-weight: 500; letter-spacing: .01em; text-transform: none; text-decoration: underline; text-decoration-color: var(--color-line-2); text-underline-offset: 3px; }
 .text-link:hover { color: var(--color-ink); text-decoration-color: var(--color-ink-3); }
 
 .battery-track { background: var(--color-bg); }
-.battery-fill { background: repeating-linear-gradient(90deg, currentColor 0 7px, transparent 7px 9px); opacity: 1; }
-.battery-value { font-size: 10.5px; }
+.battery-fill { background: currentColor; }
+.battery-value { font-size: 12px; }
 .mode-chip,
-.mission-status-chip { border-radius: 0 !important; }
+.mission-status-chip { border-radius: var(--tier0-radius); }
 /* status chips are neutral outlines; activity is carried by the small live dot,
-   not by a filled acid-green pill on every busy robot */
+   without turning every busy robot into a highlighted block */
 .mode-chip[data-mode='executing'],
 .mode-chip[data-mode='navigating'],
 .mode-chip[data-mode='charging'],
 .mission-status-chip[data-status='active'] { border-color: var(--color-ink-2) !important; background: transparent !important; color: var(--color-ink) !important; }
 
-/* (legacy tinted-button redirect removed — primary CTAs now use the shadcn
-   Button `signal` variant, filter chips carry explicit signal classes.) */
-
-/* status squares are intentionally rectangular, like a hardware indicator */
-.live-dot { width: 6px; height: 6px; border-radius: 0 !important; background: var(--signal); animation: status-pulse 1.8s steps(2, end) infinite; }
-.live-dot.crit { background: var(--color-crit); animation-name: status-pulse-critical; }
-@keyframes status-pulse { 50% { opacity: .42; box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 10%, transparent); } }
-@keyframes status-pulse-critical { 50% { opacity: .4; box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-crit) 13%, transparent); } }
-
-@keyframes rise-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
-.rise { animation: rise-in 220ms cubic-bezier(.2,.7,.2,1) both; }
-.rise-1 { animation-delay: 20ms; }
-.rise-2 { animation-delay: 40ms; }
-.rise-3 { animation-delay: 60ms; }
-.rise-4 { animation-delay: 80ms; }
-.rise-5 { animation-delay: 100ms; }
-@keyframes flash-in { 0% { box-shadow: inset 3px 0 0 var(--signal); background: color-mix(in srgb, var(--signal) 6%, var(--color-surface)); } 100% { box-shadow: inset 0 0 0 transparent; background: transparent; } }
-.flash-new { animation: flash-in 1.2s ease-out both; }
+/* Activity is a steady signal. Alarm semantics remain distinct from brand green. */
+.live-dot { width: 6px; height: 6px; flex: none; background: var(--signal); }
+.live-dot.crit { background: var(--color-crit); }
+.flash-new { animation: flash-in 200ms ease-out both; }
+@keyframes flash-in { from { background: var(--tier0-highlight-bg); } to { background: transparent; } }
 
 video-stream,
 video-stream video { display: block; width: 100%; height: 100%; object-fit: cover; background: #000; }
@@ -493,21 +476,19 @@ video-stream video { display: block; width: 100%; height: 100%; object-fit: cove
 .skeleton { background: linear-gradient(90deg, var(--color-surface-2) 25%, var(--color-surface-3) 37%, var(--color-surface-2) 63%); background-size: 800px 100%; animation: shimmer 1.2s linear infinite; }
 
 /* map chrome: flat, high-contrast and coordinate-system driven */
-.map-viewport { background: #050505 !important; }
-.map-tools { border-color: var(--color-line-2) !important; background: #0b0b0b !important; box-shadow: 4px 4px 0 rgba(0,0,0,.3); }
-.map-tools button { border-radius: 0 !important; }
+.map-viewport { background: var(--color-surface-3) !important; }
+.map-tools { border-color: var(--color-line-2) !important; border-radius: var(--tier0-radius); background: var(--color-surface) !important; box-shadow: none; }
 .map-readout {
   display: flex;
   align-items: center;
   gap: 12px;
   border: 1px solid var(--color-line-2);
-  background: rgba(7,7,7,.92);
+  background: var(--color-surface);
   padding: 6px 8px;
-  color: #a8a8a8;
+  color: var(--color-ink-2);
   font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: .1em;
-  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: 0;
 }
 .map-readout strong { color: var(--color-ink); font-weight: 500; }
 .map-readout span { display: flex; align-items: center; gap: 5px; }
@@ -521,30 +502,21 @@ video-stream video { display: block; width: 100%; height: 100%; object-fit: cove
 
 @media (max-width: 767px) {
   .top-bar { z-index: 55; gap: 9px; }
-  .panel { border-radius: 0 !important; }
+  [data-slot='button'][data-size='icon'],
+  [data-slot='button'][data-size='iconSm'],
+  [data-slot='dialog-close'] { min-width: 44px; min-height: 44px; }
+  [data-slot='input'], [data-slot='textarea'] { font-size: 16px; }
+  [data-slot='select-item'], [data-slot='dropdown-menu-item'] { min-height: 40px; }
+  .page-context h1 { font-size: 16px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rise,
-  .rise-1,
-  .rise-2,
-  .rise-3,
-  .rise-4,
-  .rise-5,
   .flash-new,
   .live-dot,
   .skeleton,
-  .kpi-tile::before,
-  .route-signal,
-  .route-content,
   .modal-backdrop-scrim,
   .modal-surface { animation: none !important; }
   * { scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }
-/* light theme: the 3D viewport's empty sky and the map chrome follow the paper palette
-   instead of the dark console black (otherwise a black band shows above the scene) */
-[data-theme='light'] .map-viewport { background: var(--color-surface-3) !important; }
-[data-theme='light'] .map-tools { background: #ffffff !important; box-shadow: 4px 4px 0 rgba(0,0,0,.08); }
-[data-theme='light'] .map-readout { background: rgba(255,255,255,.92); color: var(--color-ink-2); }
 /* site switcher: long site names get an ellipsis instead of a hard clip */
 .site-switch [data-slot='select-value'] { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -4,9 +4,9 @@ import { Toggle as TogglePrimitive } from 'radix-ui'
 
 import { cn } from '@/lib/cn'
 
-// Segmented-cell behavior: pressed state inverts to solid ink.
+// Selected states use the Tier0 highlight surface.
 const toggleVariants = cva(
-  'inline-flex items-center justify-center gap-1.5 whitespace-nowrap font-(family-name:--font-condensed) text-[11px] font-medium uppercase tracking-[0.08em] text-ink-3 transition-colors outline-none hover:bg-surface-2 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ink disabled:pointer-events-none disabled:opacity-45 data-[state=on]:bg-ink data-[state=on]:text-bg [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*=size-])]:size-3.5',
+  'inline-flex rounded-md items-center justify-center gap-1.5 whitespace-nowrap font-sans text-[13px] font-medium text-ink-3 transition-colors outline-none hover:bg-surface-2 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-(--signal) disabled:pointer-events-none disabled:opacity-45 data-[state=on]:bg-highlight-soft data-[state=on]:text-ink [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*=size-])]:size-3.5',
   {
     variants: {
       variant: {
@@ -14,8 +14,8 @@ const toggleVariants = cva(
         outline: 'border border-line bg-surface',
       },
       size: {
-        default: 'h-8 min-w-7 px-2.5',
-        sm: 'h-7 min-w-7 px-2 text-[10px]',
+        default: 'h-9 min-w-8 px-2.5',
+        sm: 'h-8 min-w-8 px-2 text-[12px]',
         lg: 'h-9 min-w-9 px-3',
       },
     },

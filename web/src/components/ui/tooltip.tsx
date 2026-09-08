@@ -4,7 +4,7 @@ import { Tooltip as TooltipPrimitive } from "radix-ui"
 import { cn } from "@/lib/cn"
 
 function TooltipProvider({
-  delayDuration = 0,
+  delayDuration = 300,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
   return (
@@ -40,7 +40,7 @@ function TooltipContent({
         data-slot="tooltip-content"
         sideOffset={sideOffset}
         className={cn(
-          "mono z-50 w-fit origin-(--radix-tooltip-content-transform-origin) animate-in border border-line-2 bg-ink px-2 py-1 text-[10px] uppercase tracking-[0.08em] text-balance text-bg fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0",
+          "z-50 rounded-md max-w-72 w-fit origin-(--radix-tooltip-content-transform-origin) animate-in border border-line-2 bg-ink px-2 py-1 font-sans text-[12px] text-balance text-bg fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0",
           className
         )}
         {...props}

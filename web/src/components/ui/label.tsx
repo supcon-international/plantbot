@@ -3,7 +3,7 @@ import { Label as LabelPrimitive } from 'radix-ui'
 
 import { cn } from '@/lib/cn'
 
-// Field labels are the console microlabel: mono, 10px, letterspaced uppercase.
+// Field labels use the shared sentence-case Plex Sans treatment.
 function Label({ className, ...props }: React.ComponentProps<typeof LabelPrimitive.Root>) {
   return (
     <LabelPrimitive.Root

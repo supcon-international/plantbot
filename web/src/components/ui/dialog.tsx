@@ -1,8 +1,9 @@
 import * as React from 'react'
-import { XIcon } from 'lucide-react'
+import { Close as XIcon } from '@carbon/icons-react'
 import { Dialog as DialogPrimitive } from 'radix-ui'
 
 import { cn } from '@/lib/cn'
+import { useT } from '@/lib/i18n'
 
 function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />
@@ -25,7 +26,7 @@ function DialogOverlay({ className, ...props }: React.ComponentProps<typeof Dial
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        'modal-backdrop-scrim fixed inset-0 z-50 bg-black/65 backdrop-blur-sm data-[state=closed]:animate-out data-[state=closed]:fade-out-0',
+        'modal-backdrop-scrim fixed inset-0 z-50 bg-black/45 data-[state=closed]:animate-out data-[state=closed]:fade-out-0',
         className,
       )}
       {...props}
@@ -33,16 +34,24 @@ function DialogOverlay({ className, ...props }: React.ComponentProps<typeof Dial
   )
 }
 
-/** Carbon surface: .panel + .modal-surface hard offset shadow; bottom sheet on
- *  mobile, centred on md+ (the console's original modal geometry). */
+/** Stable scrollable dialog: bottom sheet on mobile, centred on desktop. */
 function DialogContent({
   className,
   children,
   showCloseButton = true,
+  onOpenAutoFocus,
+  onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
 }) {
+  const t = useT()
+  // Native input autoFocus runs before Radix's mount autofocus callback. Keep
+  // a pre-portal snapshot for conditionally mounted dialogs in that case.
+  const activeBeforeMount = document.activeElement
+  const openerRef = React.useRef<HTMLElement | null>(
+    activeBeforeMount instanceof HTMLElement && activeBeforeMount !== document.body ? activeBeforeMount : null,
+  )
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
@@ -50,19 +59,36 @@ function DialogContent({
         data-slot="dialog-content"
         className={cn(
           // NB: not the .panel class — its position:relative would beat `fixed`.
-          'modal-surface fixed bottom-0 left-[50%] z-50 max-h-[92vh] w-full translate-x-[-50%] overflow-y-auto bg-surface outline-none md:top-[50%] md:bottom-auto md:max-w-xl md:translate-y-[-50%] data-[state=closed]:animate-out data-[state=closed]:fade-out-0',
+          'modal-surface fixed bottom-0 left-[50%] z-50 max-h-[92dvh] w-full translate-x-[-50%] overflow-y-auto bg-surface outline-none md:top-[50%] md:bottom-auto md:max-w-xl md:translate-y-[-50%] data-[state=closed]:animate-out data-[state=closed]:fade-out-0',
           className,
         )}
         {...props}
+        onOpenAutoFocus={(event) => {
+          // Controlled / conditionally mounted dialogs may have no Radix Trigger.
+          const active = document.activeElement
+          const content = event.target
+          if (active instanceof HTMLElement && active !== document.body && !(content instanceof HTMLElement && content.contains(active))) {
+            openerRef.current = active
+          }
+          onOpenAutoFocus?.(event)
+        }}
+        onCloseAutoFocus={(event) => {
+          onCloseAutoFocus?.(event)
+          const opener = openerRef.current
+          if (!event.defaultPrevented && opener?.isConnected) {
+            event.preventDefault()
+            opener.focus({ preventScroll: true })
+          }
+        }}
       >
         {children}
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
-            className="absolute top-3 right-3 inline-flex size-7 items-center justify-center border border-transparent text-ink-3 transition-colors outline-none hover:bg-surface-2 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink [&_svg]:pointer-events-none [&_svg]:size-3.5"
+            className="absolute top-3 right-3 inline-flex rounded-md size-8 items-center justify-center border border-transparent text-ink-3 transition-colors outline-none hover:bg-surface-2 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--signal) [&_svg]:pointer-events-none [&_svg]:size-3.5"
           >
             <XIcon />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{t('c.close')}</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Content>
@@ -89,7 +115,7 @@ function DialogTitle({ className, ...props }: React.ComponentProps<typeof Dialog
     <DialogPrimitive.Title
       data-slot="dialog-title"
       className={cn(
-        'font-(family-name:--font-condensed) text-[15px] font-semibold tracking-[0.04em] text-ink uppercase',
+        'font-sans text-[18px] font-medium text-ink',
         className,
       )}
       {...props}
@@ -101,7 +127,7 @@ function DialogDescription({ className, ...props }: React.ComponentProps<typeof 
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"
-      className={cn('text-[12.5px] text-ink-3', className)}
+      className={cn('text-[13px] text-ink-2', className)}
       {...props}
     />
   )

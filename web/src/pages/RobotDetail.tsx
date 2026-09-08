@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { ArrowLeft, ArrowUpRight, Anchor, Megaphone, Pause, Play, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, ChargingStation as Anchor, Bullhorn as Megaphone, Pause, Play, Security as ShieldCheck } from '@carbon/icons-react'
 import { useApp, useReadings, useHistory, api, useCan } from '../lib/store'
 import { useT, useLang } from '../lib/i18n'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -52,7 +52,7 @@ function ReadingsPanel({ robotId }: { robotId: string }) {
           last && def ? (
             <span className="mono text-[12px]" style={{ color: outOfBand ? 'var(--color-warn)' : 'var(--color-ink-2)' }}>
               {last.value.toFixed(def.decimals)} {def.unit}
-              {last.wp ? <span className="ml-1.5 text-[10px] text-ink-3">@{last.wp}</span> : null}
+              {last.wp ? <span className="ml-1.5 text-[12px] text-ink-3">@{last.wp}</span> : null}
             </span>
           ) : undefined
         }
@@ -66,7 +66,7 @@ function ReadingsPanel({ robotId }: { robotId: string }) {
               onPressedChange={() => setMetric(d.id)}
               variant="outline"
               size="sm"
-              className="mono h-auto px-1.5 py-0.5 text-[10.5px] normal-case tracking-[0.06em] data-[state=on]:border-(--signal) data-[state=on]:bg-(--signal) data-[state=on]:text-[#080808]"
+              className="h-auto px-1.5 py-0.5 text-[12px] normal-case tracking-normal data-[state=on]:border-(--signal) data-[state=on]:bg-highlight data-[state=on]:text-primary"
             >
               {d.label}
             </Toggle>
@@ -104,10 +104,10 @@ function CommandPanel({ robotId }: { robotId: string }) {
   }
   return (
     <Panel className="rise rise-2">
-      <PanelHead label={t('rd.commands')} right={<span className="mono text-[10.5px] text-ink-3">{t('rd.commandsHint')}</span>} />
+      <PanelHead label={t('rd.commands')} right={<span className="mono text-[12px] text-ink-3">{t('rd.commandsHint')}</span>} />
       <div className="space-y-2.5 p-3.5">
         <div className="flex flex-wrap gap-1.5">
-          <Button variant="outline" size="sm" onClick={() => send({ type: 'dock' })} className="mono h-auto gap-1.5 px-2 py-1.5 text-[11px] normal-case tracking-[0.06em]">
+          <Button variant="outline" size="sm" onClick={() => send({ type: 'dock' })} className="h-auto gap-1.5 px-2 py-1.5 text-[12px] normal-case tracking-normal">
             <Anchor size={11} /> {t('rd.cmdDock')}
           </Button>
           {mission?.status === 'active' && (
@@ -115,7 +115,7 @@ function CommandPanel({ robotId }: { robotId: string }) {
               variant="outline"
               size="sm"
               onClick={() => send({ type: mission.paused ? 'resume' : 'pause' })}
-              className="mono h-auto gap-1.5 px-2 py-1.5 text-[11px] normal-case tracking-[0.06em]"
+              className="h-auto gap-1.5 px-2 py-1.5 text-[12px] normal-case tracking-normal"
             >
               {mission.paused ? <Play size={11} /> : <Pause size={11} />} {mission.paused ? t('mi.resume') : t('mi.pause')}
             </Button>
@@ -141,13 +141,13 @@ function CommandPanel({ robotId }: { robotId: string }) {
               send({ type: 'announce', text: text.trim() })
               setText('')
             }}
-            className="mono h-auto gap-1.5 px-2.5 py-1.5 text-[11px] normal-case tracking-[0.08em] disabled:opacity-30"
+            className="h-auto gap-1.5 px-2.5 py-1.5 text-[12px] normal-case tracking-normal disabled:opacity-30"
           >
             <Megaphone size={11} /> {t('rd.cmdAnnounce')}
           </Button>
         </div>
         {last && (
-          <div className="mono flex items-center gap-2 text-[11px]">
+          <div className="mono flex items-center gap-2 text-[12px]">
             <span style={{ color: last.accepted ? 'var(--color-ok)' : 'var(--color-crit)' }}>
               {last.accepted ? t('rd.cmdAccepted') : t('rd.cmdRejected')}
             </span>
@@ -166,14 +166,14 @@ function JointRow({ name, c }: { name: string; c: number }) {
   const tone = c > 55 ? 'var(--color-crit)' : c > 50 ? 'var(--color-warn)' : 'var(--color-ink-2)'
   return (
     <div className="flex items-center gap-2.5 px-3.5 py-[7px]">
-      <span className="mono w-16 shrink-0 text-[11.5px] text-ink-3">{name}</span>
+      <span className="mono w-16 shrink-0 text-[12px] text-ink-3">{name}</span>
       <div className="h-[3px] flex-1 overflow-hidden bg-surface-3">
         <div
           className="h-full transition-[width] duration-500"
           style={{ width: `${Math.min(100, ((c - 30) / 40) * 100)}%`, background: tone, opacity: 0.7 }}
         />
       </div>
-      <span className="mono w-12 shrink-0 text-right text-[11.5px]" style={{ color: tone }}>
+      <span className="mono w-12 shrink-0 text-right text-[12px]" style={{ color: tone }}>
         {c.toFixed(1)}°C
       </span>
     </div>
@@ -224,7 +224,7 @@ export function RobotDetail() {
     <div className="mx-auto max-w-[1400px] space-y-3 p-3 md:p-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link to="/robots" className="text-ink-3 transition-colors hover:text-ink">
+          <Link to="/robots" aria-label={t('nav.fleet')} className="text-ink-3 transition-colors hover:text-ink">
             <ArrowLeft size={16} />
           </Link>
           <div>
@@ -232,8 +232,8 @@ export function RobotDetail() {
               {robot.vendor} · {robot.model}
             </div>
             <div className="mt-0.5 flex items-center gap-2.5">
-              <span className="live-dot" style={{ background: robot.color }} />
-              <span className="mono text-[15px] font-medium tracking-[0.04em] text-ink">{robot.callsign}</span>
+              <span className={tel && tel.mode !== 'offline' ? 'live-dot' : 'h-1.5 w-1.5 shrink-0 rounded-full bg-ink-3'} />
+              <h1 className="text-2xl font-medium text-ink">{robot.callsign}</h1>
               <ModeChip mode={tel?.mode} />
             </div>
           </div>
@@ -273,13 +273,13 @@ export function RobotDetail() {
         {/* right column */}
         <div className="space-y-3 lg:col-span-5">
           <Panel className="rise">
-            <PanelHead label={t('rd.status')} right={<span className="mono text-[11px] text-ink-3">{tel ? '4 Hz' : t('c.noData')}</span>} />
+            <PanelHead label={t('rd.status')} right={<span className="mono text-[12px] text-ink-3">{tel && tel.mode !== 'offline' ? t('integ.online') : t('mode.offline')}</span>} />
             <div className="space-y-4 p-3.5">
               {mission && (
                 <div className="flex items-center gap-2 border border-line bg-surface-2 px-2.5 py-2">
                   <span className="live-dot shrink-0" />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-[13px] text-ink">{mission.name}</div>
+                    <div className="truncate text-[14px] text-ink">{mission.name}</div>
                     <div className="microlabel mt-0.5">
                       {targetWp ? `→ ${targetWp.id} ${targetWp.name}` : `${t('rd.step')} ${mission.currentStep + 1}/${mission.steps.length}`}
                       {tel?.pathRemaining ? ` · ${tel.pathRemaining} ${t('rd.mLeft')}` : ''}
@@ -291,7 +291,7 @@ export function RobotDetail() {
               <div className="flex items-end justify-between gap-4">
                 <div className="flex-1">
                   <div className="microlabel mb-1.5">{t('c.battery')}</div>
-                  <BatteryBar value={tel?.battery ?? 0} w={150} />
+                  <BatteryBar value={tel && tel.mode !== 'offline' ? tel.battery : undefined} w={150} />
                 </div>
                 <Stat label={t('rd.gait')} value={tel?.gait ?? '—'} />
               </div>
@@ -313,7 +313,7 @@ export function RobotDetail() {
                     return pts.length > 1 ? (
                       <Spark points={pts} min={-70} max={-40} w={200} h={30} color="var(--color-ink-3)" />
                     ) : (
-                      <div className="mono text-[11px] text-ink-3">—</div>
+                      <div className="mono text-[12px] text-ink-3">—</div>
                     )
                   })()}
                 </div>
@@ -325,7 +325,7 @@ export function RobotDetail() {
             <PanelHead
               label={t('rd.payloads')}
               right={
-                <span className="mono text-[11px] text-ink-3">
+                <span className="mono text-[12px] text-ink-3">
                   {robot.payloads.length} {t('rd.fitted')}
                 </span>
               }
@@ -334,30 +334,34 @@ export function RobotDetail() {
               const Icon = KIND_ICON[p.kind]
               const hot = payloadSel === p.id
               return (
-                <button
+                <div
                   key={p.id}
-                  onClick={() => setPayloadSel(hot ? null : p.id)}
                   className={`flex w-full items-start gap-3 border-b border-line/60 px-3.5 py-3 text-left transition-colors ${
                     hot ? 'bg-surface-2' : 'hover:bg-surface-2/60'
                   }`}
                   style={hot ? { boxShadow: 'inset 2px 0 0 var(--color-ink)' } : undefined}
                 >
-                  <Icon size={15} strokeWidth={1.5} className="mt-0.5 shrink-0" style={{ color: hot ? 'var(--color-ink)' : 'var(--color-ink-3)' }} />
+                  <Icon size={15} className="mt-0.5 shrink-0" style={{ color: hot ? 'var(--color-ink)' : 'var(--color-ink-3)' }} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-[13.5px] text-ink">{p.name}</span>
+                      <Button
+                        variant="ghost"
+                        aria-pressed={hot}
+                        onClick={() => setPayloadSel(hot ? null : p.id)}
+                        className="h-auto min-w-0 whitespace-normal p-0 text-left text-sm text-ink hover:bg-transparent hover:underline"
+                      >{p.name}</Button>
                       {p.stream && (
                         <Link
                           to={`/live?src=${p.stream}`}
                           onClick={(e) => e.stopPropagation()}
-                          className="mono flex items-center gap-1 border border-ok/30 bg-ok/10 px-1 py-0.5 text-[9.5px] tracking-[0.12em] text-ok hover:bg-ok/20"
+                          className="mono flex items-center gap-1 border border-ok/30 bg-ok/10 px-1 py-0.5 text-[12px] tracking-normal text-ok hover:bg-ok/20"
                         >
                           <span className="live-dot" style={{ width: 4, height: 4, background: 'var(--color-ok)' }} />
                           {t('live.live')}
                         </Link>
                       )}
                     </div>
-                    <div className="mono mt-0.5 text-[11.5px] text-ink-3">{p.model}</div>
+                    <div className="mono mt-0.5 text-[12px] text-ink-3">{p.model}</div>
                     <div className="mt-0.5 text-[12px] text-ink-2">{p.detail}</div>
                     {(() => {
                       const armed = rules.filter((rl) => rl.enabled && (rl.source === p.stream || rl.source === `${robot.id}:${p.id}`)).length
@@ -365,7 +369,7 @@ export function RobotDetail() {
                         <Link
                           to="/events?view=rules"
                           onClick={(e) => e.stopPropagation()}
-                          className="mono mt-1 inline-flex items-center gap-1 text-[10.5px] tracking-[0.08em] text-ink-3 underline decoration-line-2 underline-offset-2 hover:text-accent"
+                          className="mono mt-1 inline-flex items-center gap-1 text-[12px] tracking-normal text-ink-3 underline decoration-line-2 underline-offset-2 hover:text-accent"
                         >
                           <ShieldCheck size={10} /> {armed} {t('ev.rulesArmed')}
                         </Link>
@@ -373,12 +377,12 @@ export function RobotDetail() {
                     })()}
                   </div>
                   <span
-                    className="mono mt-1 shrink-0 text-[10px] uppercase tracking-[0.1em]"
-                    style={{ color: (tel?.payloadHealth[p.id] ?? 'ok') === 'ok' ? 'var(--color-ok)' : 'var(--color-warn)' }}
+                    className="mono mt-1 shrink-0 text-[12px] uppercase tracking-normal"
+                    style={{ color: tel && tel.mode !== 'offline' && tel.payloadHealth[p.id] ? (tel.payloadHealth[p.id] === 'ok' ? 'var(--color-ok)' : 'var(--color-warn)') : 'var(--color-ink-3)' }}
                   >
-                    {tel?.payloadHealth[p.id] ?? 'ok'}
+                    {tel && tel.mode !== 'offline' ? (tel.payloadHealth[p.id] ?? t('c.unknown')) : t('c.unknown')}
                   </span>
-                </button>
+                </div>
               )
             })}
           </Panel>

@@ -16,7 +16,7 @@ const apply = (t: ThemeMode) => {
 export const useTheme = create<ThemeState>()(
   persist(
     (set) => ({
-      theme: 'dark',
+      theme: 'light',
       toggle: () =>
         set((s) => {
           const next: ThemeMode = s.theme === 'dark' ? 'light' : 'dark'
@@ -28,7 +28,14 @@ export const useTheme = create<ThemeState>()(
         set({ theme })
       },
     }),
-    { name: 'aegis-theme' },
+    {
+      name: 'aegis-theme',
+      // Match the first-paint script and ignore obsolete / malformed values.
+      merge: (persisted, current) => {
+        const saved = persisted as Partial<Pick<ThemeState, 'theme'>> | undefined
+        return { ...current, theme: saved?.theme === 'dark' ? 'dark' : 'light' }
+      },
+    },
   ),
 )
 
