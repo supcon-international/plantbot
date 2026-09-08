@@ -12,6 +12,7 @@ Plantbot is a multi-site inspection robot management platform for managing mixed
 - **Inspection tasks:** task templates, automatic or assigned robot dispatch, schedules, calendars, execution records and report exports.
 - **Video and PTZ:** live video, recording search and playback, clip downloads, camera control, presets and scheduled patrols.
 - **Robot teleoperation:** exclusive control, hold-to-move and release-to-stop input, keyboard controls and confirmation before interrupting a task.
+- **Vision inspection:** eleven presets for people, boundaries, restricted areas, crowds, post occupancy, dwell, vehicles and display OCR, with configurable regions, previews and evidence review.
 - **Equipment and issues:** equipment records, industrial tag registers, sensor readings, alarm evidence and defect resolution history.
 - **Administration and integration:** site permissions, users and organizations, audit logs, OIDC single sign-on, HTTP APIs, a TypeScript SDK and Node-RED nodes.
 
@@ -19,18 +20,18 @@ The interface supports English and Chinese, light and dark themes, and iframe em
 
 ## Quick start
 
-The prebuilt demo package includes the platform, video relay and simulated robots from three vendors. No local build is required. The current package targets Linux x86-64 and requires Docker Engine and Docker Compose 2.17+.
-
-Download the archive and its `.sha256` file from the [v2.3.1 release](https://github.com/supcon-international/plantbot/releases/tag/v2.3.1), place them in the same directory, then run:
+[Download v2.4.0](https://github.com/supcon-international/plantbot/releases/tag/v2.4.0) as separate **Server** and **Adapter** packages. Server runs the web application, API and video relay. Adapter connects robots and cameras and runs vision models near the devices. The prebuilt Linux x86-64 packages require Docker Engine and Docker Compose 2.17+; no source build is needed.
 
 ```bash
-sha256sum -c plantbot-v2.3.1-linux-amd64.tar.gz.sha256
-tar -xzf plantbot-v2.3.1-linux-amd64.tar.gz
-cd plantbot-v2.3.1-linux-amd64
+sha256sum -c plantbot-server-v2.4.0-linux-amd64.tar.gz.sha256
+tar -xzf plantbot-server-v2.4.0-linux-amd64.tar.gz
+cd plantbot-server-v2.4.0-linux-amd64
 bash start.sh
 ```
 
-Open [http://127.0.0.1:18080/robots/](http://127.0.0.1:18080/robots/). The startup script generates initial login credentials and stores them in `.env.demo`. See [release deployment](docs/release.md) for remote access, stopping services and upgrading while retaining data.
+Open [http://127.0.0.1:18080/robots/](http://127.0.0.1:18080/robots/) and sign in using the initial password in `.env.server`. Create a site and issue its API key. Configure the Adapter package with `serverUrl`, device addresses and `PB_SITE_KEY`, then run its `start.sh`. Pretrained models are included.
+
+Fresh installations start with an empty platform. See the [deployment guide](docs/release.md) for installation, separate hosts and upgrades, and [vision inspection](docs/vision.md) for monitoring configuration.
 
 ## Local development
 

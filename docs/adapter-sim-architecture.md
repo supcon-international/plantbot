@@ -196,3 +196,7 @@ deviceId/robotSn/deviceCode 并存；激光地图 y 轴原点左下角；WS Robo
 ## Manual control (v2.3.1)
 
 Manual robot input uses an exclusive expiring control session, separate from durable orders. Spot supports native velocity and discovered Spot CAM position control; F2 supports vendor directional driving and camera reset; X30 robotserver does not expose these manual interfaces. See [manual-control.md](manual-control.md) for the operator workflow, `teleop`/`ptz.manual` factsheet fields, `pumpControl`, stop confirmation and deployment limits.
+
+## Server / Adapter 发布边界（v2.4.0）
+
+产品以 Server 和 Adapter 两个包交付。Server 包含平台、Web 和视频中继；Adapter 包含现有三厂商驱动及可选视觉进程。`integrations/runtime.ts` 监督驱动进程，视觉在独立资源受限容器内运行；相同厂商配置由 `integrations/shared/connector-catalog.ts` 供托管连接器与独立 Adapter 共用。现有托管模式继续兼容，不将厂商协议或模型加载进 World。模拟器仍位于独立 `plantbotsimulator` 仓库，用于开发与验收，发布包默认不启动它。见 [vision.md](vision.md)、[release.md](release.md)。

@@ -1,0 +1,44 @@
+[
+  {
+    "file": "detector.onnx",
+    "url": "https://huggingface.co/onnx-community/rtdetr_v2_r18vd-ONNX/resolve/936f90b6a476c6da4dfe053fc521af55285976ba/onnx/model.onnx",
+    "sha256": "583a236ac21c95a7fd94f284fc21485e42355bfef82c27011ba78fbc09ee87e2",
+    "bytes": 81057510,
+    "license": "Apache-2.0"
+  },
+  {
+    "file": "detector-config.json",
+    "url": "https://huggingface.co/onnx-community/rtdetr_v2_r18vd-ONNX/resolve/936f90b6a476c6da4dfe053fc521af55285976ba/config.json",
+    "sha256": "2146837ddc24e4ab5e7c39d96ffe986d1d9048fdd4d02b37a0af5b59b17821c1",
+    "bytes": 5731,
+    "license": "Apache-2.0"
+  },
+  {
+    "file": "detector-preprocess.json",
+    "url": "https://huggingface.co/onnx-community/rtdetr_v2_r18vd-ONNX/resolve/936f90b6a476c6da4dfe053fc521af55285976ba/preprocessor_config.json",
+    "sha256": "cd38cd59999e7a95d68e487fbe5132df3d4e5c32a0836add57e6126ba0c4eaf1",
+    "bytes": 444,
+    "license": "Apache-2.0"
+  },
+  {
+    "file": "ocr-det.onnx",
+    "url": "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.2/onnx/PP-OCRv5/det/ch_PP-OCRv5_det_mobile.onnx",
+    "sha256": "4d97c44a20d30a81aad087d6a396b08f786c4635742afc391f6621f5c6ae78ae",
+    "bytes": 4819576,
+    "license": "Apache-2.0"
+  },
+  {
+    "file": "ocr-rec.onnx",
+    "url": "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.2/onnx/PP-OCRv5/rec/ch_PP-OCRv5_rec_mobile.onnx",
+    "sha256": "5825fc7ebf84ae7a412be049820b4d86d77620f204a041697b0494669b1742c5",
+    "bytes": 16631306,
+    "license": "Apache-2.0"
+  },
+  {
+    "file": "ocr-cls.onnx",
+    "url": "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.2/onnx/PP-OCRv4/cls/ch_ppocr_mobile_v2.0_cls_mobile.onnx",
+    "sha256": "e47acedf663230f8863ff1ab0e64dd2d82b838fceb5957146dab185a89d6215c",
+    "bytes": 585532,
+    "license": "Apache-2.0"
+  }
+]

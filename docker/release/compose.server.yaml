@@ -1,0 +1,46 @@
+name: plantbot-server
+x-logging: &logging
+  driver: json-file
+  options: {max-size: "10m", max-file: "3"}
+services:
+  api:
+    image: plantbot/api:VERSION
+    init: true
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      API_HOST: 0.0.0.0
+      API_PORT: "8787"
+      PUBLIC_BASE: /robots
+      PB_PUBLIC_VIEW: "0"
+      MEDIA_RELAY: http://relay:1984
+      SESSION_SECRET: ${SESSION_SECRET:?Run start.sh first}
+      PB_ADMIN_PASSWORD: ${PB_ADMIN_PASSWORD:?Run start.sh first}
+      PB_OPERATOR_PASSWORD: ${PB_OPERATOR_PASSWORD:?Run start.sh first}
+      PB_VIEWER_PASSWORD: ${PB_VIEWER_PASSWORD:?Run start.sh first}
+      PB_VISION_MAX_MB: ${PB_VISION_MAX_MB:-1024}
+    volumes:
+      - plantbot-data:/app/robots/server/data
+    depends_on:
+      relay: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8787/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+    stop_grace_period: 15s
+  relay:
+    image: plantbot/relay:VERSION
+    restart: unless-stopped
+    logging: *logging
+  gateway:
+    image: plantbot/gateway:VERSION
+    restart: unless-stopped
+    logging: *logging
+    ports: ["${PLANTBOT_BIND:-127.0.0.1}:${PLANTBOT_PORT:-18080}:8080"]
+    depends_on:
+      api: {condition: service_healthy}
+      relay: {condition: service_healthy}
+volumes:
+  plantbot-data:
+    name: ${PB_DATA_VOLUME:-plantbot-server-data}

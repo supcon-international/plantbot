@@ -92,3 +92,7 @@ Administrators maintain equipment and tags. A tag can bind to a metric from a re
 - Connecting robots with a code agent (Claude Code etc.): the repo ships an Agent Skill at [.claude/skills/robot-adapter](../.claude/skills/robot-adapter/SKILL.md) — hand the folder to your agent
 
 Open FLEET → robot → Teleoperation for manual driving, and LIVE → PTZ inspection for camera controls. See [manual-control.md](manual-control.md) for ownership, stopping behavior, supported hardware and adapter configuration.
+
+## Vision inspection
+
+Open LIVE → Vision inspection to view Adapter sources, choose one of eleven presets, preview the scene and configure regions, lines, thresholds and UTC schedules. Enabled rules produce observations with original images, annotations, readings and configuration versions; anomalies enter the existing event history. Continuous rules require a fixed view. Mobile OCR requires device-confirmed stationary feedback. See [release.md](release.md) and [vision.md](vision.md) for the separate Server and Adapter packages.

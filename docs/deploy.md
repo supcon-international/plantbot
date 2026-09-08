@@ -307,3 +307,7 @@ sudo systemctl restart plantbot   # 服务端变更时（任务/事件/规则等
 - **iframe 嵌入**:宿主页 `<iframe src=…/live?embed=1&site=…>`;平台侧 `PB_COOKIE_SAMESITE=none` + HTTPS,
   nginx 对 `/robots/` location 加 `add_header Content-Security-Policy "frame-ancestors 'self' https://宿主域";`
   (不设则任何站点都能嵌)。SSO 建议由宿主在顶层窗口完成(IdP 普遍拒绝被 iframe),iframe 内即已带会话。
+
+## v2.4.0 分包部署
+
+预构建 Release 分为 Server 和 Adapter。部署、凭证、卷名与 v2.3.1 演示实例迁移统一见 [release.md](release.md)。视觉模型随 Adapter 交付，Server 不需要 Python 或模型运行库。多个实例必须使用独立 Adapter ID 与数据卷；一个 SQLite 数据卷不能由两个 Server 同时写入。

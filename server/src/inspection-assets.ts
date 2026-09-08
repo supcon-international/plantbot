@@ -278,9 +278,10 @@ export function registerInspectionAssets(app: FastifyInstance, getWorld: (site: 
       requireRecord(resource, site, id)
       if (
         all<Defect>('defects', site).some((d) => (resource === 'assets' ? d.assetId === id : d.tagId === id)) ||
-        (resource === 'assets' && all<AssetTag>('asset-tags', site).some((t) => t.assetId === id))
+        (resource === 'assets' && all<AssetTag>('asset-tags', site).some((t) => t.assetId === id)) ||
+        (resource === 'assets' && db.prepare("SELECT 1 FROM vision_configs WHERE site_id=? AND json_extract(data,'$.assetId')=? LIMIT 1").get(site, id))
       )
-        fail('record is referenced by tags or defects; retain it for history', 409)
+        fail('record is referenced by tags, defects or vision monitoring; retain it for history', 409)
       db.prepare(`DELETE FROM ${tables[resource]} WHERE site_id=? AND id=?`).run(site, id)
       return { ok: true }
     })

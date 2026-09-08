@@ -37,6 +37,7 @@ import { registerInspectionAssets } from './inspection-assets.js'
 import { registerOperations } from './operations.js'
 import { registerPtz } from './ptz.js'
 import { registerControl } from './control.js'
+import { registerVision } from './vision.js'
 
 const PUB = process.env.PUBLIC_BASE ?? ''
 const DEMO = process.env.PB_DEMO === '1'
@@ -168,6 +169,7 @@ registerInspectionAssets(app, id => worlds.get(id))
 const recordings = registerRecordings(app, worlds)
 const stopPtz = registerPtz(app, worlds)
 const stopControl = registerControl(app, worlds, integrationSite)
+registerVision(app, worlds, integrationSite)
 
 const wss = new WebSocketServer({ noServer: true })
 

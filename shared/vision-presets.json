@@ -1,0 +1,90 @@
+[
+  {
+    "id": "people_count",
+    "en": "People counting",
+    "zh": "人数统计",
+    "engine": "detector",
+    "rule": "count",
+    "target": "person"
+  },
+  {
+    "id": "line_crossing",
+    "en": "Boundary crossing",
+    "zh": "越线检测",
+    "engine": "detector",
+    "rule": "cross",
+    "target": "person"
+  },
+  {
+    "id": "intrusion",
+    "en": "Restricted area intrusion",
+    "zh": "禁区入侵",
+    "engine": "detector",
+    "rule": "above",
+    "target": "person"
+  },
+  {
+    "id": "crowding",
+    "en": "Crowd gathering",
+    "zh": "人群聚集",
+    "engine": "detector",
+    "rule": "above",
+    "target": "person"
+  },
+  {
+    "id": "absence",
+    "en": "Absence from post",
+    "zh": "离岗检测",
+    "engine": "detector",
+    "rule": "below",
+    "target": "person"
+  },
+  {
+    "id": "loitering",
+    "en": "Personnel loitering",
+    "zh": "人员滞留",
+    "engine": "detector",
+    "rule": "dwell",
+    "target": "person"
+  },
+  {
+    "id": "post_occupancy",
+    "en": "Post duty monitoring",
+    "zh": "在岗监测",
+    "engine": "detector",
+    "rule": "below",
+    "target": "person"
+  },
+  {
+    "id": "vehicle_count",
+    "en": "Vehicle counting",
+    "zh": "车辆计数",
+    "engine": "detector",
+    "rule": "cross",
+    "target": "vehicle"
+  },
+  {
+    "id": "illegal_parking",
+    "en": "Illegal parking",
+    "zh": "违停检测",
+    "engine": "detector",
+    "rule": "stationary",
+    "target": "vehicle"
+  },
+  {
+    "id": "ocr",
+    "en": "Display OCR",
+    "zh": "显示屏读数",
+    "engine": "ocr",
+    "rule": "ocr",
+    "target": "text"
+  },
+  {
+    "id": "hazard_dwell",
+    "en": "Hazard zone loitering",
+    "zh": "危险区域滞留",
+    "engine": "detector",
+    "rule": "dwell",
+    "target": "person"
+  }
+]

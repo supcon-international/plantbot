@@ -307,3 +307,7 @@ PTZ 的绝对 pan/tilt 使用校准后的度（右/上为正），zoom 为光学
 - **平台级「下发」按钮**:配置生效靠状态机与版本号,不靠人肉同步动作。
 
 机器人遥操作入口为 FLEET → 机器人 → 遥操作，云台手动控制在 LIVE → 云台巡检。控制权、断线停止、能力范围及接入契约见 [manual-control.md](manual-control.md)。
+
+## 视觉能力落地（v2.4.0）
+
+视觉推理位于 Adapter 内的独立进程。Server 的 `vision_configs` 保存版本化场站配置，`vision_jobs` 冻结试运行参数，`vision_results` 保留读数/标注/模型版本/原图引用，`vision_episodes` 去重当前告警。固定摄像头直接注册为 Adapter source，不创建虚假机器人。异常沿用既有事件域；设备关联沿用 asset ID。视觉任务不进入机器人运动订单或临时遥操作通道。具体数据和边界见 [vision.md](vision.md)。

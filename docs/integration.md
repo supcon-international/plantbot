@@ -280,3 +280,9 @@ cd ~/.node-red && npm i <repo>/sdk/node-red-contrib-plantbot   # 重启 Node-RED
 ## Manual control (v2.3.1)
 
 Manual robot input uses an exclusive expiring control session, separate from durable orders. Spot supports native velocity and discovered Spot CAM position control; F2 supports vendor directional driving and camera reset; X30 robotserver does not expose these manual interfaces. See [manual-control.md](manual-control.md) for the operator workflow, `teleop`/`ptz.manual` factsheet fields, `pumpControl`, stop confirmation and deployment limits.
+
+## Adapter vision capability
+
+The standalone Adapter can host the eleven built-in vision presets alongside vendor drivers. Configure local sources in `adapter.json`; the site key and camera credentials remain on the Adapter. `POST /vision/heartbeat` renews an exclusive 15-second runtime lease and returns enabled, versioned configurations and frozen preview jobs. `POST /vision/results` requires the returned `X-Vision-Token`, an immutable result ID, model/observation identifiers and optional base64 JPEG evidence. Retries are idempotent; stale configuration versions and expired jobs are rejected. Results more than 60 seconds late are archived without raising a current alarm. Both routes are under `/api/integration/v1`.
+
+Session configuration and evidence routes are under `/api/sites/:siteId/vision`; admin writes, operator previews and viewer reads follow existing site permissions. This capability does not alter robot orders or manual-control contracts. Full configuration, fixed-view requirements, model provenance and tests: [vision.md](vision.md).

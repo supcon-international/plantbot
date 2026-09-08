@@ -1,5 +1,27 @@
 # Changelog
 
+## v2.4.0 — 2026-09-09
+
+### English
+
+- Added eleven vision inspection presets with bundled pretrained detection, tracking and OCR models.
+- Added monitoring configuration, scene previews, protected evidence review and versioned observation history.
+- Added standalone Adapter deployment with independent robot and vision processes.
+- Updated the bilingual interface, navigation and responsive layouts.
+- Published separate, self-contained Server and Adapter deployment packages with checksums.
+
+Compatibility: Continuous vision monitoring requires a fixed camera view. Mobile OCR requires confirmed stationary feedback. Existing robot integration and managed connectors remain supported. See the deployment guide when upgrading from the v2.3.1 demo package.
+
+### 中文
+
+- 新增 11 项视觉巡检预置能力，内置预训练检测、跟踪与 OCR 模型。
+- 新增监测配置、场景试运行、受保护证据复核与版本化观测记录。
+- 新增独立 Adapter 部署，机器人驱动与视觉进程分别运行。
+- 更新中英文界面、导航与响应式布局。
+- 分别提供 Server、Adapter 完整部署包及校验文件。
+
+兼容性：连续视觉监测要求固定视角；移动相机 OCR 需要可信停稳反馈。现有机器人集成和托管连接器继续兼容。从 v2.3.1 演示包升级请参阅部署指南。
+
 ## v2.3.1 — 2026-09-08
 
 ### English

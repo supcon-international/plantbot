@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { ChevronLeft, ChevronRight, Grid2X2, Focus, Pencil, Plus, Radio, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
@@ -15,6 +15,8 @@ import { Input } from '@/components/ui/input'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { utcClock } from '../lib/format'
 import type { Channel, StreamSession } from '../lib/types'
+
+const VisionInspection = lazy(() => import('../components/VisionInspection').then(m => ({ default: m.VisionInspection })))
 
 interface Feed {
   channelId: string
@@ -210,10 +212,12 @@ export function Live() {
       <div className="mx-auto w-full max-w-[1400px] px-3 md:px-4"><TabsList aria-label={zh ? '视频功能' : 'Video workspace'}>
         <TabsTrigger value="live">{zh ? '实时视频' : 'Live video'}</TabsTrigger>
         <TabsTrigger value="ptz">{zh ? '云台巡检' : 'PTZ inspection'}</TabsTrigger>
+        <TabsTrigger value="vision">{zh ? '视觉巡检' : 'Vision inspection'}</TabsTrigger>
         <TabsTrigger value="archive">{zh ? '录像回放' : 'Recordings'}</TabsTrigger>
       </TabsList></div>
       <TabsContent value="live"><LiveFeeds /></TabsContent>
       <TabsContent value="ptz" className="mx-auto w-full max-w-[1400px] p-3 md:p-4"><PtzInspection key={siteId} /></TabsContent>
+      <TabsContent value="vision" className="mx-auto w-full max-w-[1400px] p-3 md:p-4"><Suspense fallback={<div className="skeleton h-48" />}><VisionInspection key={siteId} /></Suspense></TabsContent>
       <TabsContent value="archive" className="mx-auto w-full max-w-[1400px] p-3 md:p-4"><RecordingArchive key={siteId} /></TabsContent>
     </Tabs>
   </div>

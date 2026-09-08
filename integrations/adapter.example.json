@@ -1,0 +1,9 @@
+{
+  "id": "edge-01",
+  "name": "Plant edge adapter",
+  "serverUrl": "https://plantbot.example.com/robots",
+  "devices": [],
+  "sources": [
+    { "id": "gate", "label": "Main gate", "url": "rtsp://user:password@192.168.1.20/stream1", "view": "fixed" }
+  ]
+}

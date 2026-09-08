@@ -92,3 +92,7 @@ Plantbot 反过来：**厂区的知识属于厂区，不属于某台机器人**�
 - 用 code agent（Claude Code 等）接机器人：仓库自带 Agent Skill [.claude/skills/robot-adapter](../.claude/skills/robot-adapter/SKILL.md)，把文件夹交给 agent 即可
 
 机器人遥操作入口为 FLEET → 机器人 → 遥操作，云台手动控制在 LIVE → 云台巡检。控制权、断线停止、能力范围及接入契约见 [manual-control.md](manual-control.md)。
+
+## 视觉巡检
+
+在 LIVE → 视觉巡检中查看 Adapter 视频源，添加 11 项预置监测之一，试运行获取画面后设置区域、计数线、阈值与 UTC 班次。启用后可查看原图、标注、读数和配置版本，异常进入事件记录。固定视角是连续规则的前提；移动相机 OCR 需要设备确认停稳。Server / Adapter 分包安装和现场配置见 [release.md](release.md) 与 [vision.md](vision.md)。

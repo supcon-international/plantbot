@@ -597,6 +597,87 @@ paths:
             application/json:
               schema: { type: object }
 
+  /vision/heartbeat:
+    post:
+      tags:
+      - vision
+      summary: Renew the 15-second exclusive adapter lease and receive active configurations and preview jobs
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  serverTime:
+                    type: number
+                  configs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/VisionConfig'
+                  jobs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/VisionJob'
+        '400':
+          description: Invalid input
+        '401':
+          description: Authentication required
+        '403':
+          description: Insufficient site role or wrong adapter
+        '409':
+          description: Configuration version conflict, duplicate runtime or expired lease
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisionHeartbeat'
+  /vision/results:
+    post:
+      tags:
+      - vision
+      summary: Idempotently ingest an observation and its original evidence
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  eventId:
+                    type: string
+                  duplicate:
+                    type: boolean
+        '400':
+          description: Invalid input
+        '401':
+          description: Authentication required
+        '403':
+          description: Insufficient site role or wrong adapter
+        '409':
+          description: Configuration version conflict, duplicate runtime or expired lease
+        '410':
+          description: Configuration removed or test expired
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisionResultInput'
+      parameters:
+      - name: X-Vision-Token
+        in: header
+        required: true
+        schema:
+          type: string
+
 components:
   securitySchemes:
     siteKey:
@@ -641,6 +722,353 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
 
   schemas:
+    VisionConfig:
+      type: object
+      required:
+      - name
+      - preset
+      - adapterId
+      - sourceId
+      properties:
+        id:
+          type: string
+        revision:
+          type: integer
+          minimum: 1
+        name:
+          type: string
+          maxLength: 120
+        preset:
+          type: string
+          enum:
+          - people_count
+          - line_crossing
+          - intrusion
+          - crowding
+          - absence
+          - loitering
+          - post_occupancy
+          - vehicle_count
+          - illegal_parking
+          - ocr
+          - hazard_dwell
+        adapterId:
+          type: string
+        sourceId:
+          type: string
+        enabled:
+          type: boolean
+          default: false
+        region:
+          type: array
+          items: &id001
+            type: array
+            items:
+              type: number
+              minimum: 0
+              maximum: 1
+            minItems: 2
+            maxItems: 2
+          minItems: 3
+          maxItems: 20
+        line:
+          type: array
+          items: *id001
+          minItems: 2
+          maxItems: 2
+        direction:
+          type: string
+          enum:
+          - both
+          - forward
+          - reverse
+          default: both
+        threshold:
+          type: number
+          minimum: 0
+          maximum: 10000
+        durationS:
+          type: number
+          minimum: 0
+          maximum: 86400
+        confidence:
+          type: number
+          minimum: 0.1
+          maximum: 0.99
+        intervalS:
+          type: number
+          minimum: 1
+          maximum: 3600
+        severity:
+          type: string
+          enum:
+          - info
+          - low
+          - high
+          - critical
+        schedule:
+          type: object
+          nullable: true
+          description: UTC. Sunday=0. Overnight allowed; equal start/end means all day.
+          required:
+          - days
+          - start
+          - end
+          properties:
+            days:
+              type: array
+              items:
+                type: integer
+                minimum: 0
+                maximum: 6
+              minItems: 1
+            start:
+              type: string
+              pattern: ^([01][0-9]|2[0-3]):[0-5][0-9]$
+            end:
+              type: string
+              pattern: ^([01][0-9]|2[0-3]):[0-5][0-9]$
+        assetId:
+          type: string
+        unit:
+          type: string
+          maxLength: 24
+        numeric:
+          type: boolean
+        min:
+          type: number
+          nullable: true
+        max:
+          type: number
+          nullable: true
+    VisionSource:
+      type: object
+      required:
+      - id
+      - label
+      - view
+      - status
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        channelId:
+          type: string
+          description: Optional logical channel association. Never a stream URL.
+        view:
+          type: string
+          enum:
+          - fixed
+          - mobile
+        status:
+          type: string
+          enum:
+          - ready
+          - unavailable
+          - paused
+        note:
+          type: string
+          maxLength: 200
+    VisionHeartbeat:
+      type: object
+      required:
+      - adapterId
+      - runtimeId
+      - sources
+      properties:
+        adapterId:
+          type: string
+        runtimeId:
+          type: string
+          description: Unique per process boot; one live runtime per site and adapter ID.
+        name:
+          type: string
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisionSource'
+          maxItems: 32
+        models:
+          type: object
+          properties:
+            detector:
+              type: string
+            ocr:
+              type: string
+    VisionJob:
+      type: object
+      properties:
+        id:
+          type: string
+        config:
+          $ref: '#/components/schemas/VisionConfig'
+        status:
+          type: string
+          enum:
+          - queued
+          - done
+          - expired
+        createdAt:
+          type: number
+        expiresAt:
+          type: number
+        resultId:
+          type: string
+    VisionResultInput:
+      type: object
+      required:
+      - id
+      - adapterId
+      - revision
+      - capturedAt
+      - status
+      - model
+      - observationId
+      properties:
+        id:
+          type: string
+          description: Unique immutable observation ID, reused on retries.
+        adapterId:
+          type: string
+        configId:
+          type: string
+        jobId:
+          type: string
+          description: Test job ID, instead of active configId; never emits a production alarm.
+        revision:
+          type: integer
+        capturedAt:
+          type: number
+          description: Unix milliseconds; accepts up to 7 days old and 60 seconds in the future. Older than 60 seconds
+            is archived without raising a current alarm.
+        status:
+          type: string
+          enum:
+          - normal
+          - alert
+          - unknown
+          - failed
+        value:
+          type: number
+          nullable: true
+        text:
+          type: string
+          maxLength: 2000
+        note:
+          type: string
+          maxLength: 500
+        model:
+          type: string
+          maxLength: 160
+        observationId:
+          type: string
+          description: Observation epoch, reset after view/capture restart.
+        image:
+          type: string
+          format: byte
+          maxLength: 3145728
+          description: Base64 JPEG original, at most 3 MiB encoded. Protected by the site evidence route.
+        annotations:
+          type: array
+          items:
+            type: object
+            required:
+            - label
+            - box
+            - score
+            properties:
+              label:
+                type: string
+              box:
+                type: array
+                items:
+                  type: number
+                  minimum: 0
+                  maximum: 1
+                minItems: 4
+                maxItems: 4
+              score:
+                type: number
+                minimum: 0
+                maximum: 1
+          maxItems: 200
+    VisionResult:
+      allOf:
+      - $ref: '#/components/schemas/VisionResultInput'
+      - type: object
+        properties:
+          config:
+            $ref: '#/components/schemas/VisionConfig'
+          receivedAt:
+            type: number
+          late:
+            type: boolean
+          evidence:
+            type: string
+            description: Protected same-origin URL, including PUBLIC_BASE.
+          eventId:
+            type: string
+    VisionOverview:
+      type: object
+      properties:
+        presets:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              en:
+                type: string
+              zh:
+                type: string
+              engine:
+                type: string
+              rule:
+                type: string
+              target:
+                type: string
+        configs:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisionConfig'
+        adapters:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              online:
+                type: boolean
+              lastSeen:
+                type: number
+              sources:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VisionSource'
+              models:
+                type: object
+                properties:
+                  detector:
+                    type: string
+                  ocr:
+                    type: string
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisionResult'
+        jobs:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisionJob'
+        timezone:
+          type: string
+          enum:
+          - UTC
     TeleopCapability:
       type: object
       required:

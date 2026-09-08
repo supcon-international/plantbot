@@ -1,0 +1,33 @@
+name: plantbot-adapter
+x-logging: &logging
+  driver: json-file
+  options: {max-size: "10m", max-file: "3"}
+services:
+  adapter:
+    image: plantbot/adapter:VERSION
+    init: true
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      PB_ADAPTER_CONFIG: /config/adapter.json
+      PB_SITE_KEY: ${PB_SITE_KEY:?Set PB_SITE_KEY in .env.adapter}
+    volumes:
+      - ./adapter.json:/config/adapter.json:ro
+    stop_grace_period: 10s
+  vision:
+    image: plantbot/vision:VERSION
+    init: true
+    restart: unless-stopped
+    logging: *logging
+    cpus: ${PB_VISION_CPUS:-2}
+    mem_limit: ${PB_VISION_MEMORY:-2g}
+    environment:
+      PB_SITE_KEY: ${PB_SITE_KEY:?Set PB_SITE_KEY in .env.adapter}
+      PB_VISION_THREADS: ${PB_VISION_THREADS:-2}
+    volumes:
+      - ./adapter.json:/config/adapter.json:ro
+      - vision-data:/data
+    stop_grace_period: 10s
+volumes:
+  vision-data:
+    name: ${PB_ADAPTER_VOLUME:-plantbot-adapter-vision-data}

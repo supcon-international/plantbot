@@ -20,3 +20,13 @@ demos/
 server/data/
 web/public/vendor/
 .env.demo
+
+# Adapter runtime artifacts
+.venv/
+__pycache__/
+integrations/vision/models/
+integrations/vision/data/
+.env.adapter
+.env.server
+
+/adapter.json

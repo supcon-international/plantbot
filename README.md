@@ -12,25 +12,26 @@ Plantbot 是一个多场站巡检机器人管理平台，用于统一管理不�
 - **巡检任务**：任务模板、自动或指定机器人派单、定时排程、日历、执行记录与报告导出。
 - **视频与云台**：实时视频、录像检索与回放、片段下载、云台控制、预置点和定时巡检。
 - **机器人遥操作**：控制权申请、按住移动与松开停止、键盘操作、任务中断确认。
+- **视觉巡检**：11 项预置能力，覆盖人数、越线、入侵、聚集、在岗、滞留、车辆和显示屏 OCR；支持区域配置、试运行和证据复核。
 - **设备与异常**：设备档案、工业位号台账、传感器读数、告警证据及缺陷处理记录。
 - **管理与集成**：场站权限、用户和组织管理、操作审计、OIDC 单点登录、HTTP API、TypeScript SDK 和 Node-RED 节点。
 
 界面支持中英文、明暗主题及 iframe 嵌入。云台入口位于 **LIVE → 云台巡检**，机器人遥操作位于 **FLEET → 机器人 → 遥操作**。
 
-## 快速体验
+## 快速部署
 
-预构建演示包包含平台、视频中继和三家厂商的仿真机器人，无需本地构建。当前提供 Linux x86-64 包，需要 Docker Engine 和 Docker Compose 2.17+。
-
-从 [v2.3.1 Release](https://github.com/supcon-international/plantbot/releases/tag/v2.3.1) 下载压缩包及 `.sha256` 校验文件，放在同一目录后运行：
+[下载 v2.4.0](https://github.com/supcon-international/plantbot/releases/tag/v2.4.0) 的 **Server** 和 **Adapter** 两个包。Server 运行管理界面、API 和视频中继；Adapter 接入机器人与摄像头，并在现场运行视觉模型。当前提供 Linux x86-64 预构建镜像，需要 Docker Engine 和 Docker Compose 2.17+，无需本地构建。
 
 ```bash
-sha256sum -c plantbot-v2.3.1-linux-amd64.tar.gz.sha256
-tar -xzf plantbot-v2.3.1-linux-amd64.tar.gz
-cd plantbot-v2.3.1-linux-amd64
+sha256sum -c plantbot-server-v2.4.0-linux-amd64.tar.gz.sha256
+tar -xzf plantbot-server-v2.4.0-linux-amd64.tar.gz
+cd plantbot-server-v2.4.0-linux-amd64
 bash start.sh
 ```
 
-打开 [http://127.0.0.1:18080/robots/](http://127.0.0.1:18080/robots/)。首次登录凭证由启动脚本生成，保存在 `.env.demo`。远程访问、停止服务及保留数据升级见[版本部署文档](docs/release.md)。
+打开 [http://127.0.0.1:18080/robots/](http://127.0.0.1:18080/robots/)，用 `.env.server` 中的初始密码登录，创建场站和场站 API key。Adapter 包配置 `serverUrl`、设备地址及 `PB_SITE_KEY` 后运行自己的 `start.sh`；模型已包含在包内。
+
+首次安装从空场站开始。详细安装、分机部署、旧版迁移和保留数据升级见[版本部署文档](docs/release.md)，视觉配置见[视觉巡检](docs/vision.md)。
 
 ## 本地开发
 
