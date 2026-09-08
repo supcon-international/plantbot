@@ -19,6 +19,7 @@ const Integrations = lazy(() => import('./pages/Integrations').then((m) => ({ de
 const Sites = lazy(() => import('./pages/Sites').then((m) => ({ default: m.Sites })))
 const SiteBuilder = lazy(() => import('./pages/SiteBuilder').then((m) => ({ default: m.SiteBuilder })))
 const Docs = lazy(() => import('./pages/Docs').then((m) => ({ default: m.Docs })))
+const Assets = lazy(() => import('./pages/Assets'))
 
 // Carbon-flavoured placeholder while a lazy chunk loads — shimmer blocks inside
 // the Shell content area rather than a blank flash.
@@ -46,6 +47,7 @@ export function App() {
             <Route path="robots/:id" element={<RobotDetail />} />
             <Route path="map" element={<MapPage />} />
             <Route path="events" element={<Events />} />
+            <Route path="assets" element={lazyRoute(<Assets />)} />
             <Route path="login" element={<Login />} />
             <Route path="integrations" element={lazyRoute(<Integrations />)} />
             <Route path="docs" element={lazyRoute(<Docs />)} />

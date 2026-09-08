@@ -284,10 +284,24 @@ type Command =
 GET + 嵌入页 WS 已覆盖当前形态,真实需求出现再按 topic 订阅设计;Bearer key 不获得写操作(事件处置/任务
 派发仍走会话 RBAC)——key 泄露的爆炸半径必须停留在「读 + 机器人自报」。
 
-## 5. 明确不做
+## 5. 巡检运营扩展（2026-09-08 已实现）
+
+新增资源继续属于场站，复用 Channel、AdapterOrder、事件和任务模型，按会话面 RBAC 访问；详见 [inspection-operations.md](inspection-operations.md)。
+
+| 资源 / 实现 | 与既有模型的关系 |
+| --- | --- |
+| RecordingPolicy / Recording（`recordings.ts`） | 按 Channel 启用，FFmpeg 完成片段后登记 SQLite；原始 RTSP 凭证不下发，回放/下载受公共浏览门禁控制。保留与存储预算见 [deploy.md](deploy.md)。 |
+| PtzPreset / PtzPlan / PtzRun（`ptz.ts`） | 预置点属于机器人 Channel；运行冻结姿态与点位顺序，经既有 PTZ 订单执行，到位 `done` 后才停留。单通道互斥；取消/超时/重启后的不确定位置保持占用。每周计划使用 UTC。 |
+| InspectionAsset / AssetTag（`inspection-assets.ts`） | 被巡设备档案与设备—位号—航点—类型—单位—地址台账；可绑定已接入机器人和 Metric，南向协议仍由 adapter/connector 处理。 |
+| Defect / history（`inspection-assets.ts`） | 可引用 Event、设备及位号；提交人来自会话，处理人须有本站操作权限，关闭必须有结果说明，重开保留历史。缺陷状态与原事件状态独立；源事件过期不阻塞继续处理。 |
+| Calendar / Mission archive（`operations.ts`） | 日历预计触发与实际 Mission 分开，归档查询 SQLite，报告保留各点实际结果和关联事件，不从缺失数据推断成功。 |
+| Organization / Audit（`operations.ts`） | 工厂/部门/岗位与用户归属是目录数据，不改变场站角色；登录和业务操作记录保留 90 天。事件词表仍在 INTEG，指标仍用 Metric 注册表。 |
+
+PTZ 的绝对 pan/tilt 使用校准后的度（右/上为正），zoom 为光学倍率（1 为广角）；adapter 转换厂商原生单位，并以真实到位反馈结单。当前三家内置 adapter 未提供绝对预置点执行：F2 只开放有官方 opcode 的复位，方向指令因缺少可靠 stop 协议停用。平台不把接受命令当作到位，也不在停留时自动抓拍、生成读数或调用 AI。
+
+## 6. 明确不做
 
 - ~~**iframe 嵌入集成**~~ — **曾经的结论,2026-07 已反转**:见 §4。平台现已支持宿主 webapp 嵌入——`?embed=1`(去壳但保留紧凑模块导航条,`?embednav=top|bottom|hidden` 定位)+ `?site=` 钉站 + `PB_COOKIE_SAMESITE=none` 跨站 cookie + OIDC SSO,不再是「不做」项。
-- **每设备类型一个模块**(电梯/空开/消防柜管理页):非机器人设备一律走 integration API 的
-  state+events,是「外部数据源」,不是新模块。
+- **每设备类型一个模块**(电梯/空开/消防柜管理页):被巡设备统一进入 Assets 台账；设备数据经 adapter 的已注册指标和事件接入，不增加每种设备的专用驱动页。
 - **PDS/VDS 双算法栈**:Detector 一张表,media kind 是字段不是体系。
 - **平台级「下发」按钮**:配置生效靠状态机与版本号,不靠人肉同步动作。

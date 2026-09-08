@@ -21,6 +21,7 @@ cd integrations && node_modules/.bin/tsc --noEmit   # 集成层类型检查
 cd integrations && pnpm test                        # 先 test/unit 单测，再全行为 e2e（起真平台+真 sim+真 adapter,含托管连接器与开放 API）
 cd sdk/adapter-sdk-ts && pnpm test                  # SDK 单测（订单泵去重/串行/preempt）；pnpm run build 出 dist
 node scripts/record-demos.mjs                       # 录制各模块演示视频到 demos/（需 pnpm dev 在跑；scripts/build-demo.sh 合成）
+node scripts/test-inspection-ui.mjs                 # 巡检运营 UI 回归（先 WEB_BASE=/robots/ pnpm build；结果 demos/inspection-qa/）
 ```
 
 ## ⚠️ 生产部署形态（改代码前必读）
@@ -40,6 +41,13 @@ node scripts/record-demos.mjs                       # 录制各模块演示视�
 - **六域模型已全量落地**（视频流 Channel+StreamSession / payload Reading+metric 注册表 / 事件 Detector+lifecycle / 任务 Template-Schedule-Run / 建图 Map+Transform / 控制语义化 Command）——动这六域先对照 `docs/platform-model.md`。关键：流地址是**会话资源**（TTL/续期/撤销）；schedule **创建即生效**（无「下发」步骤）；坐标对外**只有世界系一个出口**（其余坐标系经 Transform 在服务端换算）。
 - **调度**：`auto` 任务按能力/电量/距离挑在线的 dispatchable 外部机器人；显式钉死（任务 `requestedRobot` / 排程 `assign:{kind:'robot'}`）的机器人未注册/离线时任务留队（订单队列是缓冲），**已有在跑任务（nav.missionId）时同样留队**，不会双发 mission 订单；**只有 `mission` 类订单的完结才结算平台侧任务**（pause/resume/abort 只是引用）。
 - **视频 RTSP-first**：摄像头/机器人流填 `rtsp://` 即生产源（经 go2rtc 播放、ffmpeg 快照），`file` 为 demo 环路；素材在 `scripts/setup.mjs` 登记；快照源由 `World.frameSource(streamKey)` 从 channel 源解析（rtsp 快照用 `-rtsp_transport tcp -timeout`，死源快速失败）。**go2rtc 中继开箱即用**：setup 下载二进制进 `bin/`，dev 经 `scripts/relay.mjs` 起在 :1984 并设 `MEDIA_RELAY`；`media.ts` 每 15s 探测 `<relay>/api` 保持 `relayOnline` 诚实（探测失败/流注册失败即 false，`openSession` 已 await 注册结果）；vite/nginx 反代 `/stream`→:1984。LIVE 页有固定摄像头增删改（server 端 POST/PATCH/DELETE `/cameras/:camId` 定点改，防止看不到 rtsp 明文的客户端整组覆盖）；播放会话是租约，前端 120s 前自动 renew、卸载即 close。
+
+## 巡检运营扩展
+
+- **录像**（`server/src/recordings.ts` / LIVE → Recordings）：管理员按 Channel 启用，RTSP/本地文件经 FFmpeg 完成片段后才入库，最多 8 路（跨场站合计）。保留 1–30 天；`PB_RECORDING_SEGMENT_SEC` 默认 60 秒，`PB_RECORDING_MAX_MB` 默认 2048 MB 是周期清理预算，**不是硬配额**。文件在 `PB_DATA_DIR/recordings`；检索/Range 回放/下载沿用 `PB_PUBLIC_VIEW` 门禁，不另开静态 URL。没有录制前历史、外部 NVR 导入或自动转码。
+- **云台**（`server/src/ptz.ts` / LIVE）：场站 Channel → PtzPreset → PtzPlan → 冻结步骤的 PtzRun，借既有订单派发。显式 `streams[].ptz` 能力；absolute pan/tilt 是度（右/上为正），zoom 是光学倍率，adapter 换算原生单位并确认到位后才报 `done`；平台随后计时停留，无自动抓拍/读数/AI。每周云台计划用 UTC；同通道互斥，已到位停留不依赖热订单环。取消/超时/重启若位置不确定则保留占用，确认设备停止后解除；这类中断订单不按一般订单重放。F2 仅开放已知复位 opcode，方向/缩放缺可靠 stop 协议而停用；Spot/X30 当前无云台定位。
+- **设备与缺陷**（`server/src/inspection-assets.ts` / ASSETS、EVENTS → Defects）：设备档案和设备—位号—航点—类型—单位—地址台账；“驱动”仅绑定已接入机器人/Metric，协议及凭证仍在 adapter/connector。admin 管设备位号，operator 处理缺陷，提交人来自会话；关闭需责任人和结果说明，重开保留不可覆盖的 history，已有事件引用过期不阻塞处理。被引用设备/位号不能删除。
+- **日历与运维**（`server/src/operations.ts` / TASKS、SITES）：日历区分预计触发与实际任务，SQLite 归档导出 CSV/可打印 HTML，不能从缺失结果推断成功。工厂/部门/岗位与用户归属不改变 RBAC；登录/操作审计保留 90 天；事件字典入口在 INTEG → Event types，指标沿用注册表。需求覆盖和验收边界见 `docs/inspection-operations.md`。
 
 ## 持久层与生产开关
 
@@ -76,6 +84,7 @@ node scripts/record-demos.mjs                       # 录制各模块演示视�
 | `docs/adapter-sim-architecture.md` | 三层架构、厂商映射、进程拓扑、e2e 面 | 改集成层结构 / 新增厂商 |
 | `docs/vendors/*` | 三厂商逐字段协议参考 | 动 sim/adapter **前必读** |
 | `docs/platform-model.md` | 六域模型设计+落地状态（输入调研：`gorobot-study.md`） | 动六域 |
+| `docs/inspection-operations.md` | 巡检运营需求覆盖、参考设计、能力边界与验收 | 改录像/云台/缺陷/设备台账/归档/组织运维 |
 | `docs/deploy.md` | 生产部署/运维/建站交付/清库重播种 | 改部署形态或恢复语义 |
 | `.claude/skills/robot-adapter/` | 接入配置 Agent Skill（自包含、可整体拷出仓库）；`.agents/skills/robot-adapter/` 是给 Codex 类 agent 的**逐字镜像** | 改集成 API / SDK / connector 目录（两份一起改） |
 | `README.md` | 面向初级开发者的项目入口（是什么/五分钟跑起来/目录/接入方式/命令） | 改命令、目录或接入形态 |

@@ -2,6 +2,8 @@
 // @plantbot/adapter-sdk's PlantbotClient. Same contract: never throws on
 // transport errors (adapters must outlive platform restarts), every call
 // resolves null on failure.
+// Factsheet streams[].ptz and order.payload.mode pass through unchanged.
+// For mode=absolute, report done only after hardware position feedback confirms arrival.
 'use strict'
 
 class PlantbotClient {

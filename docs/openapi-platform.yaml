@@ -1090,6 +1090,1724 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /api/sites/{siteId}/recording-policies:
+    parameters:
+      - $ref: "#/components/parameters/siteId"
+    get:
+      tags:
+        - media
+      summary: Recording policy and truthful worker status for each channel
+      responses:
+        "200":
+          description: Settings; enabled means requested, recording means at least one completed segment
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  policies:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/RecordingPolicy"
+                  segmentSeconds:
+                    type: number
+                  maxStorageMB:
+                    type: number
+        "404":
+          description: Unknown site
+  /api/sites/{siteId}/recording-policies/{chId}:
+    parameters:
+      - $ref: "#/components/parameters/siteId"
+      - name: chId
+        in: path
+        required: true
+        schema:
+          type: string
+    put:
+      tags:
+        - media
+      summary: Enable/disable recording and set retention (admin)
+      security:
+        - cookieAuth: []
+      description: Opt-in local FFmpeg archive for RTSP or local file sources. Maximum 8 enabled channels across the
+        instance. 1–30 retention days; completed and active files share PB_RECORDING_MAX_MB budget. Stopping
+        leaves completed history. Deleted sources may only be disabled.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - enabled
+                - retentionDays
+              properties:
+                enabled:
+                  type: boolean
+                retentionDays:
+                  type: integer
+                  minimum: 1
+                  maximum: 30
+      responses:
+        "200":
+          description: Policy saved
+        "400":
+          description: Invalid policy
+        "401":
+          description: Login required
+        "403":
+          description: Admin required
+        "404":
+          description: Unknown site/channel
+        "409":
+          description: Recording channel limit reached
+        "422":
+          description: Unsupported source
+  /api/sites/{siteId}/recordings:
+    parameters:
+      - $ref: "#/components/parameters/siteId"
+    get:
+      tags:
+        - media
+      summary: Search completed recordings by channel and overlapping time interval
+      parameters:
+        - name: channelId
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: since
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            description: Epoch ms, inclusive; defaults to 0
+        - name: until
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            description: Epoch ms, inclusive; defaults to now
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 100
+      responses:
+        "200":
+          description: Newest recordings first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  recordings:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Recording"
+                  total:
+                    type: integer
+                  offset:
+                    type: integer
+                  limit:
+                    type: integer
+        "400":
+          description: Invalid range or pagination
+        "404":
+          description: Unknown site
+  /api/sites/{siteId}/recordings/{id}/video:
+    parameters:
+      - $ref: "#/components/parameters/siteId"
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - media
+      summary: Play or download a completed MP4; private deployments require session
+      description: Accepts a single byte Range including suffix ranges. URL carries PUBLIC_BASE. PB_PUBLIC_VIEW=0
+        protects both playback and download. File may expire under retention.
+      parameters:
+        - name: download
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - "1"
+        - name: Range
+          in: header
+          required: false
+          schema:
+            type: string
+            example: bytes=0-1023
+      responses:
+        "200":
+          description: Full video
+          content:
+            video/mp4:
+              schema:
+                type: string
+                format: binary
+        "206":
+          description: Partial content, Content-Range and Accept-Ranges headers
+          content:
+            video/mp4:
+              schema:
+                type: string
+                format: binary
+        "401":
+          description: Login required in private deployment
+        "404":
+          description: Not found or expired
+        "416":
+          description: Invalid or unsatisfiable byte range
+  /api/sites/{siteId}/recordings/{id}:
+    parameters:
+      - $ref: "#/components/parameters/siteId"
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    delete:
+      tags:
+        - media
+      security:
+        - cookieAuth: []
+      summary: Delete a recording file and its index (admin)
+      responses:
+        "200":
+          description: Deleted
+        "401":
+          description: Login required
+        "403":
+          description: Admin required
+        "404":
+          description: Not found
+        "500":
+          description: File deletion failed; record is retained
+  /api/sites/{siteId}/assets:
+    parameters:
+      - name: siteId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - site
+      summary: List assets
+      responses:
+        "200":
+          description: Records
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/InspectionAsset"
+        "404":
+          description: Site or record not found
+    post:
+      tags:
+        - site
+      summary: Create assets (admin)
+      description: Equipment inspected by robots; the record belongs to the site.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/InspectionAssetInput"
+                - required:
+                    - name
+                    - kind
+      responses:
+        "201":
+          description: Records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InspectionAsset"
+        "400":
+          description: Invalid fields, references or transition preconditions
+        "401":
+          description: Sign-in required
+        "403":
+          description: Insufficient site role
+        "404":
+          description: Site or record not found
+        "409":
+          description: Duplicate name, referenced record or closed defect conflict
+      security:
+        - cookieAuth: []
+  /api/sites/{siteId}/assets/{id}:
+    parameters:
+      - name: siteId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      tags:
+        - site
+      summary: Update assets (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InspectionAssetInput"
+      responses:
+        "200":
+          description: Records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InspectionAsset"
+        "400":
+          description: Invalid fields, references or transition preconditions
+        "401":
+          description: Sign-in required
+        "403":
+          description: Insufficient site role
+        "404":
+          description: Site or record not found
+        "409":
+          description: Duplicate name, referenced record or closed defect conflict
+      security:
+        - cookieAuth: []
+    delete:
+      tags:
+        - site
+      summary: Delete unreferenced assets (admin)
+      description: References from tags or defect history prevent deletion. Site deletion cascades these records.
+      responses:
+        "200":
+          description: Deleted
+        "400":
+          description: Invalid fields, references or transition preconditions
+        "401":
+          description: Sign-in required
+        "403":
+          description: Insufficient site role
+        "404":
+          description: Site or record not found
+        "409":
+          description: Duplicate name, referenced record or closed defect conflict
+      security:
+        - cookieAuth: []
+  /api/sites/{siteId}/assets/export:
+    parameters:
+      - name: siteId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - site
+      summary: Export assets CSV (operator)
+      description: UTF-8 with BOM, escaped cells and spreadsheet formula protection.
+      responses:
+        "200":
+          description: CSV attachment
+          content:
+            text/csv:
+              schema:
+                type: string
+        "401":
+          description: Sign-in required
+        "403":
+          description: Insufficient site role
+        "404":
+          description: Site or record not found
+  /api/sites/{siteId}/asset-tags:
+    parameters:
+      - name: siteId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - site
+      summary: List asset-tags
+      responses:
+        "200":
+          description: Records
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/InspectionTag"
+        "404":
+          description: Site or record not found
+    post:
+      tags:
+        - site
+      summary: Create asset-tags (admin)
+      description: Name is case-insensitively unique per site. Asset and waypoint must exist in the site.
+        Adapter/integration bindings require a registered robot and metric, number dataType and the metric unit.
+        Manual bindings clear robotId/metric.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/InspectionTagInput"
+                - required:
+                    - assetId
+                    - name
+                    - waypointId
+                    - address
+      responses:
+        "201":
+          description: Records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InspectionTag"
+        "400":
+          description: Invalid fields, references or transition preconditions
+        "401":
+          description: Sign-in required
+        "403":
+          description: Insufficient site role
+        "404":
+          description: Site or record not found
+        "409":
+          description: Duplicate name, referenced record or closed defect conflict
+      security:
+        - cookieAuth: []
+  /api/sites/{siteId}/asset-tags/{id}:
+    parameters:
+      - name: siteId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      tags:
+        - site
+      summary: Update asset-tags (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InspectionTagInput"
+      responses:
+        "200":
+          description: Records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InspectionTag"
+        "400":
+          description: Invalid fields, references or transition preconditions
+        "401":
+          description: Sign-in required
+        "403":
+          description: Insufficient site role
+        "404":
+          description: Site or record not found
+        "409":
+          description: Duplicate name, referenced record or closed defect conflict
+      security:
+        - cookieAuth: []
+    delete:
+      tags:
+        - site
+      summary: Delete unreferenced asset-tags (admin)
+      description: References from tags or defect history prevent deletion. Site deletion cascades these records.
+      responses:
+        "200":
+          description: Deleted
+        "400":
+          description: Invalid fields, references or transition preconditions
+        "401":
+          description: Sign-in required
+        "403":
+          description: Insufficient site role
+        "404":
+          description: Site or record not found
+        "409":
+          description: Duplicate name, referenced record or closed defect conflict
+      security:
+        - cookieAuth: []
+  /api/sites/{siteId}/asset-tags/export:
+    parameters:
+      - name: siteId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - site
+      summary: Export asset-tags CSV (operator)
+      description: UTF-8 with BOM, escaped cells and spreadsheet formula protection.
+      responses:
+        "200":
+          description: CSV attachment
+          content:
+            text/csv:
+              schema:
+                type: string
+        "401":
+          description: Sign-in required
+        "403":
+          description: Insufficient site role
+        "404":
+          description: Site or record not found
+  /api/sites/{siteId}/defect-assignees:
+    parameters:
+      - name: siteId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - events
+      summary: List eligible defect assignees
+      description: Site operators and administrators; only username and displayName are returned.
+      responses:
+        "200":
+          description: Eligible operators
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        username:
+                          type: string
+                          maxLength: 240
+                        displayName:
+                          type: string
+                          maxLength: 240
+        "404":
+          description: Site or record not found
+  /api/sites/{siteId}/defects:
+    parameters:
+      - name: siteId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - events
+      summary: Filter defect ledger
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum:
+              - open
+              - in_progress
+              - closed
+        - name: severity
+          in: query
+          schema:
+            type: string
+            enum:
+              - minor
+              - major
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: assetId
+          in: query
+          schema:
+            type: string
+        - name: assignedTo
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Records
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/InspectionDefect"
+        "400":
+          description: Invalid fields, references or transition preconditions
+        "404":
+          description: Site or record not found
+    post:
+      tags:
+        - events
+      summary: Report a defect (operator)
+      description: submittedBy, timestamps, open status and initial history are generated by the server. Optional
+        event, equipment and tag references must belong to this site; a tag infers its equipment. assignedTo
+        must be a site operator/admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/InspectionDefectInput"
+                - required:
+                    - title
+                    - category
+      responses:
+        "201":
+          description: Records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InspectionDefect"
+        "400":
+          description: Invalid fields, references or transition preconditions
+        "401":
+          description: Sign-in required
+        "403":
+          description: Insufficient site role
+        "404":
+          description: Site or record not found
+        "409":
+          description: Duplicate name, referenced record or closed defect conflict
+      security:
+        - cookieAuth: []
+  /api/sites/{siteId}/defects/{id}:
+    parameters:
+      - name: siteId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - events
+      summary: Read a defect and its full treatment history
+      responses:
+        "200":
+          description: Records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InspectionDefect"
+        "404":
+          description: Site or record not found
+    patch:
+      tags:
+        - events
+      summary: Update defect details or assignment (operator)
+      description: Closed defects must be reopened before editing. Every changed field records before/after values,
+        actor and timestamp. Submitted-by identity and history cannot be supplied or overwritten. An existing
+        event link remains editable after the source event expires under event retention; a new or changed event
+        link must exist in this site.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InspectionDefectInput"
+      responses:
+        "200":
+          description: Records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InspectionDefect"
+        "400":
+          description: Invalid fields, references or transition preconditions
+        "401":
+          description: Sign-in required
+        "403":
+          description: Insufficient site role
+        "404":
+          description: Site or record not found
+        "409":
+          description: Duplicate name, referenced record or closed defect conflict
+      security:
+        - cookieAuth: []
+  /api/sites/{siteId}/defects/{id}/updates:
+    parameters:
+      - name: siteId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags:
+        - events
+      summary: Record treatment, close or reopen a defect (operator)
+      description: Every update requires a nonblank note. Starting work or closing requires a responsible operator.
+        Closing stores the note as the resolution; reopening clears the current resolution but retains all
+        history. A comment on a closed record does not rewrite its closing statement.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - note
+              properties:
+                note:
+                  type: string
+                  minLength: 1
+                  maxLength: 8000
+                status:
+                  type: string
+                  enum:
+                    - open
+                    - in_progress
+                    - closed
+      responses:
+        "200":
+          description: Records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InspectionDefect"
+        "400":
+          description: Invalid fields, references or transition preconditions
+        "401":
+          description: Sign-in required
+        "403":
+          description: Insufficient site role
+        "404":
+          description: Site or record not found
+        "409":
+          description: Duplicate name, referenced record or closed defect conflict
+      security:
+        - cookieAuth: []
+  /api/sites/{siteId}/defects/export:
+    parameters:
+      - name: siteId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - events
+      summary: Export filtered defects including treatment history (operator)
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum:
+              - open
+              - in_progress
+              - closed
+        - name: severity
+          in: query
+          schema:
+            type: string
+            enum:
+              - minor
+              - major
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: assetId
+          in: query
+          schema:
+            type: string
+        - name: assignedTo
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: UTF-8 CSV attachment; history is serialized JSON and formula-like cells are neutralized.
+          content:
+            text/csv:
+              schema:
+                type: string
+        "400":
+          description: Invalid fields, references or transition preconditions
+        "401":
+          description: Sign-in required
+        "403":
+          description: Insufficient site role
+        "404":
+          description: Site or record not found
+        "409":
+          description: Duplicate name, referenced record or closed defect conflict
+  /api/sites/{siteId}/mission-archive:
+    parameters:
+      - name: siteId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - missions
+      summary: Query durable inspection runs beyond the runtime history window
+      description: Creation timestamps use an inclusive from and exclusive to range in epoch milliseconds. Defaults
+        to the last 30 days through tomorrow. Public viewer access follows PB_PUBLIC_VIEW.
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+        - name: to
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum:
+              - queued
+              - active
+              - done
+              - failed
+              - aborted
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 50
+      responses:
+        "200":
+          description: Persisted records, newest creation first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  missions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Mission"
+                  total:
+                    type: integer
+                  offset:
+                    type: integer
+                  limit:
+                    type: integer
+        "400":
+          description: Invalid date range or status
+        "401":
+          description: Sign in required when public viewing is disabled
+        "404":
+          description: Site not loaded
+  /api/sites/{siteId}/mission-archive/{id}:
+    parameters:
+      - name: siteId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - missions
+      summary: Read a persisted inspection run and all events explicitly linked by runId
+      responses:
+        "200":
+          description: Run and its linked events; no runtime ring-buffer limit
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mission:
+                    $ref: "#/components/schemas/Mission"
+                  events:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+        "404":
+          description: Site or run not found
+  /api/sites/{siteId}/mission-archive/{id}/report:
+    parameters:
+      - name: siteId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - missions
+      summary: Export a printable report or spreadsheet-safe UTF-8 CSV
+      description: Contains run metadata, planned actions, actual results and linked events. HTML has escaped
+        content and a restrictive CSP; CSV includes a UTF-8 BOM and neutralizes formula prefixes. No missing
+        result is inferred as successful. Timestamps in reports use UTC. Exports are included in the operation
+        audit.
+      parameters:
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum:
+              - html
+              - csv
+            default: html
+      responses:
+        "200":
+          description: Printable HTML or CSV attachment
+          content:
+            text/html:
+              schema:
+                type: string
+            text/csv:
+              schema:
+                type: string
+        "400":
+          description: Unsupported format
+        "404":
+          description: Site or run not found
+  /api/sites/{siteId}/mission-calendar:
+    parameters:
+      - name: siteId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - missions
+      summary: Compare projected future schedule occurrences and actual created runs
+      description: Range must be no more than 45 days. Future occurrences are estimates based on enabled schedules,
+        not dispatched runs. Actual entries come from persistent missions. Up to 5000 planned and 5000 actual
+        entries are returned; truncated is explicit. Weekly schedules use the server time zone, returned as
+        timeZone.
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+        - name: to
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: Entries ordered by timestamp
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MissionCalendarEntry"
+                  truncated:
+                    type: boolean
+                  timeZone:
+                    type: string
+        "400":
+          description: Invalid range or range longer than 45 days
+        "404":
+          description: Site not loaded
+  /api/organization/units:
+    get:
+      tags:
+        - platform
+      summary: Read organization units, member assignments and user display names (platform admin)
+      description: Organization metadata never grants access; existing per-site roles remain authoritative.
+      responses:
+        "200":
+          description: Directory
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  units:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/OrganizationUnit"
+                  members:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/OrganizationMember"
+                  users:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        username:
+                          type: string
+                        displayName:
+                          type: string
+        "401":
+          description: Sign in required
+        "403":
+          description: Platform admin required
+      security:
+        - cookieAuth: []
+    post:
+      tags:
+        - platform
+      summary: Create a factory, department or position (platform admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrganizationUnitInput"
+      responses:
+        "200":
+          description: Created unit
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  unit:
+                    $ref: "#/components/schemas/OrganizationUnit"
+        "400":
+          description: Invalid name
+          kind: null
+          parent: null
+          site or hierarchy: null
+        "403":
+          description: Platform admin required
+      security:
+        - cookieAuth: []
+  /api/organization/units/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      tags:
+        - platform
+      summary: Update an organization unit (platform admin)
+      description: The hierarchy cannot contain cycles or use positions as parents. A factory has no parent. A
+        referenced unit cannot change type. Empty parentId or siteId clears that relation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  maxLength: 120
+                kind:
+                  type: string
+                  enum:
+                    - factory
+                    - department
+                    - position
+                parentId:
+                  type: string
+                siteId:
+                  type: string
+      responses:
+        "200":
+          description: Updated unit
+        "400":
+          description: Invalid hierarchy or fields
+        "404":
+          description: Unit not found
+        "409":
+          description: Type change blocked by children or member assignments
+      security:
+        - cookieAuth: []
+    delete:
+      tags:
+        - platform
+      summary: Delete an unreferenced organization unit (platform admin)
+      responses:
+        "200":
+          description: Deleted
+        "404":
+          description: Unit not found
+        "409":
+          description: Unit has children or assigned members
+      security:
+        - cookieAuth: []
+  /api/organization/members/{username}:
+    parameters:
+      - name: username
+        in: path
+        required: true
+        schema:
+          type: string
+    put:
+      tags:
+        - platform
+      summary: Assign a user's department and position (platform admin)
+      description: Omitted or empty IDs clear assignments. Membership is deleted when the user is deleted.
+        Assignments never alter site permissions.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                departmentId:
+                  type: string
+                positionId:
+                  type: string
+      responses:
+        "200":
+          description: Saved assignment
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  member:
+                    $ref: "#/components/schemas/OrganizationMember"
+        "400":
+          description: Invalid department or position
+        "404":
+          description: User not found
+      security:
+        - cookieAuth: []
+  /api/audit-log:
+    get:
+      tags:
+        - platform
+      summary: Query server-recorded login and operation outcomes (platform admin)
+      description: Records session mutations, report exports, local sign-in attempts and OIDC login/callback
+        outcomes. Integration telemetry is excluded. Only actor, route template, selected target IDs, site and
+        HTTP status are stored; no bodies, headers, query strings, session cookies, passwords or keys. Retained
+        for 90 days, newest first.
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+        - name: to
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+        - name: actor
+          in: query
+          schema:
+            type: string
+        - name: kind
+          in: query
+          schema:
+            type: string
+            enum:
+              - all
+              - login
+              - operation
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        "200":
+          description: Audit records and pagination metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  logs:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/OperationAudit"
+                  total:
+                    type: integer
+                  offset:
+                    type: integer
+                  limit:
+                    type: integer
+                  retentionDays:
+                    type: integer
+                    enum:
+                      - 90
+        "400":
+          description: Invalid date range
+        "401":
+          description: Sign in required
+        "403":
+          description: Platform admin required
+      security:
+        - cookieAuth: []
+  /api/sites/{siteId}/ptz:
+    parameters:
+      - $ref: "#/components/parameters/siteId"
+    get:
+      tags:
+        - media
+      operationId: getPtzInspection
+      summary: Camera capabilities, presets, plans, interlocks and latest 100 site records
+      description: Viewer. URLs containing credentials are never returned. Weekly schedules use UTC. Records
+        document camera positioning and dwell, not automatic image capture or AI inference.
+      responses:
+        "200":
+          description: Site PTZ configuration and runtime
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  channels:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        label:
+                          type: string
+                        robotId:
+                          type: string
+                        ptz:
+                          $ref: "#/components/schemas/PtzCapability"
+                  presets:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PtzPreset"
+                  plans:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PtzPlan"
+                  runs:
+                    type: array
+                    maxItems: 100
+                    items:
+                      $ref: "#/components/schemas/PtzRun"
+                  interlocks:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PtzRun"
+                  timezone:
+                    type: string
+                    enum:
+                      - UTC
+        "404":
+          description: Site not loaded
+  /api/sites/{siteId}/ptz/presets:
+    parameters:
+      - $ref: "#/components/parameters/siteId"
+    post:
+      tags:
+        - media
+      operationId: createPtzPreset
+      summary: Save a named absolute camera pose (operator)
+      description: Saving does not move the camera. A channel without absolute support can hold draft configuration.
+        Maximum 500 presets per site.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PtzPresetInput"
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  preset:
+                    $ref: "#/components/schemas/PtzPreset"
+        "400":
+          description: Invalid name or out-of-range pose
+        "401":
+          description: Sign in required
+        "403":
+          description: Operator role required
+        "404":
+          description: Channel or site missing
+        "409":
+          description: Preset capacity reached
+      security:
+        - cookieAuth: []
+  /api/sites/{siteId}/ptz/presets/{id}:
+    parameters:
+      - $ref: "#/components/parameters/siteId"
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    put:
+      tags:
+        - media
+      operationId: updatePtzPreset
+      summary: Replace preset configuration (operator)
+      description: Running records retain their immutable pose snapshot. A referenced preset cannot change cameras.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PtzPresetInput"
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  preset:
+                    $ref: "#/components/schemas/PtzPreset"
+        "400":
+          description: Invalid input
+        "404":
+          description: Preset or channel missing
+        "409":
+          description: Preset is referenced by a plan on a different camera
+      security:
+        - cookieAuth: []
+    delete:
+      tags:
+        - media
+      operationId: deletePtzPreset
+      summary: Delete an unreferenced preset (operator)
+      responses:
+        "200":
+          description: Deleted
+        "404":
+          description: Preset missing
+        "409":
+          description: Remove plan references first
+      security:
+        - cookieAuth: []
+  /api/sites/{siteId}/ptz/presets/{id}/recall:
+    parameters:
+      - $ref: "#/components/parameters/siteId"
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags:
+        - media
+      operationId: recallPtzPreset
+      summary: Execute one absolute preset and create a record (operator)
+      description: Requires declared absolute capability. Returns a run; only adapter done confirms arrival. Offline
+        robots produce a failed run with the rejection reason.
+      responses:
+        "200":
+          description: Run created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  run:
+                    $ref: "#/components/schemas/PtzRun"
+        "404":
+          description: Preset or channel missing
+        "409":
+          description: Camera busy
+          interlocked or absolute positioning unavailable: null
+      security:
+        - cookieAuth: []
+  /api/sites/{siteId}/ptz/plans:
+    parameters:
+      - $ref: "#/components/parameters/siteId"
+    post:
+      tags:
+        - media
+      operationId: createPtzPlan
+      summary: Create an ordered preset patrol and schedule (operator)
+      description: Maximum 200 plans per site. Enabled interval plans first run after their interval. Once requires
+        a future epoch timestamp. Weekly times and days use UTC. Unsupported cameras can save disabled plans
+        only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PtzPlanInput"
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  plan:
+                    $ref: "#/components/schemas/PtzPlan"
+        "400":
+          description: Invalid stops or cadence
+        "409":
+          description: Absolute positioning unavailable or plan capacity reached
+      security:
+        - cookieAuth: []
+  /api/sites/{siteId}/ptz/plans/{id}:
+    parameters:
+      - $ref: "#/components/parameters/siteId"
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    put:
+      tags:
+        - media
+      operationId: updatePtzPlan
+      summary: Replace plan configuration or toggle its enabled flag (operator)
+      description: Does not change an already running record. Changing cadence or enabling recalculates the next run.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PtzPlanInput"
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  plan:
+                    $ref: "#/components/schemas/PtzPlan"
+        "400":
+          description: Invalid input
+        "404":
+          description: Plan missing
+        "409":
+          description: Absolute positioning unavailable
+      security:
+        - cookieAuth: []
+    delete:
+      tags:
+        - media
+      operationId: deletePtzPlan
+      summary: Delete an inactive plan while retaining execution records (operator)
+      responses:
+        "200":
+          description: Deleted
+        "404":
+          description: Plan missing
+        "409":
+          description: Cancel its active run first
+      security:
+        - cookieAuth: []
+  /api/sites/{siteId}/ptz/plans/{id}/run:
+    parameters:
+      - $ref: "#/components/parameters/siteId"
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags:
+        - media
+      operationId: runPtzPlan
+      summary: Run a plan now without altering its schedule (operator)
+      responses:
+        "200":
+          description: Run created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  run:
+                    $ref: "#/components/schemas/PtzRun"
+        "404":
+          description: Plan missing
+        "409":
+          description: Camera busy
+          interlocked or unsupported: null
+      security:
+        - cookieAuth: []
+  /api/sites/{siteId}/ptz/manual:
+    parameters:
+      - $ref: "#/components/parameters/siteId"
+    post:
+      tags:
+        - media
+      operationId: manualPtzCommand
+      summary: Send the documented reset command to a relative-only camera (operator)
+      description: Vendor acceptance is recorded; it does not prove camera position. GS F2 supports reset (opcode
+        12). Directional and zoom movements are rejected because the documented protocol requires a stop message
+        without specifying its opcode.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - channelId
+                - mode
+              properties:
+                channelId:
+                  type: string
+                mode:
+                  type: string
+                  enum:
+                    - home
+                pan:
+                  type: number
+                  minimum: -90
+                  maximum: 90
+                  default: 0
+                tilt:
+                  type: number
+                  minimum: -90
+                  maximum: 90
+                  default: 0
+                zoom:
+                  type: number
+                  minimum: -9
+                  maximum: 9
+                  default: 0
+      responses:
+        "200":
+          description: Run created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  run:
+                    $ref: "#/components/schemas/PtzRun"
+        "400":
+          description: Invalid mode or values
+        "409":
+          description: Camera busy or adapter lacks directional control
+      security:
+        - cookieAuth: []
+  /api/sites/{siteId}/ptz/runs:
+    parameters:
+      - $ref: "#/components/parameters/siteId"
+    get:
+      tags:
+        - media
+      operationId: queryPtzRuns
+      summary: Query all historical records using time filters and an opaque descending cursor
+      parameters:
+        - name: channelId
+          in: query
+          schema:
+            type: string
+        - name: since
+          in: query
+          description: Inclusive start epoch milliseconds
+          schema:
+            type: integer
+            minimum: 0
+        - name: until
+          in: query
+          description: Inclusive end epoch milliseconds
+          schema:
+            type: integer
+            minimum: 0
+        - name: before
+          in: query
+          description: nextCursor from the previous page
+          schema:
+            type: integer
+            minimum: 0
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+      responses:
+        "200":
+          description: Records, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  runs:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PtzRun"
+                  nextCursor:
+                    type: integer
+                    nullable: true
+        "400":
+          description: Invalid cursor or filters
+  /api/sites/{siteId}/ptz/runs/{id}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/siteId"
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags:
+        - media
+      operationId: cancelPtzRun
+      summary: Cancel further stops and retract pending commands (operator)
+      description: Commands already delivered cannot be physically recalled. Delivered control without an arrival
+        receipt keeps the camera interlocked until verified. Completed arrival receipts remain unchanged.
+      responses:
+        "200":
+          description: Current run
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  run:
+                    $ref: "#/components/schemas/PtzRun"
+        "404":
+          description: Run missing
+      security:
+        - cookieAuth: []
+  /api/sites/{siteId}/ptz/runs/{id}/release:
+    parameters:
+      - $ref: "#/components/parameters/siteId"
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags:
+        - media
+      operationId: releasePtzInterlock
+      summary: Record operator verification that an interrupted camera has stopped
+      description: Releases the platform reservation only. Does not send a physical stop command. The operator
+        identity is appended to the run record.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - confirmedStopped
+              properties:
+                confirmedStopped:
+                  type: boolean
+                  enum:
+                    - true
+      responses:
+        "200":
+          description: Current run
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  run:
+                    $ref: "#/components/schemas/PtzRun"
+        "400":
+          description: Stop verification required
+        "404":
+          description: Run missing
+      security:
+        - cookieAuth: []
+
 components:
   securitySchemes:
     cookieAuth:
@@ -1235,6 +2953,7 @@ components:
         label: { type: string }
         codec: { type: string }
         streamKey: { type: string }
+        ptz: { $ref: "#/components/schemas/PtzCapability" }
         source:
           type: object
           properties:
@@ -1256,6 +2975,11 @@ components:
       additionalProperties: true
       properties:
         type: { type: string, enum: [goto, dock, pause, resume, abort, announce, ptz] }
+        mode: { type: string, enum: [absolute, relative, home], description: "PTZ only; explicit capability and range validation apply" }
+        channelId: { type: string, description: "PTZ channel id for this robot" }
+        pan: { type: number, description: "Absolute mode degrees, positive right" }
+        tilt: { type: number, description: "Absolute mode degrees, positive up" }
+        zoom: { type: number, description: "Absolute mode optical magnification, 1 = wide" }
     MetricDef:
       type: object
       properties:
@@ -1379,3 +3103,641 @@ components:
         createdAt: { type: integer }
         updatedAt: { type: integer }
         runtime: { $ref: "#/components/schemas/ConnectorRuntime" }
+
+    RecordingPolicy:
+      type: object
+      properties:
+        channelId:
+          type: string
+        enabled:
+          type: boolean
+        retentionDays:
+          type: integer
+          minimum: 1
+          maximum: 30
+        recording:
+          type: boolean
+        error:
+          type: string
+          nullable: true
+          description: Sanitized failure description; never includes source credentials
+    Recording:
+      type: object
+      properties:
+        id:
+          type: string
+        channelId:
+          type: string
+        label:
+          type: string
+        startedAt:
+          type: integer
+        endedAt:
+          type: integer
+        bytes:
+          type: integer
+        url:
+          type: string
+          description: PUBLIC_BASE-prefixed protected video route
+    InspectionAssetInput:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          maxLength: 240
+        kind:
+          type: string
+          maxLength: 240
+        location:
+          type: string
+          maxLength: 240
+        waypointId:
+          type: string
+          maxLength: 240
+        manufacturer:
+          type: string
+          maxLength: 240
+        model:
+          type: string
+          maxLength: 240
+        serial:
+          type: string
+          maxLength: 240
+        notes:
+          type: string
+          maxLength: 8000
+    InspectionAsset:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 240
+        kind:
+          type: string
+          maxLength: 240
+        location:
+          type: string
+          maxLength: 240
+        waypointId:
+          type: string
+          maxLength: 240
+        manufacturer:
+          type: string
+          maxLength: 240
+        model:
+          type: string
+          maxLength: 240
+        serial:
+          type: string
+          maxLength: 240
+        notes:
+          type: string
+          maxLength: 8000
+        id:
+          type: string
+        createdAt:
+          type: integer
+          format: int64
+        updatedAt:
+          type: integer
+          format: int64
+    InspectionTagInput:
+      type: object
+      additionalProperties: false
+      properties:
+        assetId:
+          type: string
+          maxLength: 240
+        name:
+          type: string
+          maxLength: 240
+        waypointId:
+          type: string
+          maxLength: 240
+        dataType:
+          type: string
+          enum:
+            - number
+            - string
+            - boolean
+          default: number
+        unit:
+          type: string
+          maxLength: 40
+        address:
+          type: string
+          maxLength: 500
+        source:
+          type: string
+          enum:
+            - manual
+            - adapter
+            - integration
+          default: manual
+        robotId:
+          type: string
+          maxLength: 240
+        metric:
+          type: string
+          maxLength: 240
+    InspectionTag:
+      type: object
+      properties:
+        assetId:
+          type: string
+          maxLength: 240
+        name:
+          type: string
+          maxLength: 240
+        waypointId:
+          type: string
+          maxLength: 240
+        dataType:
+          type: string
+          enum:
+            - number
+            - string
+            - boolean
+          default: number
+        unit:
+          type: string
+          maxLength: 40
+        address:
+          type: string
+          maxLength: 500
+        source:
+          type: string
+          enum:
+            - manual
+            - adapter
+            - integration
+          default: manual
+        robotId:
+          type: string
+          maxLength: 240
+        metric:
+          type: string
+          maxLength: 240
+        id:
+          type: string
+        createdAt:
+          type: integer
+          format: int64
+        updatedAt:
+          type: integer
+          format: int64
+    InspectionDefectInput:
+      type: object
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          maxLength: 240
+        description:
+          type: string
+          maxLength: 8000
+        assetId:
+          type: string
+          maxLength: 240
+        tagId:
+          type: string
+          maxLength: 240
+        eventId:
+          type: string
+          maxLength: 240
+        severity:
+          type: string
+          enum:
+            - minor
+            - major
+          default: minor
+        category:
+          type: string
+          maxLength: 100
+        assignedTo:
+          type: string
+          maxLength: 240
+    InspectionDefect:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 240
+        description:
+          type: string
+          maxLength: 8000
+        assetId:
+          type: string
+          maxLength: 240
+        tagId:
+          type: string
+          maxLength: 240
+        eventId:
+          type: string
+          maxLength: 240
+        severity:
+          type: string
+          enum:
+            - minor
+            - major
+          default: minor
+        category:
+          type: string
+          maxLength: 100
+        assignedTo:
+          type: string
+          maxLength: 240
+        id:
+          type: string
+        createdAt:
+          type: integer
+          format: int64
+        updatedAt:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum:
+            - open
+            - in_progress
+            - closed
+        submittedBy:
+          type: string
+          maxLength: 240
+        resolution:
+          type: string
+          maxLength: 8000
+        history:
+          type: array
+          items:
+            type: object
+            required:
+              - at
+              - by
+              - action
+              - note
+            properties:
+              at:
+                type: integer
+                format: int64
+              by:
+                type: string
+                maxLength: 240
+              action:
+                type: string
+                enum:
+                  - created
+                  - updated
+                  - comment
+                  - status
+              note:
+                type: string
+                maxLength: 8000
+              from:
+                type: string
+                maxLength: 240
+              to:
+                type: string
+                maxLength: 240
+              changes:
+                type: object
+                additionalProperties:
+                  type: object
+                  properties:
+                    from: {}
+                    to: {}
+    MissionCalendarEntry:
+      type: object
+      required:
+        - id
+        - kind
+        - at
+        - name
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum:
+            - planned
+            - actual
+        at:
+          type: integer
+          description: Epoch milliseconds; creation time for actual runs
+        name:
+          type: string
+        scheduleId:
+          type: string
+        runId:
+          type: string
+          description: Present only for actual runs
+        status:
+          type: string
+          enum:
+            - queued
+            - active
+            - done
+            - failed
+            - aborted
+        robot:
+          type: string
+    OrganizationUnitInput:
+      type: object
+      required:
+        - name
+        - kind
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        kind:
+          type: string
+          enum:
+            - factory
+            - department
+            - position
+        parentId:
+          type: string
+        siteId:
+          type: string
+    OrganizationUnit:
+      allOf:
+        - $ref: "#/components/schemas/OrganizationUnitInput"
+        - type: object
+          required:
+            - id
+          properties:
+            id:
+              type: string
+    OrganizationMember:
+      type: object
+      required:
+        - username
+      properties:
+        username:
+          type: string
+        departmentId:
+          type: string
+        positionId:
+          type: string
+    OperationAudit:
+      type: object
+      required:
+        - id
+        - ts
+        - actor
+        - action
+        - target
+        - status
+      properties:
+        id:
+          type: integer
+        ts:
+          type: integer
+        actor:
+          type: string
+        action:
+          type: string
+          description: HTTP method and route template
+        siteId:
+          type: string
+          nullable: true
+        target:
+          type: string
+        status:
+          type: integer
+          description: Actual HTTP response status
+    PtzCapability:
+      type: object
+      required:
+        - absolute
+        - pan
+        - tilt
+        - zoom
+      description: Declared by adapter factsheet streams[].ptz. Absolute means calibrated degrees for pan/tilt and
+        optical zoom multiplier; adapter must send done only after arrival feedback. Relative-only ranges describe
+        vendor control input, not a position.
+      properties:
+        absolute:
+          type: boolean
+        pan:
+          type: array
+          items:
+            type: number
+          minItems: 2
+          maxItems: 2
+        tilt:
+          type: array
+          items:
+            type: number
+          minItems: 2
+          maxItems: 2
+        zoom:
+          type: array
+          items:
+            type: number
+          minItems: 2
+          maxItems: 2
+    PtzPresetInput:
+      type: object
+      required:
+        - name
+        - channelId
+        - pan
+        - tilt
+        - zoom
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        channelId:
+          type: string
+        pan:
+          type: number
+          description: Degrees within adapter range; draft fallback -360..360
+        tilt:
+          type: number
+          description: Degrees within adapter range; draft fallback -180..180
+        zoom:
+          type: number
+          description: Optical multiplier within adapter range; draft fallback 1..100
+    PtzPreset:
+      allOf:
+        - $ref: "#/components/schemas/PtzPresetInput"
+        - type: object
+          properties:
+            id:
+              type: string
+            createdAt:
+              type: integer
+            updatedAt:
+              type: integer
+    PtzCadence:
+      oneOf:
+        - type: object
+          required:
+            - kind
+            - at
+          properties:
+            kind:
+              type: string
+              enum:
+                - once
+            at:
+              type: integer
+              description: Epoch milliseconds
+        - type: object
+          required:
+            - kind
+            - everyMin
+          properties:
+            kind:
+              type: string
+              enum:
+                - interval
+            everyMin:
+              type: number
+              minimum: 1
+              maximum: 525600
+        - type: object
+          required:
+            - kind
+            - days
+            - at
+          properties:
+            kind:
+              type: string
+              enum:
+                - weekly
+            days:
+              type: array
+              minItems: 1
+              uniqueItems: true
+              items:
+                type: integer
+                minimum: 0
+                maximum: 6
+              description: UTC weekdays; Sunday is 0
+            at:
+              type: string
+              pattern: ^([01]\d|2[0-3]):[0-5]\d$
+              description: UTC HH:mm
+    PtzPlanInput:
+      type: object
+      required:
+        - name
+        - channelId
+        - steps
+        - cadence
+        - enabled
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        channelId:
+          type: string
+        enabled:
+          type: boolean
+        cadence:
+          $ref: "#/components/schemas/PtzCadence"
+        steps:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            required:
+              - presetId
+              - dwellS
+            properties:
+              presetId:
+                type: string
+              dwellS:
+                type: number
+                minimum: 1
+                maximum: 3600
+    PtzPlan:
+      allOf:
+        - $ref: "#/components/schemas/PtzPlanInput"
+        - type: object
+          properties:
+            id:
+              type: string
+            nextRunAt:
+              type: integer
+            createdAt:
+              type: integer
+            updatedAt:
+              type: integer
+    PtzRun:
+      type: object
+      properties:
+        id:
+          type: string
+        planId:
+          type: string
+        name:
+          type: string
+        channelId:
+          type: string
+        robotId:
+          type: string
+        by:
+          type: string
+        status:
+          type: string
+          enum:
+            - running
+            - done
+            - failed
+            - cancelled
+        mode:
+          type: string
+          enum:
+            - absolute
+            - relative
+            - home
+        interlocked:
+          type: boolean
+        stepIndex:
+          type: integer
+        startedAt:
+          type: integer
+        endedAt:
+          type: integer
+        note:
+          type: string
+        steps:
+          type: array
+          items:
+            type: object
+            description: Immutable target snapshot with adapter receipt timestamps. No automatic image or algorithm
+              capture is implied.
+            properties:
+              presetId:
+                type: string
+              name:
+                type: string
+              pan:
+                type: number
+              tilt:
+                type: number
+              zoom:
+                type: number
+              dwellS:
+                type: number
+              orderId:
+                type: string
+              sentAt:
+                type: integer
+              arrivedAt:
+                type: integer
+                description: For relative mode this means vendor acceptance only
+              completedAt:
+                type: integer
+              note:
+                type: string

@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { OperationsAdmin } from '../components/OperationsAdmin'
 
 const slug = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32)
@@ -327,6 +328,7 @@ export function Sites() {
       </div>
 
       <UsersPanel />
+      <OperationsAdmin />
 
       {creating && (
         <NewSiteModal

@@ -347,7 +347,7 @@ export interface ExternalRec {
   ip?: string
   protocol?: string
   home?: { x: number; z: number }
-  streams?: { id: string; name: string; kind?: 'camera' | 'thermal' | 'ogi' | 'lidar' | 'gas' | 'acoustic' | 'imu'; url?: string }[]
+  streams?: { id: string; name: string; kind?: 'camera' | 'thermal' | 'ogi' | 'lidar' | 'gas' | 'acoustic' | 'imu'; url?: string; ptz?: import('./fleet.js').PayloadSpec['ptz'] }[]
 }
 
 export function listExternals(siteId: string): ExternalRec[] {

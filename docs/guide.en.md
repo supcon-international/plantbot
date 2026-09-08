@@ -6,18 +6,19 @@ Plantbot is a **multi-site inspection-robot operations platform**: bring robots 
 
 ## 1 · What each module does
 
-Nine entries on the left rail, one job each (INTEG / SITES / DOCS are admin-only):
+Ten entries on the left rail (INTEG / SITES / DOCS are admin-only):
 
 | Module | The question it answers |
 | --- | --- |
 | **OPS** | What does the site look like right now? — robots and alarms on a 3D plant map; tap a waypoint to send a robot there |
-| **LIVE** | What do the cameras see? — robot onboard cameras plus fixed cameras, focus view or wall; admins add, edit and remove fixed cameras right here |
-| **TASKS** | How are the patrols going? — running, queued and historical missions, step by step, with what was captured at each stop |
+| **LIVE** | Live video, recording search/playback/download, camera presets, inspection plans and execution records |
+| **TASKS** | Templates, schedules, week/month calendars, archived results and related events, CSV and printable reports |
 | **FLEET** | How are the robots doing? — battery, speed, current job for every unit, with 3D models; the "connect a robot" wizard lives here too |
 | **MAP** | What does the plant look like? — the full working map: base layer, zones, waypoints and live robot positions |
-| **EVENTS** | What happened? — an alarm board split by severity, every entry with snapshot evidence; acknowledge, resolve or dismiss |
+| **EVENTS** | Alarm review and evidence; equipment defects with severity, category, submitter, assignee, treatment history and resolution |
+| **ASSETS** | Inspected equipment records in cards or tables; equipment–tag–inspection point–data type–unit–address register |
 | **INTEG** (admin) | How do external systems plug in? — managed connectors, API keys, the event vocabulary and map upload, all on one page |
-| **SITES** (admin) | Which plants are on the platform? — create sites, draw them (Site Builder), manage user accounts |
+| **SITES** (admin) | Sites and Site Builder, user accounts, factory/department/position membership, login and operation audit logs |
 | **DOCS** (admin) | How do I use the APIs? — the "API & Integration" reference: both OpenAPI specs rendered live from the running platform (never drifts) + the connect/embed guide |
 
 ## 2 · Why the platform is site-centric
@@ -75,8 +76,15 @@ Want Plantbot **inside your own system**? Pages embed in an iframe (`?embed=1&si
 
 Fields that contain video source addresses (with embedded credentials) never leave through these APIs — playback goes through viewing sessions, evidence frames through the snapshot endpoint.
 
-## 5 · Further reading
+## 5 · Inspection operations
 
+To start recording, an administrator enables each channel in LIVE → Recordings and selects 1–30 days of retention. Earlier footage is not recovered. For camera inspections, save named presets, arrange their order and set dwell times. Execution requires an adapter that supports absolute positioning and confirms arrival; weekly camera schedules use UTC. The current F2 adapter only supports reset because its directional stop protocol is unverified; the current Spot/X30 integrations do not provide camera positioning. After an interrupted move, an operator must verify that the camera has stopped before releasing its reservation.
+
+Administrators maintain equipment and tags. A tag can bind to a metric from a registered robot; device protocols and credentials stay in adapters/connectors. Operators report, assign and treat defects in EVENTS → Defects; closure requires a resolution and reopening preserves the history. Organization membership does not grant access: site roles remain separate. Event types are managed in INTEG → Event types. Camera patrols do not automatically capture images or run AI; external algorithms use the existing event, reading and evidence interfaces.
+
+## 6 · Further reading
+
+- Full feature coverage, boundaries and reference designs (Chinese): [inspection-operations.md](inspection-operations.md)
 - Endpoint details and examples: [integration.md](integration.md)
 - Machine-readable interface definition: [openapi.yaml](openapi.yaml)
 - Deployment and operations: [deploy.md](deploy.md)

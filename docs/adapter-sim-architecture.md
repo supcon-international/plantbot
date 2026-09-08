@@ -107,7 +107,7 @@ TCP 段，坏帧会永久卡死官方接收端；无心跳无鉴权，保活/重
 | orders: goto(dock) | `sendMQComandByUTF8` 一键充电 XML | 平台 dock 命令带 `dock:true` 语义,adapter 换充电指令 |
 | orders: mission | 逐点:每点 **changeControl(1) 前置 + `navigateToPoint`**,同上到点判定 + 手动驻留 | GoRobot 的「路线」是预配置资产(手绘/组合上传),没有 ad-hoc imperative 接口——桥接即真实集成商做法 |
 | orders: announce / pause / resume | `voiceSoundtextSet` / `pauseTask` / `resumeTask` | 直接映射 |
-| commands: ptz | 云台 XML(unCtrlValue 1/3/5/7…,200ms 重发语义留在 sim) | |
+| commands: ptz | 仅官方 XML `unCtrlValue=12` 复位；接受回执不代表位置确认 | 无绝对定位；方向/缩放因缺少可靠停止 opcode 停用，不能依赖 sim 推断真机安全停止 |
 | events | WS `AlarmInfo`(alarmType 码表→平台事件类型) + `AlarmRunInfo`(本体故障) | 315 陌生人→tailgating、1015 聚集→crowding、10012 遗留背包→unattended-bag…;picUrl 无 host,adapter 拼接;**AlarmInfo 无 x/y 时事件位置回落机器人当前位置** |
 | readings | findRobotStatus 温湿度/噪声/PM | amb.temp.c / amb.rh.pct / noise.db |
 | channels | `selectChannelList` + `getVideoUrl`(10 秒时效) | 通道表照搬;demo 流地址注册本地环路,10s 时效机制 sim 完整还原 |
@@ -157,8 +157,8 @@ deviceId/robotSn/deviceCode 并存；激光地图 y 轴原点左下角；WS Robo
    充电指令（GoRobot 一键充电 / Spot 无自动回坞则普通导航）。
 5. **证据快照** → `POST /api/integration/v1/snapshot {stream}` → `{url}`：adapter 引用平台登记的
    帧源出快照（InOrbit 式平台侧抓帧），事件证据不再依赖 adapter 自己会转码。
-6. **ptz 命令止于日志** → 外部机器人 ptz 命令转发为 `ptz` 订单（GoRobot 映射云台 XML，其余厂商回
-   `failed: unsupported`——能力矩阵由 adapter 声明真话）。
+6. **ptz 命令止于日志** → 外部机器人 ptz 命令转发为 `ptz` 订单（GoRobot 当前仅映射复位 XML，其余厂商回
+   `failed: unsupported`——不从模拟器可执行推断真机具备定位或停止能力）。
 7. **gosim 退役 → 纯集成层** → 平台进程里不再内嵌任何厂商行为模型；随后原生种子机队也整体退役
    （World 不再有运动仿真与 A* 规划——路径规划回归机器人端 Nav 栈），机器人只有一种来路：外部 adapter。
 8. **外部机器人的常态活水** → 排程可 `assign: {kind:'robot', robotId}` 钉死外部单元
@@ -173,6 +173,8 @@ deviceId/robotSn/deviceCode 并存；激光地图 y 轴原点左下角；WS Robo
     适配器一律 `failed: unsupported` 回报——操作员看到的是厂商真实能力面。
 
 ## 5. 测试（三机器人全行为）
+
+云台新增 `streams[].ptz` 显式能力和订单 `payload.mode`。平台保存场站 Channel 的预置点/计划，运行时冻结步骤并通过同一订单队列下发；绝对定位的 pan/tilt 是度（右/上为正），zoom 是光学倍率，厂商原生坐标和到位判断由 adapter 转换。`acked` 只表示已领单，绝对运动 `done` 必须来自到位反馈，之后平台才开始停留。每周计划使用 UTC；取消/超时/重启后的不确定位置保持占用，人工验证后解除。平台不自动抓拍或运行算法。资源关系及现场验收边界见 [inspection-operations.md](inspection-operations.md)。
 
 `integrations/test/*.e2e.ts`（node:test + tsx）。每个厂商一个 suite，模式相同：
 

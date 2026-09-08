@@ -111,12 +111,25 @@ curl -X POST $BASE/api/integration/v1/orders/OR-0002/status \
 | kind | payload | 语义 |
 | --- | --- | --- |
 | `goto` | `{x, z, dock?}` | 地图 tap-to-dispatch;`dock: true` 表示这是回桩命令——适配器可换用厂商自己的回充例程(如高新兴一键充电) |
-| `mission` | `{missionId, name, steps[]}` | 操作员显式指派的完整任务;**只有 mission 订单的完结会结算平台侧任务状态** |
+| `mission` | `{missionId, name, steps[]}` | 自动选择或显式指派的完整任务;**只有 mission 订单的完结会结算平台侧任务状态** |
 | `announce` | `{text}` | 语音播报 |
 | `pause` / `resume` / `abort` | `{missionId}` | 操作员对进行中外部任务的干预(missionId 仅作引用) |
-| `ptz` | `{channelId, pan?, tilt?, zoom?}` | 云台意图 |
+| `ptz` | `{channelId, mode?: 'absolute'\|'relative'\|'home', pan?, tilt?, zoom?}` | 云台指令；绝对定位只有真实到位才能回 `done` |
 
-平台不会把 `auto` 任务自动派给外部机器人——只派显式点名的(排程也可用 `assign: {kind:'robot'}` 钉死外部单元,机器人未注册时任务留队,注册后自动派发)。
+`auto` 按能力、电量和距离选择在线、可派遣的外部机器人。显式点名（或排程 `assign: {kind:'robot'}`）的机器人未注册、离线或已有任务在跑时，任务留队，待其可用后派发。
+
+### 云台能力与预置点执行
+
+视频通道不等于可控云台。只有具备可重复的绝对定位和到位反馈时，adapter 才应在 factsheet 的目标流声明：
+
+```json
+{ "id": "ptz", "name": "Inspection camera", "url": "rtsp://camera/stream",
+  "ptz": { "absolute": true, "pan": [-180, 180], "tilt": [-90, 90], "zoom": [1, 30] } }
+```
+
+范围必须来自实际设备能力；上例仅示意。绝对 `pan/tilt` 为校准后的度，右/上为正；`zoom` 为光学倍率，1 表示广角。adapter 负责把厂商原生坐标（例如 ONVIF 归一化坐标）转换到这个契约。`mode:'absolute'` 的三个数值都必填；到位反馈确认后才能回 `done`，厂商“指令已接受”不能作为到位。`relative` 是声明范围内的方向控制，`home` 为复位且不得携带非零方向量；没有可信的停止协议时不要声明方向控制能力。当前 F2 仅开放复位，方向/缩放返回失败；当前 Spot/X30 接入不支持云台定位。
+
+预置点、点位顺序、停留时长和计划归平台会话面 `/api/sites/:siteId/ptz*` 管理，adapter 仍只领 PTZ 订单并回报结果。平台收到绝对定位 `done` 后开始停留，不自动抓拍或调用 AI；每周云台计划使用 UTC。运行冻结步骤，后续编辑不改变在跑任务；一个通道一次只允许一个巡检占用。取消待发单可直接撤回，已送达但位置不确定的取消/超时/重启会保留占用，需操作员确认摄像头停止后解除。一般订单的重启重排队规则不适用于这类已中断的托管 PTZ run。
 
 ## 4. 自定义事件
 
@@ -255,6 +268,10 @@ cd ~/.node-red && npm i <repo>/sdk/node-red-contrib-plantbot   # 重启 Node-RED
 3. **会话面全量 OpenAPI**:除本文的集成面 v1 之外,浏览器/会话面(auth/SSO、场站与用户管理、任务派发、
    事件处置、播放租约、连接器…)完整规范在 [openapi-platform.yaml](openapi-platform.yaml),
    运行中的平台在线提供 `GET /api/openapi.json`(免鉴权)——宿主前端/BFF 代用户驱动平台时按此对接。
+
+## 巡检运营会话面
+
+录像、设备/位号、缺陷、日历归档和组织审计是会话面的运营资源，按 [openapi-platform.yaml](openapi-platform.yaml) 对接。位号数据来源绑定已有机器人与 Metric，南向驱动/凭证仍由 adapter/connector 管理；外部算法继续经注册事件类型、Reading 与证据接口上报，平台没有新增算法运行时。组织目录不授予场站权限。完整入口和能力边界见 [inspection-operations.md](inspection-operations.md)。
 
 ## Agent Skill（给 code agent 的接入向导）
 

@@ -80,11 +80,19 @@ All fields optional — send what you have. `mode ∈ idle|navigating|executing|
 | `mission` | `{missionId, name, steps: [{waypointId, actions?: [{type, durationS?}]}]}` | Full inspection mission. **Only this kind's settlement settles the platform-side mission.** Resolve `waypointId` against `GET /site` waypoints; dwell per action durations (capture/scan happens on-robot) |
 | `announce` | `{text}` | Loudspeaker TTS |
 | `pause` / `resume` / `abort` | `{missionId}` | Operator intervention on a running external mission; `missionId` is a reference — apply to your executor, settle `done`, do not treat as mission completion |
-| `ptz` | `{channelId, pan?, tilt?, zoom?}` | PTZ intent for one of your streams |
+| `ptz` | `{channelId, mode?: 'absolute'\|'relative'\|'home', pan?, tilt?, zoom?}` | PTZ intent; absolute success requires verified arrival, not just acceptance |
 
-Settle: `POST /orders/:id/status` `{status: "done"|"failed", note?}`. Unsupported kind → `failed` with note `unsupported: <kind>`. After a platform restart, acked-but-unsettled orders are re-queued — the same order id may arrive twice.
+Settle: `POST /orders/:id/status` `{status: "done"|"failed", note?}`. Unsupported kind → `failed` with note `unsupported: <kind>`. After a platform restart, ordinary acked-but-unsettled orders are re-queued — the same order id may arrive twice. Interrupted platform-owned PTZ runs are failed instead; their unfinished orders are retracted and an uncertain camera position remains reserved until an operator verifies it.
 
-Dispatch policy: the platform never auto-assigns `auto` missions to external robots — only explicitly pinned ones (operator pick or schedule `assign: {kind:'robot', robotId}`). A pinned mission for an unregistered robot waits in queue and dispatches automatically once the robot registers.
+Dispatch policy: `auto` selects an online, dispatchable external robot by required capability, battery and distance. Explicitly pinned missions wait when that robot is unregistered, offline or already running a mission; they dispatch when it becomes available.
+
+### Camera capability and PTZ execution
+
+Factsheet `streams[].ptz` is optional: `{absolute:boolean, pan:[min,max], tilt:[min,max], zoom:[min,max]}`. Declare `absolute:true` only for repeatable absolute positioning with measured arrival feedback. Absolute pan/tilt are calibrated degrees (positive right/up); zoom is optical magnification (1 = wide). Convert vendor-native coordinates at the adapter boundary and report the actual supported ranges. Do not pass normalized ONVIF coordinates through as if they were degrees.
+
+For `payload.mode:'absolute'`, pan/tilt/zoom are required and `done` means the camera arrived, not that a vendor accepted the request. The platform starts dwell only after this receipt. Relative control is constrained by the declared ranges; `home` must not contain nonzero directional values. A reliable stop protocol is required before advertising directional control. The bundled F2 adapter currently allows reset only; directional movement/zoom and absolute positioning fail. Bundled Spot/X30 adapters do not support PTZ positioning.
+
+Presets, ordered plans and immutable run steps belong to the site's Channel and are managed through the session-facing API. One patrol reserves each camera at a time. Weekly camera schedules use UTC. Cancellation stops further stops; it does not physically recall a delivered command. An operator verifies that an uncertain camera has stopped before releasing the reservation. Patrol dwell does not automatically capture images, collect readings or run AI: use the existing snapshot, event and reading interfaces for actual evidence and algorithm outputs.
 
 ## Events (POST /events)
 

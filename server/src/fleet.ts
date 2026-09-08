@@ -2,6 +2,14 @@
 // has vendor adapters for). Per-site data (yards, waypoints, seeds) lives in
 // sites.ts; runtime state lives in world.ts (one World instance per site).
 
+/** Absolute positioning is opt-in: an adapter must confirm arrival before done. */
+export interface PtzCapability {
+  absolute: boolean
+  pan: [number, number]
+  tilt: [number, number]
+  zoom: [number, number]
+}
+
 export interface PayloadSpec {
   id: string
   name: string
@@ -11,6 +19,7 @@ export interface PayloadSpec {
   /** loop-demo file served from /media — plays natively, zero transcode */
   file?: string
   detail: string
+  ptz?: PtzCapability
 }
 
 export interface RobotSpec {
@@ -131,6 +140,7 @@ export interface Channel {
   source: { kind: 'file'; file: string } | { kind: 'rtsp' | 'hls' | 'webrtc'; url: string }
   /** snapshot / legacy stream key (frames.ts SOURCE table) */
   streamKey?: string
+  ptz?: PtzCapability
 }
 
 /** explicit playback lease — GoRobot's implicit 10-second URL, made a resource.
@@ -206,9 +216,10 @@ export type Command =
   | { type: 'resume' }
   | { type: 'abort' }
   | { type: 'announce'; text: string; priority?: number }
-  | { type: 'ptz'; channelId: string; pan?: number; tilt?: number; zoom?: number }
+  | { type: 'ptz'; channelId: string; mode?: 'absolute' | 'relative' | 'home'; pan?: number; tilt?: number; zoom?: number }
 
 export interface CommandRecord {
+  orderId?: string
   id: string
   robotId: string
   ts: number

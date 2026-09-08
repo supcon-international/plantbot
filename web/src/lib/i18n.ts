@@ -30,6 +30,8 @@ const D: Record<string, [string, string]> = {
   'nav.fleet': ['FLEET', '机队'],
   'nav.map': ['MAP', '地图'],
   'nav.events': ['EVENTS', '事件'],
+  'nav.assets': ['ASSETS', '设备'],
+  'assets.title': ['Equipment & tags', '设备与位号'],
   'shell.link': ['LINK', '在线'],
   'shell.down': ['DOWN', '断开'],
   'shell.view': ['View', '查看'],
@@ -290,7 +292,7 @@ const D: Record<string, [string, string]> = {
   'ops.awaiting': ['No detections yet. Events reported by adapters and rules show up here.', '还没有检测事件。适配器上报和规则触发的事件会出现在这里。'],
 
   // ---------- live ----------
-  'live.videoWall': ['Video wall', '视频墙'],
+  'live.videoWall': ['Video & PTZ', '视频与云台'],
   'live.allFeeds': ['All feeds', '全部通道'],
   'live.channels': ['channels', '路通道'],
   'live.focus': ['Focus', '主视图'],

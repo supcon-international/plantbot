@@ -6,6 +6,7 @@ import {
   Building2,
   Cctv,
   LayoutGrid,
+  Warehouse,
   LogIn,
   LogOut,
   Map as MapIcon,
@@ -34,6 +35,7 @@ const NAV = [
   { to: '/robots', key: 'nav.fleet', icon: Bot },
   { to: '/map', key: 'nav.map', icon: MapIcon },
   { to: '/events', key: 'nav.events', icon: ShieldAlert },
+  { to: '/assets', key: 'nav.assets', icon: Warehouse },
 ]
 const NAV_ADMIN = [
   ...NAV,
@@ -313,6 +315,7 @@ export function Shell() {
     if (path === '/robots') return { title: t('fl.fleet') }
     if (path === '/map') return { title: site?.name ?? t('nav.map') }
     if (path === '/events') return { title: t('ev.center') }
+    if (path === '/assets') return { title: t('assets.title') }
     if (path === '/integrations') return { title: t('integ.title') }
     if (path === '/docs') return { title: t('docs.title') }
     if (path === '/login') return { title: t('login.title') }

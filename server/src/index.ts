@@ -32,6 +32,10 @@ import { ROBOT_CATALOG, METRIC_DEFS, type Command, type Waypoint, type Zone, typ
 import { relayConfigured, relayOnline, startRelayHealth } from './media.js'
 import type { DetectionRule, DetectionEvent, Mission, AdapterOrder } from './world.js'
 import type { MissionTemplate, Schedule, Reading } from './fleet.js'
+import { registerRecordings } from './recordings.js'
+import { registerInspectionAssets } from './inspection-assets.js'
+import { registerOperations } from './operations.js'
+import { registerPtz } from './ptz.js'
 
 const PUB = process.env.PUBLIC_BASE ?? ''
 const DEMO = process.env.PB_DEMO === '1'
@@ -157,6 +161,11 @@ if (!PUBLIC_VIEW) {
 }
 
 // ---------- websocket (per-site rooms) ----------
+
+registerOperations(app, worlds)
+registerInspectionAssets(app, id => worlds.get(id))
+const recordings = registerRecordings(app, worlds)
+const stopPtz = registerPtz(app, worlds)
 
 const wss = new WebSocketServer({ noServer: true })
 
@@ -1404,7 +1413,8 @@ for (const sig of ['SIGINT', 'SIGTERM'] as const) {
   process.on(sig, async () => {
     // give children a SIGTERM + 2 s grace (then SIGKILL) before we exit, so a
     // wedged adapter can't be orphaned by the platform going down
-    await shutdownConnectors()
+    stopPtz()
+    await Promise.all([shutdownConnectors(), recordings.shutdown()])
     process.exit(0)
   })
 }

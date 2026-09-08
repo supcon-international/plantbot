@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
-import { Check, X, Plus, Trash2, Columns3, Table2, SlidersHorizontal } from 'lucide-react'
+import { Check, X, Plus, Trash2, Columns3, Table2, SlidersHorizontal, ClipboardList } from 'lucide-react'
+import { DefectLedger } from '../components/DefectLedger'
+import { useAssetText } from '../lib/inspection-assets'
 import { useApp, api, useCan } from '../lib/store'
 import { useT, useAgo } from '../lib/i18n'
 import { timeShort } from '../lib/format'
@@ -65,12 +67,13 @@ function CardSnapshot({ src }: { src?: string }) {
   return <img src={src} alt="" loading="lazy" onError={img.onError} className="mt-2 h-20 w-full border border-line object-cover" />
 }
 
-function DetailModal({ ev, onClose, onRule }: { ev: DetectionEvent; onClose: () => void; onRule: (id: string) => void }) {
+function DetailModal({ ev, onClose, onRule, onDefect }: { ev: DetectionEvent; onClose: () => void; onRule: (id: string) => void; onDefect: () => void }) {
   const canOp = useCan('operator')
   const setLifecycle = useApp((s) => s.setLifecycle)
   const rules = useApp((s) => s.rules)
   const rule = rules.find((r) => r.id === ev.ruleId)
   const t = useT()
+  const l = useAssetText()
   const ago = useAgo()
   const readingEv = ev.evidence.find((e) => e.kind === 'reading')?.reading
   return (
@@ -160,6 +163,7 @@ function DetailModal({ ev, onClose, onRule }: { ev: DetectionEvent; onClose: () 
             </Button>
           </div>
         )}
+        {canOp && <Button variant="outline" onClick={onDefect}><ClipboardList size={14} />{l('Report equipment defect', '登记设备缺陷')}</Button>}
       </div>
     </Modal>
   )
@@ -459,9 +463,10 @@ function NewRuleModal({ onClose }: { onClose: () => void }) {
 
 // ---------- page ----------
 
-type View = 'board' | 'table' | 'rules'
+type View = 'board' | 'table' | 'rules' | 'defects'
 
 export function Events() {
+  const l = useAssetText()
   const canOp = useCan('operator')
   const canAdmin = useCan('admin')
   const events = useApp((s) => s.events)
@@ -472,7 +477,7 @@ export function Events() {
   const ago = useAgo()
   const [view, setView] = useState<View>(() => {
     const v = new URLSearchParams(window.location.search).get('view')
-    return v === 'rules' || v === 'table' ? v : 'board'
+    return v === 'rules' || v === 'table' || v === 'defects' ? v : 'board'
   })
   // hold only the selected id — the detail derives the live event from the
   // store, so an ack/resolve inside the modal updates its buttons immediately
@@ -486,6 +491,9 @@ export function Events() {
   useEffect(() => {
     const id = params.get('ev')
     if (id) setSelId(id)
+    const v = params.get('view')
+    if (v === 'rules' || v === 'table' || v === 'defects') setView(v)
+    else if (id) setView('board')
   }, [params])
   const closeDetail = () => {
     setSelId(null)
@@ -509,7 +517,7 @@ export function Events() {
   return (
     <div className="mx-auto max-w-[1400px] space-y-3 p-3 md:p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
+        <div className={view === 'defects' ? 'hidden' : ''}>
           <div className="mono text-[14px] text-ink-2">
             {events.length} {t('c.events')} · <span style={{ color: unacked ? 'var(--color-warn)' : 'var(--color-ok)' }}>{unacked} {t('c.open')}</span>
             {' · '}{rules.filter((r) => r.enabled).length}/{rules.length} {t('ev.rulesArmed')}
@@ -557,6 +565,7 @@ export function Events() {
                 ['board', Columns3, t('ev.board')],
                 ['table', Table2, t('ev.table')],
                 ['rules', SlidersHorizontal, t('ev.rules')],
+                ['defects', ClipboardList, l('Defects', '缺陷台账')],
               ] as const
             ).map(([v, Icon, label]) => (
               <ToggleGroupItem key={v} value={v} className="gap-1.5 px-2.5 data-[state=on]:bg-surface-2 data-[state=on]:text-ink">
@@ -569,6 +578,7 @@ export function Events() {
       </div>
 
       {view === 'board' && <Board events={boardShown} onOpen={(e) => setSelId(e.id)} />}
+      {view === 'defects' && <DefectLedger initialEvent={events.find(e => e.id === params.get('fromEvent'))} />}
 
       {view === 'table' && (
         <Panel className="rise overflow-x-auto">
@@ -655,6 +665,7 @@ export function Events() {
         <DetailModal
           ev={sel}
           onClose={closeDetail}
+          onDefect={() => { setSelId(null); setParams({ view: 'defects', fromEvent: sel.id }); setView('defects') }}
           onRule={(id) => {
             closeDetail()
             setHiRule(id)
