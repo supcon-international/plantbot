@@ -259,7 +259,7 @@ export interface AdapterOrder {
     steps?: MissionStep[]
     text?: string
     channelId?: string
-    mode?: 'absolute' | 'relative' | 'home'
+    mode?: 'absolute' | 'relative' | 'home' | 'stop'
     pan?: number
     tilt?: number
     zoom?: number
@@ -273,7 +273,7 @@ export interface AdapterOrder {
 function validPtzCapability(value: PayloadSpec['ptz']): PayloadSpec['ptz'] {
   if (!value || typeof value.absolute !== 'boolean') return undefined
   if (!(['pan', 'tilt', 'zoom'] as const).every((axis) => Array.isArray(value[axis]) && value[axis].length === 2 && value[axis].every(Number.isFinite) && value[axis][0] <= value[axis][1])) return undefined
-  return { absolute: value.absolute, pan: [...value.pan], tilt: [...value.tilt], zoom: [...value.zoom] }
+  return { absolute: value.absolute, ...(value.absolute && value.manual === 'position' ? { manual: 'position' as const } : {}), pan: [...value.pan], tilt: [...value.tilt], zoom: [...value.zoom] }
 }
 
 /** latest adapter-reported state for an external robot */
@@ -315,6 +315,8 @@ export class World {
   commandLog: CommandRecord[] = []
   /** Patrol ownership prevents a manual command moving a camera mid-dwell. */
   ptzLocks = new Map<string, string>()
+  /** Includes unconfirmed stops; only adapter confirmation releases control. */
+  controlLocks = new Map<string, string>()
   /** robotId|metric -> ring buffer of recent readings */
   readings = new Map<string, Reading[]>()
   sessions = new Map<string, StreamSession>()
@@ -476,6 +478,7 @@ export class World {
     callsign?: string
     family?: 'quadruped' | 'ugv'
     level: 'state-only' | 'dispatchable'
+    teleop?: RobotSpec['teleop']
     ip?: string
     protocol?: string
     home?: { x: number; z: number }
@@ -516,6 +519,9 @@ export class World {
       home,
       adapter: 'external',
       integrationLevel: input.level,
+      teleop: input.teleop && ['native', 'adapter'].includes(input.teleop.watchdog) &&
+        ['forward', 'lateral', 'turn'].every(k => Number.isFinite((input.teleop as any)[k]) && (input.teleop as any)[k] >= 0 && (input.teleop as any)[k] <= 2)
+        ? { forward: input.teleop.forward, lateral: input.teleop.lateral, turn: input.teleop.turn, watchdog: input.teleop.watchdog, ...(input.teleop.mode === 'direction' ? { mode: 'direction' as const } : {}) } : undefined,
     }
     if (existing) {
       Object.assign(existing, robot, { id: existing.id })
@@ -1238,7 +1244,7 @@ export class World {
   /** tap-to-dispatch: forwarded to the adapter as a goto order */
   teleopGoto(robotId: string, x: number, z: number): boolean {
     const r = this.robots.find((rb) => rb.id === robotId)
-    if (!r || r.integrationLevel !== 'dispatchable') return false
+    if (!r || r.integrationLevel !== 'dispatchable' || this.controlLocks.has(robotId)) return false
     this.enqueueOrder(robotId, 'goto', { x, z })
     return true
   }
@@ -1268,6 +1274,8 @@ export class World {
     const ext = this.externals.get(robotId)
     if (!ext || Date.now() - ext.lastSeen > EXTERNAL_STALE_MS) return done(false, 'robot offline')
     if (r.integrationLevel !== 'dispatchable') return done(false, 'external unit is state-only')
+    if (this.controlLocks.has(robotId) && ['goto', 'dock', 'resume'].includes(cmd.type)) return done(false, 'robot is reserved for manual control')
+    if (cmd.type === 'ptz' && this.controlLocks.has(robotId) && this.controlLocks.get(robotId) !== ptzOwner) return done(false, 'robot is reserved for manual control')
 
     switch (cmd.type) {
       case 'goto': {
@@ -1309,8 +1317,9 @@ export class World {
         if (!ch) return done(false, 'unknown channel')
         const owner = this.ptzLocks.get(ch.id)
         if (owner && owner !== ptzOwner) return done(false, 'camera is reserved by a PTZ inspection')
-        if (cmd.mode !== undefined && !['absolute', 'relative', 'home'].includes(cmd.mode)) return done(false, 'invalid PTZ mode')
+        if (cmd.mode !== undefined && !['absolute', 'relative', 'home', 'stop'].includes(cmd.mode)) return done(false, 'invalid PTZ mode')
         if (cmd.mode !== undefined && !ch.ptz) return done(false, 'adapter does not declare PTZ control')
+        if (cmd.mode === 'stop' && !ch.ptz?.manual) return done(false, 'adapter does not support verified PTZ stop')
         if (cmd.mode === 'absolute') {
           if (!ch.ptz?.absolute) return done(false, 'adapter does not support absolute PTZ positioning')
           for (const axis of ['pan', 'tilt', 'zoom'] as const) {
@@ -1439,6 +1448,7 @@ export class World {
       const tmpl = m.templateId ? this.templates.find((t) => t.id === m.templateId) : undefined
       const candidates = this.robots.filter((r) => {
         if (r.integrationLevel !== 'dispatchable') return false
+        if (this.controlLocks.has(r.id)) return false
         // pinned requests dispatch even while the robot is briefly offline (the
         // order queue is the buffer) and ignore battery — but never double-book
         // a unit that already carries an active mission, or two schedules pinned

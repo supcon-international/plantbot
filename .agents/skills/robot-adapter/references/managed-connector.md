@@ -61,3 +61,11 @@ Supervisor behavior you get for free: spawn via workspace `tsx` with **only a wh
 3. `pnpm dev`, then in the UI: INTEG → NEW CONNECTOR shows the vendor card with your form fields → create against your sim's address → status RUNNING with pid → FLEET card (`EXTERNAL`, right model, twin/silhouette) → LIVE channel if streams configured → MAP marker → dispatch goto + mission → LOGS dialog shows the southbound session → STOP/START/RESTART/delete behave.
 4. Kill the sim process → connector logs show reconnect attempts, robot goes OFFLINE, comes back when the sim returns.
 5. Definition-of-done checklist in [SKILL.md](../SKILL.md).
+
+## Manual control extension
+
+`teleop:{forward,lateral,turn,watchdog:"native"|"adapter",mode?:"direction"}` declares driving. SI limits are m/s and rad/s; directional mode uses normalized direction codes. `streams[].ptz.manual:"position"` declares bounded position adjustment and a verified `mode:"stop"` PTZ order. Do not declare either capability from simulator assumptions alone.
+
+GET `/robots/:serial/control` returns `{frame:null}` or `{id,sequence,target,channelId?,status,axes,remainingMs}`; `channelId` is the adapter stream key. POST the same path with `{id,sequence,status:"ready"|"applied"|"stopped"|"failed",position?:{pan,tilt,zoom},note?}`. Poll at about 80 ms and deduct HTTP round-trip time from TTL. Input expires after 400 ms; SDK bounds it to 350 ms with an independent 40 ms watchdog. Never replay sequences, queue these inputs or renew an old command's deadline. A stop receipt must confirm physical stopping, and match the latest sequence. Failure and platform restart retain the lock until confirmation.
+
+The TypeScript and Node-RED client export `pumpControl(pb, serial, {start,apply,stop,position?})`. Start confirms stationary state; apply respects remaining TTL; stop resolves only after vendor confirmation. Spot supports native expiring velocity and discovered optional Spot CAM mechanical positioning. F2 direction controls have an adapter watchdog only; reset remains its only verified PTZ operation. X30 robotserver does not expose these interfaces. Managed Spot connector optional fields: `camStreamId`, `camStreamUrl` (RTSP), `camPtz` (default mech). Port 443 uses the official CA and Directory authority routing.

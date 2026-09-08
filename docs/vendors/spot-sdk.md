@@ -591,3 +591,7 @@ data_chunk/...`）。完整清单、加载方式与许可见
 **权威出处索引**：proto 字段 = `integrations/spot/protos/bosdyn/api/*.proto`（spot-sdk master）；运行期常量 =
 `python/bosdyn-client/src/bosdyn/client/{estop,lease,time_sync,auth,channel,robot}.py`；概念 =
 dev.bostondynamics.com（base_services、estop_service、lease_service、get_image example）。
+
+## Manual control implementation (v2.3.1)
+
+SE2Velocity uses `flat_body`, forward/lateral m/s and angular rad/s, with a robot-clock `end_time` on every refresh. Stand commands plus fresh velocity feedback confirm stop. Spot CAM is discovered via ListPtz; `mech` supports absolute position, not velocity. Small bounded SetPtzPosition steps implement manual adjustment; GetPtzPosition confirms arrival and stop. TLS port 443 uses the official root CA, bootstrap auth/id/api authorities and Directory routing. See [manual-control.md](../manual-control.md).

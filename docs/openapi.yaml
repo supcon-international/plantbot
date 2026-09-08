@@ -48,6 +48,94 @@ tags:
     description: Open read side — operational data for third-party systems
 
 paths:
+  /robots/{serial}/control:
+    parameters:
+      - name: serial
+        in: path
+        required: true
+        schema: &a1
+          type: string
+    get:
+      tags:
+        - robots
+      summary: Poll ephemeral manual control frame
+      operationId: pollManualControl
+      description: Poll about every 80 ms. Subtract the entire HTTP round trip from remainingMs. Never replay or
+        extend a sequence. Stop independently when input expires or the link fails. A null frame also means
+        stop. Frames are withheld while older navigation orders settle.
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  frame:
+                    $ref: "#/components/schemas/ControlFrame"
+                    nullable: true
+        "400": &a4
+          description: Invalid input
+        "401": &a5
+          description: Authentication required
+        "403": &a6
+          description: Site role or control token denied
+        "404": &a7
+          description: Site, robot or session not found
+        "409": &a8
+          description: Conflicting control, stale input or unconfirmed stop
+    post:
+      tags:
+        - robots
+      summary: Confirm control readiness, applied input or physical stop
+      operationId: reportManualControl
+      description: ready requires an initial confirmed stop; stopped requires a measured stop and the current
+        sequence. failed retains the robot lock. A stale receipt cannot release a newer stop request.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - id
+                - sequence
+                - status
+              properties:
+                id: *a1
+                sequence: &a3
+                  type: integer
+                status:
+                  type: string
+                  enum:
+                    - ready
+                    - applied
+                    - stopped
+                    - failed
+                note: *a1
+                position:
+                  type: object
+                  properties:
+                    pan: &a2
+                      type: number
+                    tilt: *a2
+                    zoom: *a2
+                    ts: *a3
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+        "400": *a4
+        "401": *a5
+        "403": *a6
+        "404": *a7
+        "409": *a8
   /site:
     get:
       tags: [site]
@@ -553,6 +641,106 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
 
   schemas:
+    TeleopCapability:
+      type: object
+      required:
+        - forward
+        - lateral
+        - turn
+        - watchdog
+      properties:
+        forward:
+          type: number
+          minimum: 0
+          maximum: 2
+        lateral:
+          type: number
+          minimum: 0
+          maximum: 2
+        turn:
+          type: number
+          minimum: 0
+          maximum: 2
+        watchdog:
+          type: string
+          enum:
+            - native
+            - adapter
+        mode:
+          type: string
+          enum:
+            - direction
+      description: Explicit adapter capability. Physical axes use m/s and rad/s. mode=direction uses normalized
+        directional inputs and vendor speed setting, not SI velocity. Native watchdog means robot-enforced command
+        expiry; adapter watchdog cannot guarantee a stop after adapter failure.
+    ControlSession:
+      type: object
+      properties:
+        id: &a1
+          type: string
+        siteId: *a1
+        robotId: *a1
+        target:
+          type: string
+          enum:
+            - drive
+            - ptz
+        channelId: *a1
+        owner: *a1
+        status:
+          type: string
+          enum:
+            - starting
+            - active
+            - stopping
+            - closed
+            - failed
+        createdAt: &a2
+          type: integer
+        updatedAt: *a2
+        expiresAt: *a2
+        sequence: *a2
+        clientSequence: *a2
+        appliedSequence: *a2
+        note: *a1
+    ControlFrame:
+      type: object
+      required:
+        - id
+        - sequence
+        - target
+        - status
+        - axes
+        - remainingMs
+      properties:
+        id: *a1
+        sequence: *a2
+        target:
+          type: string
+          enum:
+            - drive
+            - ptz
+        channelId:
+          type: string
+          description: Adapter stream key, not platform channel ID
+        status:
+          type: string
+          enum:
+            - starting
+            - active
+            - stopping
+            - failed
+        axes:
+          type: object
+          additionalProperties:
+            type: number
+          description: "drive: forward/lateral/turn; PTZ: pan/tilt/zoom. Omitted axes are zero. Physical drive limits
+            0.5 m/s forward, 0.3 m/s lateral, 0.6 rad/s turn, further limited by factsheet. Directional drive and
+            PTZ inputs are in [-1,1]."
+        remainingMs:
+          type: number
+          minimum: 0
+          maximum: 400
     Error:
       type: object
       properties:
@@ -672,6 +860,7 @@ components:
       type: object
       required: [serial, model, level]
       properties:
+        teleop: { $ref: "#/components/schemas/TeleopCapability" }
         serial: { type: string, example: ACME-0007, description: idempotency key }
         model: { type: string, example: Jueying X30, description: matching a catalog model brings the 3D twin }
         vendor: { type: string }
@@ -733,7 +922,7 @@ components:
               type: array
               items: { $ref: "#/components/schemas/MissionStep" }
             channelId: { type: string, description: "ptz: registered stream id of the target camera" }
-            mode: { type: string, enum: [absolute, relative, home], description: "absolute: calibrated degrees and optical zoom multiplier; done requires actual arrival. Unsupported modes must fail." }
+            mode: { type: string, enum: [absolute, relative, home, stop], description: "absolute: calibrated degrees and optical zoom multiplier; done requires actual arrival. Unsupported modes must fail." }
             pan: { type: number }
             tilt: { type: number }
             zoom: { type: number }
@@ -992,6 +1181,7 @@ components:
         optical zoom multiplier; adapter must send done only after arrival feedback. Relative-only ranges describe
         vendor control input, not a position.
       properties:
+        manual: { type: string, enum: [position], description: "Bounded position adjustment and verified stop supported" }
         absolute:
           type: boolean
         pan:

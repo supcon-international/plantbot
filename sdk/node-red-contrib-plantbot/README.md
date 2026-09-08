@@ -50,3 +50,7 @@ Streams JSON — the platform plays it through its go2rtc relay and keeps the
 credentialed URL admin-only.
 
 Full protocol reference: `docs/integration.md` in the Plantbot repo.
+
+## Manual control (v2.3.1)
+
+Manual robot input uses an exclusive expiring control session, separate from durable orders. Spot supports native velocity and discovered Spot CAM position control; F2 supports vendor directional driving and camera reset; X30 robotserver does not expose these manual interfaces. See [../../docs/manual-control.md](../../docs/manual-control.md) for the operator workflow, `teleop`/`ptz.manual` factsheet fields, `pumpControl`, stop confirmation and deployment limits.

@@ -54,3 +54,7 @@ For the three built-in vendors on a platform that can reach the robot's network.
 - If absolute PTZ is declared, verify one preset and a two-stop plan against real camera arrival feedback, including dwell, timeout and cancellation. F2 currently exposes reset only; do not infer directional stopping or absolute positioning from simulator behavior. A platform patrol does not automatically capture evidence or invoke AI.
 - Self-check via the open read API with the same key: `GET /fleet` shows your serial with fresh telemetry; `GET /events`, `GET /robots/:serial/readings` round-trip what you posted.
 - New built-in vendors additionally: both typechecks (`cd server && node_modules/.bin/tsc --noEmit`, `cd integrations && node_modules/.bin/tsc --noEmit`) pass, `cd integrations && pnpm test` is green, and the docs-sync list in managed-connector.md is done.
+
+## Ephemeral manual control
+
+Declare `teleop:{forward,lateral,turn,watchdog}` only with verified vendor driving/stop semantics. SI axes use m/s and rad/s; `mode:"direction"` uses vendor direction codes instead. Declare `streams[].ptz.manual:"position"` only with bounded positioning and measured stop. Use the SDK `pumpControl` helper with confirmed `start/apply/stop`, never the order queue. Inputs expire, sequences cannot replay, and platform restarts retain stop locks. Spot CAM `mech` uses position nudges, not its unsupported velocity RPC. A F2 adapter watchdog is not a device-native stop guarantee. See the project `docs/manual-control.md` and both OpenAPI specifications.

@@ -36,6 +36,7 @@ import { registerRecordings } from './recordings.js'
 import { registerInspectionAssets } from './inspection-assets.js'
 import { registerOperations } from './operations.js'
 import { registerPtz } from './ptz.js'
+import { registerControl } from './control.js'
 
 const PUB = process.env.PUBLIC_BASE ?? ''
 const DEMO = process.env.PB_DEMO === '1'
@@ -166,6 +167,7 @@ registerOperations(app, worlds)
 registerInspectionAssets(app, id => worlds.get(id))
 const recordings = registerRecordings(app, worlds)
 const stopPtz = registerPtz(app, worlds)
+const stopControl = registerControl(app, worlds, integrationSite)
 
 const wss = new WebSocketServer({ noServer: true })
 
@@ -1209,6 +1211,7 @@ app.post(`${I}/robots`, async (req: FastifyRequest<{ Body: any }>, reply) => {
     callsign: b.callsign,
     family: b.family,
     level: b.level,
+    teleop: b.teleop,
     ip: b.ip,
     protocol: b.protocol,
     home: b.home,
@@ -1414,6 +1417,7 @@ for (const sig of ['SIGINT', 'SIGTERM'] as const) {
     // give children a SIGTERM + 2 s grace (then SIGKILL) before we exit, so a
     // wedged adapter can't be orphaned by the platform going down
     stopPtz()
+    stopControl()
     await Promise.all([shutdownConnectors(), recordings.shutdown()])
     process.exit(0)
   })

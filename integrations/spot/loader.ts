@@ -22,6 +22,7 @@ const SERVICE_PROTOS = [
   'bosdyn/api/robot_command_service.proto',
   'bosdyn/api/image_service.proto',
   'bosdyn/api/graph_nav/graph_nav_service.proto',
+  'bosdyn/api/spot_cam/service.proto',
 ]
 
 const def = loadSync(SERVICE_PROTOS, {
@@ -35,6 +36,7 @@ const def = loadSync(SERVICE_PROTOS, {
 export const pkg = grpc.loadPackageDefinition(def) as any
 export const api = pkg.bosdyn.api
 export const graphNav = pkg.bosdyn.api.graph_nav
+export const spotCam = pkg.bosdyn.api.spot_cam
 
 export const ts = (ms = Date.now()) => ({ seconds: String(Math.floor(ms / 1000)), nanos: (ms % 1000) * 1e6 })
 export const tsToMs = (t?: { seconds?: string | number; nanos?: number }) =>

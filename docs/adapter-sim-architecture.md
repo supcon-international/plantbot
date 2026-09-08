@@ -192,3 +192,7 @@ deviceId/robotSn/deviceCode 并存；激光地图 y 轴原点左下角；WS Robo
 环境变量：`PLANTBOT_BASE=http://127.0.0.1:8787`、`PLANTBOT_KEY=<PB_SEED_KEYS 对应值>`、
 `STREAM_BASE=/robots/media`（子路径部署时流地址前缀）、多实例的 `SPOT_PROFILE`/`DR_PROFILE`。
 详见 [deploy.md](deploy.md)。
+
+## Manual control (v2.3.1)
+
+Manual robot input uses an exclusive expiring control session, separate from durable orders. Spot supports native velocity and discovered Spot CAM position control; F2 supports vendor directional driving and camera reset; X30 robotserver does not expose these manual interfaces. See [manual-control.md](manual-control.md) for the operator workflow, `teleop`/`ptz.manual` factsheet fields, `pumpControl`, stop confirmation and deployment limits.

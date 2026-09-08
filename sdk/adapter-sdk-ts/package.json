@@ -23,7 +23,7 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc -p tsconfig.build.json",
     "prepare": "pnpm run build",
-    "test": "node --test test/*.test.ts"
+    "test": "pnpm run build && node --test test/*.test.ts"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",

@@ -78,7 +78,7 @@ Plantbot 反过来：**厂区的知识属于厂区，不属于某台机器人**�
 
 ## 五、巡检运营扩展
 
-首次使用录像，在 LIVE → Recordings 由管理员按通道开启并设定 1–30 天保留；启用前的视频不会补录。云台先保存命名预置点，再排顺序和停留时长；只有支持绝对定位且回报到位的 adapter 才能执行。每周云台计划使用 UTC。现有 F2 仅支持复位，方向控制缺少可靠停止协议；Spot/X30 当前接入不提供云台定位。位置不确定时，操作员先确认摄像头停止，再解除占用。
+首次使用录像，在 LIVE → Recordings 由管理员按通道开启并设定 1–30 天保留；启用前的视频不会补录。云台先保存命名预置点，再排顺序和停留时长；只有支持绝对定位且回报到位的 adapter 才能执行。每周云台计划使用 UTC。现有 F2 仅支持复位，方向控制缺少可靠停止协议；Spot CAM 支持回读姿态、预置点与巡检；X30 robotserver 不提供云台定位。位置不确定时，操作员先确认摄像头停止，再解除占用。
 
 设备与位号由管理员维护；位号可绑定已接入机器人的指标，协议和凭证仍在 adapter/connector 中。操作员在 EVENTS → Defects 提交、指派和处理缺陷，关闭必须填写结果，重开保留原处置历史。组织目录只记录归属，场站角色仍单独管理；事件词表在 INTEG → Event types。云台巡视不会自动抓拍或调用 AI，外部算法继续通过事件/读数/证据接口接入。
 
@@ -90,3 +90,5 @@ Plantbot 反过来：**厂区的知识属于厂区，不属于某台机器人**�
 - 部署与运维：[deploy.md](deploy.md)
 - 三层集成架构（simulator ⇄ adapter ⇄ platform）：[adapter-sim-architecture.md](adapter-sim-architecture.md)
 - 用 code agent（Claude Code 等）接机器人：仓库自带 Agent Skill [.claude/skills/robot-adapter](../.claude/skills/robot-adapter/SKILL.md)，把文件夹交给 agent 即可
+
+机器人遥操作入口为 FLEET → 机器人 → 遥操作，云台手动控制在 LIVE → 云台巡检。控制权、断线停止、能力范围及接入契约见 [manual-control.md](manual-control.md)。

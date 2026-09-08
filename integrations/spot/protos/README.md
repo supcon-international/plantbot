@@ -66,3 +66,7 @@ const bosdyn = (grpc.loadPackageDefinition(pkgDef) as any).bosdyn.api
 这些文件受 **Boston Dynamics Software Development Kit License（20191101-BDSDK-SL）** 约束，
 不是本项目的开源许可覆盖范围。完整许可文本见同目录 [`LICENSE`](./LICENSE)（同样从 spot-sdk 仓库根
 下载）。每个 `.proto` 文件头部亦带有该许可声明。仅作接口对接用途保留，随上游更新请重新下载。
+
+## Spot CAM extension (2026-09-08)
+
+Added the unmodified `bosdyn/api/spot_cam/service.proto` import closure from official Spot SDK commit `8577b41dffe0eb7b2913c6599794c5c135c8574e`. Mechanical PTZ uses List/Get/Set position with measured arrival; velocity is unsupported. The adapter additionally vendors the official `python/bosdyn-client/src/bosdyn/client/resources/robot.pem` root certificate at that commit for TLS. The original SDK license applies.

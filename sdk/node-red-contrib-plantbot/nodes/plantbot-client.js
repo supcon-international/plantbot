@@ -12,7 +12,7 @@ class PlantbotClient {
     this.key = key || ''
   }
 
-  async call(method, path, body) {
+  async call(method, path, body, timeoutMs = 8000) {
     try {
       const res = await fetch(`${this.base}/api/integration/v1${path}`, {
         method,
@@ -21,7 +21,7 @@ class PlantbotClient {
           ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
         },
         body: body !== undefined ? JSON.stringify(body) : undefined,
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(timeoutMs),
       })
       if (!res.ok) return { ok: false, status: res.status, error: (await res.text().catch(() => '')).slice(0, 200) }
       return { ok: true, data: await res.json() }
@@ -30,6 +30,14 @@ class PlantbotClient {
     }
   }
 
+  async control(serial) {
+    const r = await this.call('GET', `/robots/${encodeURIComponent(serial)}/control`, undefined, 350)
+    return r.ok ? r.data : null
+  }
+  async controlStatus(serial, receipt) {
+    const r = await this.call('POST', `/robots/${encodeURIComponent(serial)}/control`, receipt, 350)
+    return r.ok ? r.data : null
+  }
   site() {
     return this.call('GET', '/site')
   }
@@ -56,4 +64,4 @@ class PlantbotClient {
   }
 }
 
-module.exports = { PlantbotClient }
+module.exports = { PlantbotClient, pumpControl: require('./plantbot-control.js').pumpControl }

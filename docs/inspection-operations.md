@@ -41,3 +41,7 @@
 `WEB_BASE=/robots/ pnpm build` 后运行 `node scripts/test-inspection-ui.mjs`：启动隔离 API 和 `/robots` 反代，用系统 Chrome 实际登录、操作表单、打开弹窗、读返回数据、播放与下载视频、创建并执行云台计划、处理缺陷、导出报告，检查中英文、窄屏、只读角色、控制台错误和失败请求。截图及机器可读结果在 `demos/inspection-qa/`（不入 Git）。
 
 本次验证：33 项集成层单测、35 项完整集成测试、6 项 SDK 测试全部通过；新增 F2 复位/方向拒绝/绝对能力拒绝专项 1 项通过。生产构建及 server/web/integrations 类型检查通过。浏览器 11 组流程通过，含旧站慢请求不覆盖新站、明暗主题、iframe 嵌入、中英文及 390px 窄屏；未出现控制台错误或失败的 API/资源请求。已检查生成截图；未进行真机验收或部署新 AI 算法。
+
+## Manual control (v2.3.1)
+
+Manual robot input uses an exclusive expiring control session, separate from durable orders. Spot supports native velocity and discovered Spot CAM position control; F2 supports vendor directional driving and camera reset; X30 robotserver does not expose these manual interfaces. See [manual-control.md](manual-control.md) for the operator workflow, `teleop`/`ptz.manual` factsheet fields, `pumpControl`, stop confirmation and deployment limits.

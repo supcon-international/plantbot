@@ -11,6 +11,8 @@
 //   OFFLINE on the platform; the response carries `ordersPending` so you know
 //   when to pull.
 // - Node ≥ 18 (global fetch). Zero dependencies.
+import type { ControlFrame } from './control.js'
+export { pumpControl, type ControlFrame, type ManualController } from './control.js'
 
 export interface Logger {
   info: (msg: string) => void
@@ -35,7 +37,7 @@ export interface PlantbotOrder {
     steps?: MissionStep[]
     channelId?: string
     /** absolute requires a declared stream PTZ capability and arrival feedback. */
-    mode?: 'absolute' | 'relative' | 'home'
+    mode?: 'absolute' | 'relative' | 'home' | 'stop'
     pan?: number
     tilt?: number
     zoom?: number
@@ -51,12 +53,13 @@ export interface Factsheet {
   callsign?: string
   family?: 'quadruped' | 'ugv'
   level: 'state-only' | 'dispatchable'
+  teleop?: { forward: number; lateral: number; turn: number; watchdog: 'native' | 'adapter'; mode?: 'direction' }
   ip?: string
   protocol?: string
   home?: { x: number; z: number }
   /** camera/thermal channels this robot publishes — url may be an
    *  adapter-hosted file/HLS URL or the robot's native rtsp:// source */
-  streams?: { id: string; name: string; kind?: string; url?: string; ptz?: { absolute: boolean; pan: [number, number]; tilt: [number, number]; zoom: [number, number] } }[]
+  streams?: { id: string; name: string; kind?: string; url?: string; ptz?: { absolute: boolean; manual?: 'position'; pan: [number, number]; tilt: [number, number]; zoom: [number, number] } }[]
 }
 
 export interface StateReport {
@@ -113,7 +116,7 @@ export class PlantbotClient {
     this.log = opts.log ?? consoleLog
   }
 
-  private async call<T>(method: string, path: string, body?: unknown): Promise<T | null> {
+  private async call<T>(method: string, path: string, body?: unknown, timeoutMs = 8000): Promise<T | null> {
     try {
       const res = await fetch(`${this.base}/api/integration/v1${path}`, {
         method,
@@ -122,7 +125,7 @@ export class PlantbotClient {
           ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
         },
         body: body !== undefined ? JSON.stringify(body) : undefined,
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(timeoutMs),
       })
       if (!res.ok) {
         const text = await res.text().catch(() => '')
@@ -171,6 +174,14 @@ export class PlantbotClient {
    *  ordersPending so adapters know when to pull. */
   state(serial: string, s: StateReport): Promise<{ ok: boolean; ordersPending: number } | null> {
     return this.call('POST', `/robots/${encodeURIComponent(serial)}/state`, s)
+  }
+
+  control(serial: string): Promise<{ frame: ControlFrame | null } | null> {
+    return this.call('GET', `/robots/${encodeURIComponent(serial)}/control`, undefined, 350)
+  }
+
+  controlStatus(serial: string, receipt: { id: string; sequence: number; status: 'ready' | 'applied' | 'stopped' | 'failed'; note?: string; position?: { pan: number; tilt: number; zoom: number } }): Promise<unknown | null> {
+    return this.call('POST', `/robots/${encodeURIComponent(serial)}/control`, receipt, 350)
   }
 
   async pullOrders(serial: string): Promise<PlantbotOrder[]> {

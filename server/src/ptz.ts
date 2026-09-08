@@ -52,6 +52,7 @@ export interface PtzRun {
   by: string
   status: 'running' | 'done' | 'failed' | 'cancelled'
   mode: 'absolute' | 'relative' | 'home'
+  stopOrderId?: string
   interlocked?: boolean
   steps: PtzStep[]
   stepIndex: number
@@ -354,7 +355,7 @@ export class PtzService {
         w,
         run,
         'cancelled',
-        'Further stops cancelled; a command already delivered to the camera cannot be physically recalled',
+        'Inspection cancelled; waiting for camera stop confirmation',
       )
     return run
   }
@@ -367,7 +368,13 @@ export class PtzService {
     run.endedAt = this.now()
     run.note = note
     if (!run.interlocked && w.ptzLocks.get(run.channelId) === run.id) w.ptzLocks.delete(run.channelId)
-    if (run.interlocked) w.ptzLocks.set(run.channelId, run.id)
+    if (run.interlocked) {
+      w.ptzLocks.set(run.channelId, run.id)
+      if (!run.stopOrderId && w.channels(run.robotId).find(c => c.id === run.channelId)?.ptz?.manual) {
+        const command = w.command(run.robotId, { type: 'ptz', channelId: run.channelId, mode: 'stop' }, run.by, run.id)
+        if (command.accepted) run.stopOrderId = command.orderId
+      }
+    }
     put('ptz_runs', w.id, run)
   }
   private order(w: World, id: string): AdapterOrder | undefined {
@@ -434,6 +441,14 @@ export class PtzService {
   }
   tick() {
     for (const w of this.worlds.values()) {
+      for (const run of list<PtzRun>('ptz_runs', w.id, "AND json_extract(data,'$.interlocked')=1")) {
+        if (run.stopOrderId && this.order(w, run.stopOrderId)?.state === 'done') {
+          run.interlocked = false
+          run.note = 'Camera stop confirmed by adapter'
+          if (w.ptzLocks.get(run.channelId) === run.id) w.ptzLocks.delete(run.channelId)
+          put('ptz_runs', w.id, run)
+        }
+      }
       for (const run of list<PtzRun>('ptz_runs', w.id, "AND json_extract(data,'$.status')='running'"))
         inTx(() => this.advance(w, run))
       for (const plan of list<PtzPlan>('ptz_plans', w.id))

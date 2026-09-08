@@ -2,13 +2,15 @@ import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { ArrowLeft, ArrowUpRight, Anchor, Megaphone, Pause, Play, ShieldCheck } from 'lucide-react'
 import { useApp, useReadings, useHistory, api, useCan } from '../lib/store'
-import { useT } from '../lib/i18n'
+import { useT, useLang } from '../lib/i18n'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Panel, PanelHead, Stat, Spark, BatteryBar, ModeChip } from '../components/ui'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Toggle } from '@/components/ui/toggle'
 const RobotViewer = lazy(() => import('../three/RobotViewer').then((m) => ({ default: m.RobotViewer })))
 import { KIND_ICON, TwinPlaceholder } from './Robots'
+import { ManualControl } from '../components/ManualControl'
 import type { CommandRecord, Reading } from '../lib/types'
 
 /** live payload-readings strip: metric picker + sparkline over the stable envelope */
@@ -179,6 +181,7 @@ function JointRow({ name, c }: { name: string; c: number }) {
 }
 
 export function RobotDetail() {
+  const zh = useLang(s => s.lang) === 'zh'
   const canOp = useCan('operator')
   const { id } = useParams()
   const robot = useApp((s) => s.robots.find((r) => r.id === id))
@@ -243,6 +246,9 @@ export function RobotDetail() {
         </Link>
       </div>
 
+      <Tabs defaultValue="overview">
+        <TabsList><TabsTrigger value="overview">{zh ? '概览' : 'Overview'}</TabsTrigger><TabsTrigger value="control">{zh ? '遥操作' : 'Teleoperation'}</TabsTrigger></TabsList>
+        <TabsContent value="overview">
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
         {/* 3D viewer */}
         <Panel className="relative h-[44vh] min-h-[300px] overflow-hidden lg:col-span-7 lg:h-[calc(100vh-190px)] lg:max-h-[720px]">
@@ -408,6 +414,9 @@ export function RobotDetail() {
           </div>
         </div>
       </div>
+        </TabsContent>
+        <TabsContent value="control"><ManualControl robotId={robot.id} /></TabsContent>
+      </Tabs>
     </div>
   )
 }

@@ -5,6 +5,8 @@
 /** Absolute positioning is opt-in: an adapter must confirm arrival before done. */
 export interface PtzCapability {
   absolute: boolean
+  /** Bounded position increments with measured feedback, not continuous motion. */
+  manual?: 'position'
   pan: [number, number]
   tilt: [number, number]
   zoom: [number, number]
@@ -45,6 +47,7 @@ export interface RobotSpec {
   adapter?: 'sim' | 'external'
   /** external units: Open-RMF-style mixed control levels */
   integrationLevel?: 'state-only' | 'dispatchable'
+  teleop?: { forward: number; lateral: number; turn: number; watchdog: 'native' | 'adapter'; mode?: 'direction' }
 }
 
 export interface SiteCamera {
@@ -216,7 +219,7 @@ export type Command =
   | { type: 'resume' }
   | { type: 'abort' }
   | { type: 'announce'; text: string; priority?: number }
-  | { type: 'ptz'; channelId: string; mode?: 'absolute' | 'relative' | 'home'; pan?: number; tilt?: number; zoom?: number }
+  | { type: 'ptz'; channelId: string; mode?: 'absolute' | 'relative' | 'home' | 'stop'; pan?: number; tilt?: number; zoom?: number }
 
 export interface CommandRecord {
   orderId?: string

@@ -10,7 +10,7 @@
 import WebSocket from 'ws'
 import { createHash } from 'node:crypto'
 import { makeLog } from '../../shared/log.js'
-import { PlantbotClient, type PlantbotOrder } from '../../shared/plantbot.js'
+import { PlantbotClient, pumpControl, type ControlFrame, type PlantbotOrder } from '../../shared/plantbot.js'
 import { waitForSite, streamsToFactsheet, reportFault, pumpOrders, runWaypointMission, customProfileFromEnv, makeBackoff, type MissionRun } from '../../shared/bridge.js'
 
 const log = makeLog('gosuncn-adp')
@@ -56,6 +56,7 @@ interface Unit {
    *  preempt hook and the operator `abort` set its `aborted`; navAndWait watches
    *  it. One robot body, one motion at a time (enforced by the SDK pump). */
   active?: { aborted: boolean }
+  manual?: boolean
 }
 
 const CUSTOM = customProfileFromEnv()
@@ -137,7 +138,7 @@ async function login(): Promise<boolean> {
 }
 
 /** .action RPC：参数一律放 query（含 POST——厂商约定），token 失效自动重登重试一次 */
-async function action<T = any>(path: string, params: Record<string, string | number | undefined> = {}, method: 'GET' | 'POST' = 'GET', retry = true): Promise<T | null> {
+async function action<T = any>(path: string, params: Record<string, string | number | undefined> = {}, method: 'GET' | 'POST' = 'GET', retry = true, timeoutMs = 6000): Promise<T | null> {
   const qs = Object.entries(params)
     .filter(([, v]) => v !== undefined && v !== '')
     .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
@@ -146,7 +147,7 @@ async function action<T = any>(path: string, params: Record<string, string | num
     const res = await fetch(`${GOSUNCN_BASE}${path}${qs ? `?${qs}` : ''}`, {
       method,
       headers: { Token: token },
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(timeoutMs),
     })
     const j: any = await res.json()
     if (j?.ret === -1 && /token/i.test(String(j.msg ?? '')) && retry) {
@@ -160,6 +161,38 @@ async function action<T = any>(path: string, params: Record<string, string | num
 }
 
 // ---------- 任务执行器（平台 mission 订单 → navigateToPoint 逐点巡查） ----------
+
+function manualController(u: Unit) {
+  const move = async (value: number) => {
+    const r = await action('/robotservice/qpid/robotMoveControl.action', { deviceId: u.deviceId, action: value, speed: 3 }, 'POST', false, 400)
+    if (!r?.successful) throw new Error(r?.msg || 'F2 motion response unavailable')
+  }
+  const stop = async () => {
+    await move(0)
+    for (let i = 0; i < 8; i++) {
+      const r = await action('/robotservice/device/findRobotStatus.action', { deviceId: u.deviceId }, 'GET', false, 400)
+      if (r?.data?.online && r.data.speed !== null && r.data.speed !== '' && Number.isFinite(Number(r.data.speed)) && Math.abs(Number(r.data.speed)) < 0.02) return
+      await new Promise(r => setTimeout(r, 80))
+    }
+    throw new Error('F2 stop was not confirmed')
+  }
+  return {
+    async start(frame: ControlFrame) {
+      if (frame.target !== 'drive' || u.active) throw new Error('F2 control unavailable while a navigation order is active')
+      const r = await action('/robotservice/qpid/changeControl.action', { deviceId: u.deviceId, carmode: 1 }, 'POST', false, 400)
+      if (r?.ret !== 1) throw new Error(r?.msg || 'F2 manual mode was not confirmed')
+      await stop(); u.manual = true
+    },
+    async apply(frame: ControlFrame) {
+      if (frame.target !== 'drive' || frame.axes.turn) throw new Error('F2 rotation and PTZ velocity are unsupported')
+      const f = Math.sign(frame.axes.forward ?? 0), l = Math.sign(frame.axes.lateral ?? 0)
+      const value = f > 0 ? l > 0 ? 5 : l < 0 ? 9 : 1 : f < 0 ? l > 0 ? 6 : l < 0 ? 10 : 2 : l > 0 ? 4 : l < 0 ? 8 : 0
+      await move(value)
+    },
+    async stop(frame: ControlFrame) { await stop(); if (frame.status !== 'active') u.manual = false },
+  }
+}
+const manualPumps: ReturnType<typeof pumpControl>[] = []
 
 interface Waypoint {
   id: string
@@ -352,10 +385,12 @@ async function main() {
       callsign: u.callsign,
       family: 'ugv',
       level: u.level,
+      teleop: u.level === 'dispatchable' ? { forward: 1, lateral: 1, turn: 0, mode: 'direction', watchdog: 'adapter' } : undefined,
       protocol: 'GRobot cloud API (.action RPC + WS push)',
       home,
       streams: streamsToFactsheet(u.streams, STREAM_BASE).map((stream, index) => ({ ...stream, ...(index === 0 ? { ptz: { absolute: false, pan: [-90, 90] as [number, number], tilt: [-90, 90] as [number, number], zoom: [-9, 9] as [number, number] } } : {}) })),
     })
+    if (u.level === 'dispatchable') manualPumps.push(pumpControl(plantbot, u.serial, manualController(u)))
   }
 
   connectWs()
@@ -377,7 +412,8 @@ async function main() {
       const moving = Number(s.speed) > 0.05
       const charging = s.chargeConnectMode === 1 || s.ifChargeTask === 1
       const mode =
-        charging ? 'charging'
+        u.manual ? 'teleop'
+        : charging ? 'charging'
         : inFlight ? (moving ? 'navigating' : 'executing')
         : s.isPatrolStop === 1 ? 'idle'
         : s.workModel === 1 && s.taskType === 'standBy' ? 'idle'
@@ -496,3 +532,6 @@ function snapshotFor(u: Unit): Promise<string | undefined> {
 }
 
 void main()
+const shutdown = () => { void Promise.allSettled(manualPumps.map(p => p.stop())).finally(() => process.exit(0)) }
+process.once('SIGTERM', shutdown)
+process.once('SIGINT', shutdown)

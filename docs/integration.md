@@ -276,3 +276,7 @@ cd ~/.node-red && npm i <repo>/sdk/node-red-contrib-plantbot   # 重启 Node-RED
 ## Agent Skill（给 code agent 的接入向导）
 
 用 Claude Code 等 code agent 接机器人?仓库自带 Agent Skill [`.claude/skills/robot-adapter/`](../.claude/skills/robot-adapter/SKILL.md)——SKILL.md（模式选择 + 契约不变式 + 完成清单）加三份引用（北向 API 速查 / 外部 adapter 配方 / 内置厂商开发清单）。文件夹自包含,可整体拷进你自己的工程再交给 agent;它会引导写出符合上述契约的 adapter 并逐项核对验证清单。维护约定:改集成 API / SDK / connector 目录时同步更新该 skill。
+
+## Manual control (v2.3.1)
+
+Manual robot input uses an exclusive expiring control session, separate from durable orders. Spot supports native velocity and discovered Spot CAM position control; F2 supports vendor directional driving and camera reset; X30 robotserver does not expose these manual interfaces. See [manual-control.md](manual-control.md) for the operator workflow, `teleop`/`ptz.manual` factsheet fields, `pumpControl`, stop confirmation and deployment limits.

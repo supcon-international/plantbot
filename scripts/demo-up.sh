@@ -6,7 +6,7 @@ compose_file="$repo_root/compose.demo.yaml"
 env_file="${PB_DEMO_ENV_FILE:-$repo_root/.env.demo}"
 sim_dir="${PLANTBOT_SIM_DIR:-$repo_root/../plantbotsimulator}"
 sim_url="${PLANTBOT_SIM_URL:-https://github.com/supcon-international/plantbotsimulator.git}"
-sim_ref="${PLANTBOT_SIM_REF:-dc32eea659b846c250d981b4146002733e6763f2}"
+sim_ref="${PLANTBOT_SIM_REF:-49ba9419ca245f5e060a597bb75bb9d12be9d919}"
 project="${PB_DEMO_PROJECT:-plantbot-demo}"
 prebuilt="${PB_DEMO_PREBUILT:-0}"
 

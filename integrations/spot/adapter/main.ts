@@ -6,9 +6,11 @@
 // lease/estop/timesync 是 adapter 内部细节，不上浮到平台 API。
 
 import grpc from '@grpc/grpc-js'
-import { api, graphNav, ts, estopResponse, quatToYaw } from '../loader.js'
+import { readFileSync } from 'node:fs'
+import { api, graphNav, spotCam, ts, estopResponse, quatToYaw } from '../loader.js'
+import { SpotCamera } from './camera.js'
 import { makeLog } from '../../shared/log.js'
-import { PlantbotClient, type PlantbotOrder } from '../../shared/plantbot.js'
+import { PlantbotClient, pumpControl, type ControlFrame, type PlantbotOrder } from '../../shared/plantbot.js'
 import {
   waitForSite, streamsToFactsheet, reportFault, pumpOrders, runWaypointMission,
   pickProfile, customProfileFromEnv, worldTransformFromEnv, makeBackoff, type VendorProfile, type MissionRun,
@@ -59,27 +61,31 @@ const toSeed = (x: number, z: number) => {
   return { x: q.x, y: -q.z }
 }
 
-const creds = grpc.credentials.createInsecure()
-const mk = (svc: any) => new svc(HOST, creds) as any
-
-const clients = {
-  robotId: mk(api.RobotIdService),
-  auth: mk(api.AuthService),
-  timeSync: mk(api.TimeSyncService),
-  lease: mk(api.LeaseService),
-  estop: mk(api.EstopService),
-  power: mk(api.PowerService),
-  state: mk(api.RobotStateService),
-  command: mk(api.RobotCommandService),
-  image: mk(api.ImageService),
-  graphNav: mk(graphNav.GraphNavService),
-  directory: mk(api.DirectoryService),
+// Port 443 uses the official root CA and Directory authorities. Plaintext is
+// reserved for explicitly configured simulator ports (SPOT_TLS=0 overrides).
+const tls = process.env.SPOT_TLS === '1' || (process.env.SPOT_TLS !== '0' && HOST.endsWith(':443'))
+const creds = tls ? grpc.credentials.createSsl(readFileSync(process.env.SPOT_CA_FILE || new URL('../protos/robot.pem', import.meta.url))) : grpc.credentials.createInsecure()
+const definitions: Record<string, { service: any; name: string; authority?: string }> = {
+  robotId: { service: api.RobotIdService, name: 'robot-id', authority: 'id.spot.robot' },
+  auth: { service: api.AuthService, name: 'auth', authority: 'auth.spot.robot' },
+  directory: { service: api.DirectoryService, name: 'directory', authority: 'api.spot.robot' },
+  timeSync: { service: api.TimeSyncService, name: 'time-sync' },
+  lease: { service: api.LeaseService, name: 'lease' },
+  estop: { service: api.EstopService, name: 'estop' },
+  power: { service: api.PowerService, name: 'power' },
+  state: { service: api.RobotStateService, name: 'robot-state' },
+  command: { service: api.RobotCommandService, name: 'robot-command' },
+  image: { service: api.ImageService, name: 'image' },
+  graphNav: { service: graphNav.GraphNavService, name: 'graph-nav-service' },
+  ptz: { service: spotCam.PtzService, name: 'spot-cam-ptz' },
 }
+const mk = (service: any, authority?: string) => new service(HOST, creds, tls && authority ? { 'grpc.ssl_target_name_override': authority, 'grpc.default_authority': authority } : {})
+const clients: Record<string, any> = Object.fromEntries(Object.entries(definitions).map(([key, d]) => [key, mk(d.service, d.authority)]))
 
 // grpc callback → promise，统一 8s deadline
-function call<T = any>(client: any, method: string, req: unknown, md?: grpc.Metadata): Promise<T> {
+function call<T = any>(client: any, method: string, req: unknown, md?: grpc.Metadata, timeoutMs = 8000): Promise<T> {
   return new Promise((resolve, reject) => {
-    client[method](req, md ?? new grpc.Metadata(), { deadline: Date.now() + 8000 }, (err: Error | null, res: T) =>
+    client[method](req, md ?? new grpc.Metadata(), { deadline: Date.now() + timeoutMs }, (err: Error | null, res: T) =>
       err ? reject(err) : resolve(res),
     )
   })
@@ -141,6 +147,12 @@ async function dance(): Promise<void> {
     // 2) 服务发现（authority 表——对 sim 单地址无实际路由作用，忠实走一遍）
     const dir = await call(clients.directory, 'ListServiceEntries', { header: header() }, md())
     log.info(`Directory ${dir.service_entries?.length ?? 0} 个 service`)
+    if (tls) for (const [key, definition] of Object.entries(definitions)) {
+      if (definition.authority) continue
+      const entry = dir.service_entries?.find((e: any) => e.name === definition.name)
+      if (entry?.authority) { clients[key].close(); clients[key] = mk(definition.service, entry.authority) }
+      else if (key !== 'ptz') throw new Error(`Spot service unavailable: ${definition.name}`)
+    }
 
     // 3) time-sync 轮到 STATUS_OK（skew 用于把 end_time 换算到机器人时钟）
     for (let i = 0; i < 20; i++) {
@@ -255,6 +267,46 @@ let missionRun: MissionRun | null = null
 // 当前在飞运动控制（goto 或 mission）——SDK 泵的 preempt 钩子与 operator abort 置其
 // aborted，navigateTo 轮询时监听。一机一动，串行由泵保证。mission 时它就是 missionRun。
 let activeMotion: { aborted: boolean } | null = null
+let manualActive = false
+let camera: SpotCamera | undefined
+const cameraStreamId = process.env.SPOT_CAM_STREAM_ID ?? `${PROFILE.streams[0]?.id ?? SERIAL}-ptz`
+
+async function controlCommand(mobility: unknown, timeoutMs = 500) {
+  if (!session.ready) throw new Error('Spot session is not ready')
+  const response = await call(clients.command, 'RobotCommand', { header: header(), lease: session.lease,
+    clock_identifier: session.clockId, command: { synchronized_command: { mobility_command: mobility } } }, md(), timeoutMs)
+  if (response.header?.error?.code !== 1 || response.status !== 1 || response.lease_use_result?.status !== 1) throw new Error(response.message || 'Spot rejected manual control')
+}
+async function stopDrive() {
+  await controlCommand({ stand_request: {} })
+  for (let i = 0; i < 8; i++) {
+    const r = await call(clients.state, 'GetRobotState', { header: header() }, md(), 500)
+    if (r.header?.error?.code !== 1) throw new Error('Spot stop telemetry unavailable')
+    const v = r.robot_state?.kinematic_state?.velocity_of_body_in_odom
+    if (v && Math.hypot(v.linear?.x ?? 0, v.linear?.y ?? 0) < 0.02 && Math.abs(v.angular?.z ?? 0) < 0.02) return
+    await new Promise(r => setTimeout(r, 80))
+  }
+  throw new Error('Spot stop was not confirmed')
+}
+const manualController = {
+  async start(frame: ControlFrame) {
+    if (activeMotion) throw new Error('Spot has an active navigation order')
+    if (frame.target === 'drive') await stopDrive()
+    else { if (!camera || frame.channelId !== cameraStreamId) throw new Error('Spot CAM is not available'); await camera.stop() }
+    manualActive = true
+  },
+  async apply(frame: ControlFrame, ttlMs: number) {
+    if (frame.target === 'drive') await controlCommand({ se2_velocity_request: { se2_frame_name: 'flat_body',
+      end_time: endTime(Math.floor(ttlMs)), velocity: { linear: { x: frame.axes.forward ?? 0, y: frame.axes.lateral ?? 0 }, angular: frame.axes.turn ?? 0 } } }, Math.min(500, Math.floor(ttlMs)))
+    else { if (!camera) throw new Error('Spot CAM is not available'); await camera.nudge(frame.axes) }
+  },
+  async stop(frame: ControlFrame) {
+    if (frame.target === 'drive') await stopDrive()
+    else { if (!camera) throw new Error('Spot CAM is not available'); await camera.stop() }
+    if (frame.status !== 'active') manualActive = false
+  },
+  async position(frame: ControlFrame) { return frame.target === 'ptz' ? camera?.position() : undefined },
+}
 let waypoints: { id: string; x: number; z: number }[] = []
 
 async function poseFromState(rs: any): Promise<{ x: number; z: number; heading: number } | null> {
@@ -282,7 +334,7 @@ async function stateLoop() {
   const charging = rs.battery_states?.[0]?.status === 2
   const speed = Math.abs(rs.kinematic_state?.velocity_of_body_in_odom?.linear?.x ?? 0)
   const estopped = (rs.estop_states ?? []).some((e: any) => e.state === 1)
-  const mode = charging ? 'charging' : !motorOn ? 'idle' : speed > 0.05 ? (missionRun ? 'executing' : 'navigating') : 'idle'
+  const mode = manualActive ? 'teleop' : charging ? 'charging' : !motorOn ? 'idle' : speed > 0.05 ? (missionRun ? 'executing' : 'navigating') : 'idle'
   const rep = await plantbot.state(SERIAL, {
     x: +pose.x.toFixed(2),
     z: +pose.z.toFixed(2),
@@ -370,6 +422,9 @@ async function sit(): Promise<void> {
 
 // ---------- 订单执行 ----------
 
+let cameraGeneration = 0
+let cameraMotion: Promise<void> | undefined
+
 async function execOrder(order: PlantbotOrder) {
   switch (order.kind) {
     case 'goto': {
@@ -426,8 +481,27 @@ async function execOrder(order: PlantbotOrder) {
       if (activeMotion) activeMotion.aborted = true // 中止在飞运动（goto 或 mission）
       await sit().then(() => plantbot.orderStatus(order.id, 'done', 'mission aborted · sitting'))
       return
+    case 'ptz': {
+      if (!camera || order.payload.channelId !== cameraStreamId) return void await plantbot.orderStatus(order.id, 'failed', 'Spot CAM channel unavailable')
+      try {
+        if (order.payload.mode === 'stop') {
+          cameraGeneration++
+          await cameraMotion?.catch(() => {})
+          await camera.stop()
+          await plantbot.orderStatus(order.id, 'done', 'Spot CAM stop confirmed')
+          return
+        }
+        if (order.payload.mode !== 'absolute') throw new Error('Spot CAM requires absolute positioning')
+        if (cameraMotion) throw new Error('Spot CAM is busy')
+        const generation = ++cameraGeneration
+        const motion = camera.move({ pan: order.payload.pan!, tilt: order.payload.tilt!, zoom: order.payload.zoom! }, () => cameraGeneration !== generation)
+        cameraMotion = motion
+        try { await motion } finally { if (cameraMotion === motion) cameraMotion = undefined }
+        await plantbot.orderStatus(order.id, 'done', 'Spot CAM measured position reached')
+      } catch (e) { await plantbot.orderStatus(order.id, 'failed', e instanceof Error ? e.message : String(e)) }
+      return
+    }
     case 'announce':
-    case 'ptz':
       // 裸机 Spot 无扬声器/云台（那是 Spot CAM 载荷）——能力矩阵讲真话
       await plantbot.orderStatus(order.id, 'failed', `${order.kind} unsupported (base Spot has no speaker/PTZ payload)`)
       return
@@ -450,6 +524,20 @@ async function main() {
     if (!lastState) await new Promise((r) => setTimeout(r, 800))
   }
   const pose = await poseFromState(lastState)
+  const ptzs = await call(clients.ptz, 'ListPtz', { header: header() }, md(), 1000).catch(() => null)
+  const description = ptzs?.header?.error?.code === 1 ? ptzs.ptzs?.find((p: any) => p.name === (process.env.SPOT_CAM_PTZ ?? 'mech')) : undefined
+  if (description && ['pan', 'tilt', 'zoom'].every(axis => Number.isFinite(description[`${axis}_limit`]?.min?.value) && Number.isFinite(description[`${axis}_limit`]?.max?.value))) {
+    const limits = Object.fromEntries(['pan', 'tilt', 'zoom'].map(axis => [axis, [description[`${axis}_limit`].min.value, description[`${axis}_limit`].max.value]])) as any
+    camera = new SpotCamera(description.name, limits, (method, body) => call(clients.ptz, method, { header: header(), ...body }, md(), 500))
+    try { await camera.position() } catch (error) { camera = undefined; log.warn(`Spot CAM unavailable: ${String(error)}`) }
+  }
+  const streams = streamsToFactsheet(PROFILE.streams, STREAM_BASE)
+  if (camera) {
+    const existing = streams.find(s => s.id === cameraStreamId)
+    const capability = { absolute: true, manual: 'position' as const, ...camera.limits }
+    if (existing) Object.assign(existing, { ptz: capability })
+    else if (process.env.SPOT_CAM_STREAM_URL || !process.env.PB_SERIAL) streams.push({ id: cameraStreamId, name: 'Spot CAM PTZ', kind: 'camera', url: process.env.SPOT_CAM_STREAM_URL ?? `${STREAM_BASE}/switchgear.mp4`, ptz: capability } as any)
+  }
   await plantbot.registerUntilUp({
     serial: SERIAL,
     model: 'Spot',
@@ -457,14 +545,19 @@ async function main() {
     callsign: PROFILE.callsign,
     family: 'quadruped',
     level: 'dispatchable',
+    teleop: { forward: 0.5, lateral: 0.3, turn: 0.6, watchdog: 'native' },
     protocol: 'bosdyn.api gRPC (auth+timesync+lease+estop+power)',
     home: pose ? { x: +pose.x.toFixed(1), z: +pose.z.toFixed(1) } : undefined,
-    streams: streamsToFactsheet(PROFILE.streams, STREAM_BASE),
+    streams,
   })
   const srcs = await call(clients.image, 'ListImageSources', { header: header() }, md()).catch(() => null)
   log.info(`已注册 ${PROFILE.callsign}（${SERIAL}）· 机身相机 ${srcs?.image_sources?.length ?? 0} 源`)
 
   setInterval(() => void stateLoop(), 1000)
+  const control = pumpControl(plantbot, SERIAL, manualController)
+  const shutdown = () => { void control.stop().finally(() => process.exit(0)) }
+  process.once('SIGTERM', shutdown)
+  process.once('SIGINT', shutdown)
 
   // 5s：battery 健康读数（voltage/temp 来自 BatteryState）
   setInterval(() => {

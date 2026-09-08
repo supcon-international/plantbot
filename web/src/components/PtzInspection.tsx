@@ -24,6 +24,7 @@ import { Switch } from './ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table'
+import { ManualControl } from './ManualControl'
 
 type Pose = { pan: number; tilt: number; zoom: number }
 type Preset = Pose & { id: string; name: string; channelId: string }
@@ -68,7 +69,7 @@ type Camera = {
   id: string
   label: string
   robotId: string
-  ptz?: { absolute: boolean; pan: [number, number]; tilt: [number, number]; zoom: [number, number] }
+  ptz?: { absolute: boolean; manual?: 'position'; pan: [number, number]; tilt: [number, number]; zoom: [number, number] }
 }
 type Data = { channels: Camera[]; presets: Preset[]; plans: Plan[]; runs: Run[]; interlocks: Run[]; timezone: string }
 const empty: Data = { channels: [], presets: [], plans: [], runs: [], interlocks: [], timezone: 'UTC' }
@@ -443,6 +444,7 @@ function PtzPanel({ siteId }: { siteId: string }) {
                 )}
               </div>
             )}
+            {camera?.robotId && <ManualControl robotId={camera.robotId} channelId={camera.id} onCapture={p => setPreset({ name: '', channelId: camera.id, pan: Number(p.pan.toFixed(3)), tilt: Number(p.tilt.toFixed(3)), zoom: Number(p.zoom.toFixed(3)) })} />}
             <Tabs value={tab} onValueChange={setTab}>
               <TabsList>
                 <TabsTrigger value="presets">
@@ -770,7 +772,7 @@ function PtzPanel({ siteId }: { siteId: string }) {
                     }
                     required
                     type="number"
-                    step="0.1"
+                    step="any"
                     min={absolute ? camera?.ptz?.[axis][0] : axis === 'zoom' ? 1 : axis === 'pan' ? -360 : -180}
                     max={absolute ? camera?.ptz?.[axis][1] : axis === 'zoom' ? 100 : axis === 'pan' ? 360 : 180}
                     value={preset[axis] ?? ''}

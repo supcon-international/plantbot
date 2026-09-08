@@ -344,6 +344,7 @@ export interface ExternalRec {
   callsign?: string
   family?: 'quadruped' | 'ugv'
   level: 'state-only' | 'dispatchable'
+  teleop?: import('./fleet.js').RobotSpec['teleop']
   ip?: string
   protocol?: string
   home?: { x: number; z: number }

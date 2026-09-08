@@ -5,6 +5,8 @@
 
 export {
   PlantbotClient,
+  pumpControl,
+  type ControlFrame,
   type Logger,
   type MissionStep,
   type PlantbotOrder,

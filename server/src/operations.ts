@@ -303,6 +303,7 @@ export function registerOperations(app: FastifyInstance, worlds: Map<string, Wor
       (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) || route.endsWith('/report')) &&
       route.startsWith('/api/') &&
       !route.startsWith('/api/integration/')
+    if (route.endsWith('/control/:id/input')) return // high-rate input; lease acquisition/release remain audited
     if (!auth && !mutation) return
     const p = (req.params ?? {}) as Record<string, unknown>
     const body = (req.body ?? {}) as Record<string, unknown>

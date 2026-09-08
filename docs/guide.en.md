@@ -78,7 +78,7 @@ Fields that contain video source addresses (with embedded credentials) never lea
 
 ## 5 · Inspection operations
 
-To start recording, an administrator enables each channel in LIVE → Recordings and selects 1–30 days of retention. Earlier footage is not recovered. For camera inspections, save named presets, arrange their order and set dwell times. Execution requires an adapter that supports absolute positioning and confirms arrival; weekly camera schedules use UTC. The current F2 adapter only supports reset because its directional stop protocol is unverified; the current Spot/X30 integrations do not provide camera positioning. After an interrupted move, an operator must verify that the camera has stopped before releasing its reservation.
+To start recording, an administrator enables each channel in LIVE → Recordings and selects 1–30 days of retention. Earlier footage is not recovered. For camera inspections, save named presets, arrange their order and set dwell times. Execution requires an adapter that supports absolute positioning and confirms arrival; weekly camera schedules use UTC. The current F2 adapter only supports reset because its directional stop protocol is unverified; Spot CAM supports measured positioning and patrols; X30 robotserver does not expose camera positioning. After an interrupted move, an operator must verify that the camera has stopped before releasing its reservation.
 
 Administrators maintain equipment and tags. A tag can bind to a metric from a registered robot; device protocols and credentials stay in adapters/connectors. Operators report, assign and treat defects in EVENTS → Defects; closure requires a resolution and reopening preserves the history. Organization membership does not grant access: site roles remain separate. Event types are managed in INTEG → Event types. Camera patrols do not automatically capture images or run AI; external algorithms use the existing event, reading and evidence interfaces.
 
@@ -90,3 +90,5 @@ Administrators maintain equipment and tags. A tag can bind to a metric from a re
 - Deployment and operations: [deploy.md](deploy.md)
 - The three-layer integration architecture (simulator ⇄ adapter ⇄ platform): [adapter-sim-architecture.md](adapter-sim-architecture.md)
 - Connecting robots with a code agent (Claude Code etc.): the repo ships an Agent Skill at [.claude/skills/robot-adapter](../.claude/skills/robot-adapter/SKILL.md) — hand the folder to your agent
+
+Open FLEET → robot → Teleoperation for manual driving, and LIVE → PTZ inspection for camera controls. See [manual-control.md](manual-control.md) for ownership, stopping behavior, supported hardware and adapter configuration.

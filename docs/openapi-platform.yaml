@@ -41,6 +41,241 @@ security:
   - cookieAuth: []
 
 paths:
+  /api/sites/{siteId}/robots/{robotId}/control:
+    parameters:
+      - name: siteId
+        in: path
+        required: true
+        schema: &a1
+          type: string
+      - name: robotId
+        in: path
+        required: true
+        schema: *a1
+    get:
+      tags:
+        - fleet
+      summary: Read robot control and measured camera positions
+      operationId: getManualControl
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session:
+                    $ref: "#/components/schemas/ControlSession"
+                    nullable: true
+                  taskActive: &a3
+                    type: boolean
+                  cameras:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: *a1
+                        label: *a1
+                        ptz:
+                          $ref: "#/components/schemas/PtzCapability"
+                        position:
+                          type: object
+                          properties:
+                            pan: &a2
+                              type: number
+                            tilt: *a2
+                            zoom: *a2
+                            ts:
+                              type: integer
+                          nullable: true
+        "400": &a4
+          description: Invalid input
+        "401": &a5
+          description: Authentication required
+        "403": &a6
+          description: Site role or control token denied
+        "404": &a7
+          description: Site, robot or session not found
+        "409": &a8
+          description: Conflicting control, stale input or unconfirmed stop
+    post:
+      tags:
+        - fleet
+      summary: Acquire exclusive manual control (operator)
+      description: Fresh telemetry required. interrupt=true ends active navigation after reserving the robot;
+        readiness waits for all earlier motion receipts. A camera patrol must be cancelled separately. Token is
+        returned once, is bound to the user, and must be kept in tab memory. No input enters the durable order
+        queue.
+      operationId: acquireManualControl
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - target
+              properties:
+                target:
+                  type: string
+                  enum:
+                    - drive
+                    - ptz
+                channelId: *a1
+                interrupt: *a3
+      responses:
+        "201":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session:
+                    $ref: "#/components/schemas/ControlSession"
+                  token: *a1
+        "400": *a4
+        "401": *a5
+        "403": *a6
+        "404": *a7
+        "409": *a8
+  /api/sites/{siteId}/robots/{robotId}/control/{id}/input:
+    parameters:
+      - name: siteId
+        in: path
+        required: true
+        schema: *a1
+      - name: robotId
+        in: path
+        required: true
+        schema: *a1
+      - name: id
+        in: path
+        required: true
+        schema: *a1
+    put:
+      tags:
+        - fleet
+      summary: Replace manual input and renew control (owner)
+      description: Send approximately every 180 ms. Input expires after 400 ms; operator lease expires after 1500
+        ms. Increasing sequence prevents reordering and replay. Starting sessions accept only zero input.
+        Unload/blur should release the session.
+      operationId: sendManualInput
+      parameters:
+        - name: x-control-token
+          in: header
+          required: true
+          schema: *a1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - sequence
+                - axes
+              properties:
+                sequence:
+                  type: integer
+                  minimum: 0
+                axes:
+                  type: object
+                  additionalProperties: *a2
+                  description: "drive: forward/lateral/turn; PTZ: pan/tilt/zoom. Omitted axes are zero. Physical drive limits
+                    0.5 m/s forward, 0.3 m/s lateral, 0.6 rad/s turn, further limited by factsheet. Directional
+                    drive and PTZ inputs are in [-1,1]."
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session:
+                    $ref: "#/components/schemas/ControlSession"
+        "400": *a4
+        "401": *a5
+        "403": *a6
+        "404": *a7
+        "409": *a8
+  /api/sites/{siteId}/robots/{robotId}/control/{id}:
+    parameters:
+      - name: siteId
+        in: path
+        required: true
+        schema: *a1
+      - name: robotId
+        in: path
+        required: true
+        schema: *a1
+      - name: id
+        in: path
+        required: true
+        schema: *a1
+    delete:
+      tags:
+        - fleet
+      summary: Release manual control (owner)
+      operationId: releaseManualControl
+      parameters:
+        - name: x-control-token
+          in: header
+          required: true
+          schema: *a1
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session:
+                    $ref: "#/components/schemas/ControlSession"
+        "400": *a4
+        "401": *a5
+        "403": *a6
+        "404": *a7
+        "409": *a8
+  /api/sites/{siteId}/robots/{robotId}/control/{id}/stop:
+    parameters:
+      - name: siteId
+        in: path
+        required: true
+        schema: *a1
+      - name: robotId
+        in: path
+        required: true
+        schema: *a1
+      - name: id
+        in: path
+        required: true
+        schema: *a1
+    post:
+      tags:
+        - fleet
+      summary: Request stop of any control session (operator)
+      description: The robot remains reserved until its adapter confirms a stop. Platform restart restores stop
+        requests, never motion inputs.
+      operationId: stopManualControl
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session:
+                    $ref: "#/components/schemas/ControlSession"
+        "400": *a4
+        "401": *a5
+        "403": *a6
+        "404": *a7
+        "409": *a8
   /api/auth/login:
     post:
       tags: [auth]
@@ -2850,6 +3085,106 @@ components:
               connector: { $ref: "#/components/schemas/Connector" }
 
   schemas:
+    TeleopCapability:
+      type: object
+      required:
+        - forward
+        - lateral
+        - turn
+        - watchdog
+      properties:
+        forward:
+          type: number
+          minimum: 0
+          maximum: 2
+        lateral:
+          type: number
+          minimum: 0
+          maximum: 2
+        turn:
+          type: number
+          minimum: 0
+          maximum: 2
+        watchdog:
+          type: string
+          enum:
+            - native
+            - adapter
+        mode:
+          type: string
+          enum:
+            - direction
+      description: Explicit adapter capability. Physical axes use m/s and rad/s. mode=direction uses normalized
+        directional inputs and vendor speed setting, not SI velocity. Native watchdog means robot-enforced command
+        expiry; adapter watchdog cannot guarantee a stop after adapter failure.
+    ControlSession:
+      type: object
+      properties:
+        id: &a1
+          type: string
+        siteId: *a1
+        robotId: *a1
+        target:
+          type: string
+          enum:
+            - drive
+            - ptz
+        channelId: *a1
+        owner: *a1
+        status:
+          type: string
+          enum:
+            - starting
+            - active
+            - stopping
+            - closed
+            - failed
+        createdAt: &a2
+          type: integer
+        updatedAt: *a2
+        expiresAt: *a2
+        sequence: *a2
+        clientSequence: *a2
+        appliedSequence: *a2
+        note: *a1
+    ControlFrame:
+      type: object
+      required:
+        - id
+        - sequence
+        - target
+        - status
+        - axes
+        - remainingMs
+      properties:
+        id: *a1
+        sequence: *a2
+        target:
+          type: string
+          enum:
+            - drive
+            - ptz
+        channelId:
+          type: string
+          description: Adapter stream key, not platform channel ID
+        status:
+          type: string
+          enum:
+            - starting
+            - active
+            - stopping
+            - failed
+        axes:
+          type: object
+          additionalProperties:
+            type: number
+          description: "drive: forward/lateral/turn; PTZ: pan/tilt/zoom. Omitted axes are zero. Physical drive limits
+            0.5 m/s forward, 0.3 m/s lateral, 0.6 rad/s turn, further limited by factsheet. Directional drive and
+            PTZ inputs are in [-1,1]."
+        remainingMs:
+          type: number
+          minimum: 0
+          maximum: 400
     Role: { type: string, enum: [viewer, operator, admin] }
     RoleMap:
       type: object
@@ -2902,6 +3237,7 @@ components:
       type: object
       additionalProperties: true
       properties:
+        teleop: { $ref: "#/components/schemas/TeleopCapability" }
         id: { type: string }
         serial: { type: string }
         callsign: { type: string }
@@ -2975,7 +3311,7 @@ components:
       additionalProperties: true
       properties:
         type: { type: string, enum: [goto, dock, pause, resume, abort, announce, ptz] }
-        mode: { type: string, enum: [absolute, relative, home], description: "PTZ only; explicit capability and range validation apply" }
+        mode: { type: string, enum: [absolute, relative, home, stop], description: "PTZ only; explicit capability and range validation apply" }
         channelId: { type: string, description: "PTZ channel id for this robot" }
         pan: { type: number, description: "Absolute mode degrees, positive right" }
         tilt: { type: number, description: "Absolute mode degrees, positive up" }
@@ -3520,6 +3856,7 @@ components:
         optical zoom multiplier; adapter must send done only after arrival feedback. Relative-only ranges describe
         vendor control input, not a position.
       properties:
+        manual: { type: string, enum: [position], description: "Bounded position adjustment and verified stop supported" }
         absolute:
           type: boolean
         pan:
@@ -3701,6 +4038,7 @@ components:
             - absolute
             - relative
             - home
+        stopOrderId: { type: string, description: "Verified stop order; lock clears only on done" }
         interlocked:
           type: boolean
         stepIndex:

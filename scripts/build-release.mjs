@@ -30,7 +30,7 @@ const revision = run('git', ['rev-parse', 'HEAD'], root, true)
 const version = JSON.parse(run('git', ['show', 'HEAD:package.json'], root, true)).version
 if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('Release version must be X.Y.Z')
 const simDir = resolve(process.env.PLANTBOT_SIM_DIR ?? join(root, '../plantbotsimulator'))
-const simRef = process.env.PLANTBOT_SIM_REF ?? 'dc32eea659b846c250d981b4146002733e6763f2'
+const simRef = process.env.PLANTBOT_SIM_REF ?? '49ba9419ca245f5e060a597bb75bb9d12be9d919'
 const simulatorRevision = run('git', ['rev-parse', `${simRef}^{commit}`], simDir, true)
 const work = mkdtempSync(join(tmpdir(), 'plantbot-release-'))
 const source = join(work, 'source'), simulator = join(work, 'simulator')

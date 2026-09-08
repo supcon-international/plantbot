@@ -2,7 +2,7 @@
 // preempt 抢占被调用、干预类立即执行、异常被捕获不卡泵。
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { pumpOrders, type PlantbotOrder } from '../src/index.ts'
+import { pumpOrders, type PlantbotOrder } from '../dist/index.js'
 
 const tick = () => new Promise((r) => setTimeout(r, 0))
 const rep = { ordersPending: 9 }

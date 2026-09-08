@@ -30,6 +30,7 @@ export interface RobotSpec {
   /** 'sim' built-in twin · 'external' integration-API adapter */
   adapter?: 'sim' | 'external'
   integrationLevel?: 'state-only' | 'dispatchable'
+  teleop?: { forward: number; lateral: number; turn: number; watchdog: 'native' | 'adapter'; mode?: 'direction' }
 }
 
 export interface SiteCamera {
