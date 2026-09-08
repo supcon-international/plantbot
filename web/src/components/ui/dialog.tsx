@@ -5,12 +5,60 @@ import { Dialog as DialogPrimitive } from 'radix-ui'
 import { cn } from '@/lib/cn'
 import { useT } from '@/lib/i18n'
 
-function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />
+type DialogActivation = { element: HTMLElement; radixTrigger: boolean }
+let currentActivation: DialogActivation | null = null
+
+function rememberActivation(element: HTMLElement, radixTrigger = false) {
+  const activation = { element, radixTrigger }
+  currentActivation = activation
+  // React batches click updates. Keep the source through that commit, then
+  // discard it so a later programmatic dialog cannot inherit a stale click.
+  setTimeout(() => {
+    if (currentActivation === activation) currentActivation = null
+  }, 0)
 }
 
-function DialogTrigger({ ...props }: React.ComponentProps<typeof DialogPrimitive.Trigger>) {
-  return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />
+/** Capture on the existing app shell; Safari clicks need not focus buttons. */
+function captureDialogOpener(event: React.MouseEvent<HTMLElement>) {
+  const element = event.target instanceof Element
+    ? event.target.closest('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"]), [contenteditable="true"]')
+    : null
+  if (element instanceof HTMLElement) rememberActivation(element)
+}
+
+function focusedActivation(): DialogActivation | null {
+  const element = document.activeElement
+  return element instanceof HTMLElement && element !== document.body ? { element, radixTrigger: false } : null
+}
+
+const DialogActivationContext = React.createContext<DialogActivation | null | undefined>(undefined)
+
+function Dialog({ open: controlledOpen, defaultOpen, onOpenChange, ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen ?? false)
+  const open = controlledOpen ?? uncontrolledOpen
+  // Snapshot once per opening, before portalled inputs can take focus. This
+  // also covers persistent controlled roots such as the shared confirmation.
+  const activation = React.useMemo(() => open ? currentActivation ?? focusedActivation() : null, [open])
+  return (
+    <DialogActivationContext.Provider value={activation}>
+      <DialogPrimitive.Root
+        data-slot="dialog"
+        {...props}
+        open={open}
+        onOpenChange={(nextOpen) => {
+          if (controlledOpen === undefined) setUncontrolledOpen(nextOpen)
+          onOpenChange?.(nextOpen)
+        }}
+      />
+    </DialogActivationContext.Provider>
+  )
+}
+
+function DialogTrigger({ onClickCapture, ...props }: React.ComponentProps<typeof DialogPrimitive.Trigger>) {
+  return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} onClickCapture={(event) => {
+    rememberActivation(event.currentTarget, true)
+    onClickCapture?.(event)
+  }} />
 }
 
 function DialogPortal({ ...props }: React.ComponentProps<typeof DialogPrimitive.Portal>) {
@@ -46,12 +94,9 @@ function DialogContent({
   showCloseButton?: boolean
 }) {
   const t = useT()
-  // Native input autoFocus runs before Radix's mount autofocus callback. Keep
-  // a pre-portal snapshot for conditionally mounted dialogs in that case.
-  const activeBeforeMount = document.activeElement
-  const openerRef = React.useRef<HTMLElement | null>(
-    activeBeforeMount instanceof HTMLElement && activeBeforeMount !== document.body ? activeBeforeMount : null,
-  )
+  const activation = React.useContext(DialogActivationContext)
+  const restoreRef = React.useRef<DialogActivation | null>(activation ?? focusedActivation())
+  if (activation) restoreRef.current = activation
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
@@ -59,23 +104,25 @@ function DialogContent({
         data-slot="dialog-content"
         className={cn(
           // NB: not the .panel class — its position:relative would beat `fixed`.
-          'modal-surface fixed bottom-0 left-[50%] z-50 max-h-[92dvh] w-full translate-x-[-50%] overflow-y-auto bg-surface outline-none md:top-[50%] md:bottom-auto md:max-w-xl md:translate-y-[-50%] data-[state=closed]:animate-out data-[state=closed]:fade-out-0',
+          'modal-surface fixed bottom-0 z-50 translate-x-[-50%] overflow-y-auto bg-surface outline-none md:bottom-auto md:max-w-xl md:translate-y-[-50%] data-[state=closed]:animate-out data-[state=closed]:fade-out-0',
           className,
         )}
         {...props}
         onOpenAutoFocus={(event) => {
-          // Controlled / conditionally mounted dialogs may have no Radix Trigger.
+          // Preserve compatibility if this content is used with a raw Radix root.
           const active = document.activeElement
           const content = event.target
-          if (active instanceof HTMLElement && active !== document.body && !(content instanceof HTMLElement && content.contains(active))) {
-            openerRef.current = active
+          if (activation === undefined && active instanceof HTMLElement && active !== document.body && !(content instanceof HTMLElement && content.contains(active))) {
+            restoreRef.current = { element: active, radixTrigger: false }
           }
           onOpenAutoFocus?.(event)
         }}
         onCloseAutoFocus={(event) => {
           onCloseAutoFocus?.(event)
-          const opener = openerRef.current
-          if (!event.defaultPrevented && opener?.isConnected) {
+          const restore = restoreRef.current
+          const opener = restore?.element
+          // A real DialogTrigger retains Radix's own restoration behavior.
+          if (!event.defaultPrevented && !restore?.radixTrigger && opener?.isConnected) {
             event.preventDefault()
             opener.focus({ preventScroll: true })
           }
@@ -134,6 +181,7 @@ function DialogDescription({ className, ...props }: React.ComponentProps<typeof 
 }
 
 export {
+  captureDialogOpener,
   Dialog,
   DialogClose,
   DialogContent,

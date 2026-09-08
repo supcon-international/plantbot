@@ -78,7 +78,7 @@ node scripts/test-inspection-ui.mjs                 # 巡检运营 UI 回归（�
 - **组件与交互**：使用 `web/src/components/ui/*` 的 `Button`（default/signal=主操作，highlight=强调，utility/outline/ghost=次操作）、`Dialog`、`Select`、`Tabs|ToggleGroup`、`Table`、`Input`、`Switch`、`Slider`、`Progress`、`Badge`。确认框使用 `useConfirm()`，禁止原生 `window.confirm/prompt`。`components/ui.tsx` 保留领域封装。页面采用 Header + Controls + Content，空态用 `EmptyNote`；点击面板须支持键盘，表单有可访问名称，危险动作保留确认。所有用户文案中英双语，按钮正常句首大小写。移动导航为四个常用模块加“更多”，不得隐藏管理模块的入口；表格可以局部横滚，页面不能横向裁切。
 - **数据与性能**：未知电量显示未知，离线不显示在线指示；“在线空闲”只描述已上报的空闲/电量条件，不承诺一定可调度。3D 场站网格保留真实空间含义；平直火花线显示 steady。重后台页仍走 React.lazy + 骨架；`useT()` 的 t 按 lang 稳定。
 - **iframe 嵌入**：`?embed=1` 隐藏壳层，保留 `EmbedNav`；`?embednav=top|bottom|hidden` 控制导航，tab 会话粘滞，`?embed=0` 退出；`?site=` 在 WS 连接前固定场站。`.panel` 含 position:relative，不能加到 fixed 弹层；React 必须保持单副本。
-- **UI 验证**：生产子路径构建后运行 `node scripts/test-tier0-ui.mjs`、`node scripts/test-inspection-ui.mjs`、`node scripts/test-control-ui.mjs`；截图在 demos 下。新设计不能只凭 HTTP 200 验收，必须检查真实内容、导航、对话框、权限、错误恢复、375/768/1440px、中英双语与双主题。
+- **UI 验证**：生产子路径构建后运行 `node scripts/test-tier0-ui.mjs`、`node scripts/test-inspection-ui.mjs`、`node scripts/test-control-ui.mjs`；截图在 demos 下。多端扩展使用 `TIER0_UI_BROWSER=chromium|firefox|webkit`，手机/平板加 `TIER0_UI_DEVICES=1`（Firefox 不支持）；控制用 `PB_UI_BROWSER`，Chromium 真触控输入加 `PB_UI_TOUCH=1`；RTSP 跨浏览器解码用 `node scripts/test-stream-browser.mjs`。命令、环境及仿真边界见 `docs/multi-device-ui-audit.md`。新设计不能只凭 HTTP 200 验收，必须检查真实内容、导航、对话框、权限、错误恢复、375/768/1440px、中英双语与双主题。
 
 
 ## 文档地图（改动时的同步义务）

@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Toaster } from '@/components/ui/sonner'
+import { captureDialogOpener } from '@/components/ui/dialog'
 
 const NAV = [
   { to: '/', key: 'nav.ops', icon: LayoutGrid },
@@ -335,8 +336,8 @@ export function Shell() {
   // PB_PUBLIC_VIEW=0 deployments: nothing renders before sign-in
   if (authLoaded && !publicView && !authedUser) {
     return (
-      <div className="app-shell">
-        <main className="app-main col-span-full row-span-full">
+      <div className="auth-shell relative z-[1] flex h-full flex-col bg-bg" onClickCapture={captureDialogOpener}>
+        <main className="auth-main auth-main-gated min-h-0 flex-1 overflow-y-auto">
           <Login gate />
         </main>
       </div>
@@ -349,8 +350,8 @@ export function Shell() {
   // successful sign-in routes to '/', which re-renders the full shell.
   if (location.pathname === '/login' && !embedded) {
     return (
-      <div className="relative z-[1] flex h-full flex-col bg-bg">
-        <header className="flex h-14 flex-none items-center gap-3 border-b border-line px-4">
+      <div className="auth-shell relative z-[1] flex h-full flex-col bg-bg">
+        <header className="auth-header flex flex-none items-center gap-3 border-b border-line">
           <div className="flex items-center gap-3">
             <BrandMark size={24} />
             <span className="leading-tight">
@@ -363,7 +364,7 @@ export function Shell() {
             <LangSwitch />
           </div>
         </header>
-        <main className="min-h-0 flex-1 overflow-y-auto">
+        <main className="auth-main min-h-0 flex-1 overflow-y-auto">
           <Outlet />
         </main>
       </div>
@@ -378,7 +379,7 @@ export function Shell() {
   // navigate between modules. Strip position is host-configurable (embednav).
   if (embedded) {
     return (
-      <div className={`app-shell embed-shell embed-nav-${navPos}`}>
+      <div className={`app-shell embed-shell embed-nav-${navPos}`} onClickCapture={captureDialogOpener}>
         <Toaster />
         {navPos !== 'hidden' && <EmbedNav nav={nav} critCount={critCount} pos={navPos} />}
         <main id="main-content" tabIndex={-1} className="app-main embed-main">
@@ -389,7 +390,7 @@ export function Shell() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" onClickCapture={captureDialogOpener}>
       <a className="skip-link" href="#main-content">{t('shell.skip')}</a>
       <aside className="side-rail">
         <div className="side-brand"><Brand /></div>
