@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
-import { mkdtempSync, writeFileSync, readFileSync, readdirSync, mkdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, readFileSync, readdirSync, mkdirSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -102,19 +102,27 @@ try {
   assert.equal(manifest.revision, other.revision)
   assert.equal(manifest.version, other.version)
   assert.equal(manifest.platform, 'linux/amd64')
+  await run('bash', ['start.sh'], serverDir, {
+    COMPOSE_PROJECT_NAME: serverProject,
+    PLANTBOT_PORT: '18094',
+    PB_DATA_VOLUME: `${serverProject}-data`,
+  })
+  const generated = readFileSync(join(serverDir, '.env.server'), 'utf8')
+  const password = generated.match(/^PB_ADMIN_PASSWORD=([a-f0-9]{24})$/m)?.[1]
+  assert.ok(password, 'First startup generates a strong account password')
+  assert.match(generated, /^SESSION_SECRET=[a-f0-9]{64}$/m)
+  assert.equal(statSync(join(serverDir, '.env.server')).mode & 0o777, 0o600)
   writeFileSync(
     join(serverDir, '.env.server'),
-    `SESSION_SECRET=qa-only-${suffix}\nPB_ADMIN_PASSWORD=qa-admin-${suffix}\nPB_OPERATOR_PASSWORD=qa-operator-${suffix}\nPB_VIEWER_PASSWORD=qa-viewer-${suffix}\nPLANTBOT_PORT=18094\nPB_DATA_VOLUME=${serverProject}-data\n`,
-    { mode: 0o600 },
+    generated + `PLANTBOT_PORT=18094\nPB_DATA_VOLUME=${serverProject}-data\n`,
   )
-  await run('bash', ['start.sh'], serverDir, { COMPOSE_PROJECT_NAME: serverProject })
   const health = await api('/health')
   assert.equal(health.demo, false)
   assert.equal(health.sites.length, 0)
   const auth = await fetch(base + '/api/auth/login', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username: 'admin', password: `qa-admin-${suffix}` }),
+    body: JSON.stringify({ username: 'admin', password }),
   })
   assert.equal(auth.status, 200)
   cookie = auth.headers.get('set-cookie').split(';')[0]

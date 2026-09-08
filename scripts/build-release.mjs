@@ -94,7 +94,14 @@ try {
       selected[service] = images[service]
     }
     writeFileSync(join(bundle, 'compose.yaml'), YAML.stringify(compose))
-    cpSync(join(source, `docker/release/start-${kind}.sh`), join(bundle, 'start.sh'))
+    writeFileSync(
+      join(bundle, 'start.sh'),
+      readFileSync(join(source, `docker/release/start-${kind}.sh`), 'utf8').replaceAll(
+        'plantbot/api:VERSION',
+        images.api.tag,
+      ),
+      { mode: 0o755 },
+    )
     cpSync(join(source, 'docs/release.md'), join(bundle, 'README.md'))
     cpSync(join(source, 'CHANGELOG.md'), join(bundle, 'CHANGELOG.md'))
     const files = ['images.tar', 'compose.yaml', 'start.sh', 'README.md', 'CHANGELOG.md', 'release.json']
