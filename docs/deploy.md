@@ -4,6 +4,10 @@
 
 **源码部署运行要求：Node ≥ 22.22**（react-router 8 / vite 8 的下限；平台用内建 `node:sqlite`，零原生依赖）。推荐 Node 24 LTS。Docker 部署不要求宿主机安装 Node。
 
+## 预构建版本部署
+
+从 [GitHub Releases](https://github.com/supcon-international/plantbot/releases) 下载对应架构的部署包和校验文件，解压后运行 `bash start.sh`。包内包含版本化镜像、视频素材与模拟器，无需在服务器重新构建或克隆源码。升级时保留原 `.env.demo` 和 Compose 项目名即可复用数据卷。校验、启动和升级步骤见 [release.md](release.md)，版本变化见 [CHANGELOG.md](../CHANGELOG.md)。下方 `demo-up.sh` 默认流程仍适用于源码构建。
+
 ## Docker 完整演示（一键部署）
 
 这是给客户看完整功能的部署方式，不是只启动 Web + Server 的 `dev:core`。它会启动：

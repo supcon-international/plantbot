@@ -4,6 +4,8 @@
 
 在线演示：<https://m3rcyzzz.club/robots>（匿名可浏览）。
 
+版本下载：[Releases](https://github.com/supcon-international/plantbot/releases) · [更新记录](CHANGELOG.md)。预构建包无需重新构建镜像，部署步骤见 [版本部署](docs/release.md)。
+
 ## 它解决什么问题
 
 一个工厂或园区里往往同时有几种巡检机器人，比如波士顿动力 Spot、云深处 X30 四足、高新兴 F2 轮式安防车。每家的协议都不一样，各有各的后台。Plantbot 不控制机器人的腿和轮子，只做运营层的事：

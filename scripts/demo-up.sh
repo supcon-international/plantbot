@@ -8,6 +8,7 @@ sim_dir="${PLANTBOT_SIM_DIR:-$repo_root/../plantbotsimulator}"
 sim_url="${PLANTBOT_SIM_URL:-https://github.com/supcon-international/plantbotsimulator.git}"
 sim_ref="${PLANTBOT_SIM_REF:-dc32eea659b846c250d981b4146002733e6763f2}"
 project="${PB_DEMO_PROJECT:-plantbot-demo}"
+prebuilt="${PB_DEMO_PREBUILT:-0}"
 
 fail() {
   echo "[demo] $*" >&2
@@ -25,6 +26,10 @@ if [[ ! "$compose_major" =~ ^[0-9]+$ || ! "$compose_minor" =~ ^[0-9]+$ ]] || \
   fail "Docker Compose 2.17+ is required (found ${compose_version})"
 fi
 
+if [[ "$prebuilt" == "1" ]]; then
+  compose_file="$repo_root/compose.release.yaml"
+  [[ -f "$compose_file" ]] || fail "compose.release.yaml is missing; use an extracted release bundle"
+else
 if [[ ! -f "$sim_dir/package.json" ]]; then
   command -v git >/dev/null 2>&1 || fail "git is required to fetch plantbotsimulator"
   [[ ! -e "$sim_dir" ]] || fail "$sim_dir exists but is not a valid plantbotsimulator checkout"
@@ -69,6 +74,7 @@ expected_sim_ref="$(git -C "$sim_dir" rev-parse "${sim_ref}^{commit}" 2>/dev/nul
   fail "plantbotsimulator is at $actual_sim_ref, expected $expected_sim_ref; check it out or set PLANTBOT_SIM_REF explicitly"
 [[ -z "$(git -C "$sim_dir" status --porcelain)" ]] || \
   fail "$sim_dir has local changes; use a clean checkout for a reproducible demo"
+fi
 
 random_hex() {
   local bytes="$1"
@@ -114,8 +120,14 @@ export PLANTBOT_SIM_DIR="$sim_dir"
 
 compose=(docker compose --project-name "$project" --env-file "$env_file" --file "$compose_file")
 
-echo "[demo] building and starting the complete simulated stack"
-if ! "${compose[@]}" up --detach --build --remove-orphans --wait --wait-timeout 600; then
+if [[ "$prebuilt" == "1" ]]; then
+  echo "[demo] starting the release images"
+  build_args=(--no-build --pull never)
+else
+  echo "[demo] building and starting the complete simulated stack"
+  build_args=(--build)
+fi
+if ! "${compose[@]}" up --detach "${build_args[@]}" --remove-orphans --wait --wait-timeout 600; then
   "${compose[@]}" ps || true
   "${compose[@]}" logs --tail=120 api bench relay gateway || true
   fail "startup failed; see logs above"

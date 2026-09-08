@@ -15,6 +15,7 @@ pnpm run setup            # 必须带 run（裸 `pnpm setup` 是 pnpm 内置命�
 pnpm dev                  # server :8787（PB_DEMO=1 + PB_DEV_KEYS=1 + 固定 SESSION_SECRET + MEDIA_RELAY→:1984）+ web :5173 + go2rtc 中继 + 五个 adapter（+仿真机器人若 plantbotsimulator 在侧）
 pnpm dev:core             # 仅 server + web（不起集成层）；同样带 PB_DEMO/PB_DEV_KEYS/SESSION_SECRET
 WEB_BASE=/robots/ pnpm build   # 生产构建（见下）；本地根路径构建用 pnpm build
+pnpm run release:build linux/amd64  # 从已提交代码构建版本化 Docker 部署包到 dist/releases；见 docs/release.md
 cd server && node_modules/.bin/tsc --noEmit         # 服务端类型检查（无独立 build）
 cd web && node_modules/.bin/tsc --noEmit            # 前端类型检查
 cd integrations && node_modules/.bin/tsc --noEmit   # 集成层类型检查

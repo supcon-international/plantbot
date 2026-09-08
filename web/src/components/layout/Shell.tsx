@@ -18,7 +18,7 @@ import {
   ShieldAlert,
   Sun,
 } from 'lucide-react'
-import { useApp, useAuth, useCan, useRole, useSite } from '../../lib/store'
+import { useApp, useAuth, useCan, useSite } from '../../lib/store'
 import { Login } from '../../pages/Login'
 import { useTheme } from '../../lib/theme'
 import { useT, useLang, type Lang } from '../../lib/i18n'
@@ -142,7 +142,6 @@ function SiteSwitch() {
 function AuthChip() {
   const me = useAuth((s) => s.me)
   const logout = useAuth((s) => s.logout)
-  const role = useRole()
   const t = useT()
   const nav = useNavigate()
   if (!me?.user)
@@ -154,8 +153,6 @@ function AuthChip() {
     )
   return (
     <span className="flex items-center gap-2">
-      <span className="mono hidden text-[11px] text-ink-2 xl:inline">{me.user.username}</span>
-      <span className="role-chip">{t(`shell.role.${role}`)}</span>
       <Button variant="utility" size="icon" onClick={() => logout()} title={t('shell.signOut')}>
         <LogOut size={13} />
       </Button>
@@ -171,17 +168,6 @@ function ThemeToggle() {
     <Button variant="utility" size="icon" onClick={toggle} title={t('shell.theme')} aria-label={t('shell.theme')}>
       {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
     </Button>
-  )
-}
-
-function ConnectionStatus({ compact = false }: { compact?: boolean }) {
-  const connected = useApp((s) => s.connected)
-  const t = useT()
-  return (
-    <span className={`connection-chip ${connected ? 'is-online' : 'is-offline'} ${compact ? 'is-compact' : ''}`} title={connected ? t('shell.link') : t('shell.down')}>
-      <span className={connected ? 'live-dot' : ''} />
-      {!compact && <span>{connected ? t('shell.link') : t('shell.down')}</span>}
-    </span>
   )
 }
 
@@ -402,13 +388,11 @@ export function Shell() {
         </div>
         <div className="top-utilities">
           <SiteSwitch />
-          <ConnectionStatus />
           <AuthChip />
           <ThemeToggle />
           <LangSwitch />
         </div>
         <div className="ml-auto flex items-center gap-2 md:hidden">
-          <ConnectionStatus compact />
           <MobileUtilityMenu />
         </div>
       </header>

@@ -16,7 +16,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY server/package.json server/package.json
 COPY web/package.json web/package.json
 COPY integrations/package.json integrations/package.json
-COPY sdk/adapter-sdk-ts/package.json sdk/adapter-sdk-ts/package.json
+COPY sdk/adapter-sdk-ts/ sdk/adapter-sdk-ts/
 RUN pnpm install --frozen-lockfile
 
 # Download Linux-native demo footage, robot meshes, Redoc and go2rtc in a
