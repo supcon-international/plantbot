@@ -16,4 +16,5 @@ if [[ ! -f .env.server ]]; then
   trap - EXIT
 fi
 docker compose --env-file .env.server -f compose.yaml up -d --wait
-printf '\nPlantbot: http://localhost:18080/robots/\nCredentials: .env.server\nCreate a site, then create a site API key for the Adapter.\n'
+binding=$(docker compose --env-file .env.server -f compose.yaml port gateway 8080)
+printf '\nPlantbot: http://%s/robots/\nCredentials: .env.server\nCreate a site, then create a site API key for the Adapter.\n' "$binding"
