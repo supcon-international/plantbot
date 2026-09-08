@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
+import { DatabaseSync } from 'node:sqlite'
 import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -199,12 +200,39 @@ test(
       )
       assert.equal((await send('/results', { ...result, id: randomUUID() })).status, 409)
       await stop()
+      // Simulate evidence at its storage budget and colliding external IDs in two sites.
+      // Trimming one site's image must never overwrite the other site's record.
+      const database = new DatabaseSync(join(dir, 'plantbot.db'))
+      const trimId = randomUUID()
+      const insert = database.prepare('INSERT INTO vision_results(site_id,id,data,ts) VALUES(?,?,?,?)')
+      for (const [site, size, offset] of [
+        ['plant-07', 1025 * 1024 * 1024, -3600000],
+        ['plant-12', 1, 0],
+      ] as const) {
+        insert.run(
+          site,
+          trimId,
+          JSON.stringify({
+            id: trimId,
+            config: { ...c, name: site },
+            file: trimId + '.jpg',
+            fileSize: size,
+            evidence: '/' + site,
+          }),
+          Date.now() + offset,
+        )
+      }
+      database.close()
       proc = spawnProc('server/src/index.ts', env, 'vision-restart')
       await ready()
       const restored = (await api(admin, 'GET', route)).body
       assert.equal(restored.configs.length, 12)
       assert.equal(restored.adapters[0].online, false)
-      assert.equal(restored.results.length, 4)
+      assert.equal(restored.results.length, 5)
+      assert.equal(restored.results.find((r: any) => r.id === trimId).evidenceExpired, true)
+      const otherSite = (await api(admin, 'GET', '/api/sites/plant-12/vision')).body
+      assert.equal(otherSite.results[0].config.name, 'plant-12')
+      assert.equal(otherSite.results[0].evidence, '/plant-12')
       assert.equal((await send('/results', { ...result, id: randomUUID() })).status, 409)
       const newHeartbeat = await send('/heartbeat', hb)
       assert.equal(newHeartbeat.status, 200)

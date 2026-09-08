@@ -938,24 +938,9 @@ export function VisionInspection() {
                 value={draft.severity}
                 options={['info', 'low', 'high', 'critical'].map((value) => ({
                   value,
-                  label:
-                    (
-                      {
-                        info: '信息',
-                        low: '低',
-                        high: '高',
-                        critical: '紧急',
-                      } as Record<string, string>
-                    )[value] && zh
-                      ? (
-                          {
-                            info: '信息',
-                            low: '低',
-                            high: '高',
-                            critical: '紧急',
-                          } as Record<string, string>
-                        )[value]
-                      : value,
+                  label: zh
+                    ? ({ info: '信息', low: '低', high: '高', critical: '紧急' } as Record<string, string>)[value]
+                    : value,
                 }))}
                 onChange={(v) => change('severity', v)}
               />

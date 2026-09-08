@@ -490,11 +490,15 @@ export function registerVision(
         } catch {}
     db.prepare('DELETE FROM vision_results WHERE ts<?').run(cutoff)
     const budget = Math.max(128, Math.min(8192, Number(process.env.PB_VISION_MAX_MB) || 1024)) * 1024 * 1024
-    const files = rows(
-      "SELECT data FROM vision_results WHERE json_extract(data,'$.fileSize')>0 ORDER BY ts ASC",
-    )
-    let used = files.reduce((sum, x) => sum + x.fileSize, 0)
-    for (const rec of files) {
+    const files = (
+      db
+        .prepare(
+          "SELECT site_id,data FROM vision_results WHERE json_extract(data,'$.fileSize')>0 ORDER BY ts ASC",
+        )
+        .all() as { site_id: string; data: string }[]
+    ).map((x) => ({ site: x.site_id, record: JSON.parse(x.data) }))
+    let used = files.reduce((sum, x) => sum + x.record.fileSize, 0)
+    for (const { site, record: rec } of files) {
       if (used <= budget) break
       try {
         unlinkSync(join(DIR, rec.file))
@@ -504,7 +508,11 @@ export function registerVision(
       rec.file = ''
       rec.evidence = ''
       rec.evidenceExpired = true
-      db.prepare('UPDATE vision_results SET data=? WHERE id=?').run(JSON.stringify(rec), rec.id)
+      db.prepare('UPDATE vision_results SET data=? WHERE site_id=? AND id=?').run(
+        JSON.stringify(rec),
+        site,
+        rec.id,
+      )
     }
     db.prepare("DELETE FROM vision_jobs WHERE json_extract(data,'$.createdAt')<?").run(cutoff)
     const referenced = new Set(

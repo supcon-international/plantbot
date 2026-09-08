@@ -4,7 +4,7 @@
 
 ### English
 
-- Added eleven vision inspection presets with bundled pretrained detection, tracking and OCR models.
+- Added eleven vision inspection presets with bundled detection and OCR models, shared tracking and scene rules.
 - Added monitoring configuration, scene previews, protected evidence review and versioned observation history.
 - Added standalone Adapter deployment with independent robot and vision processes.
 - Updated the bilingual interface, navigation and responsive layouts.
@@ -14,7 +14,7 @@ Compatibility: Continuous vision monitoring requires a fixed camera view. Mobile
 
 ### 中文
 
-- 新增 11 项视觉巡检预置能力，内置预训练检测、跟踪与 OCR 模型。
+- 新增 11 项视觉巡检预置能力，内置检测与 OCR 模型，复用目标跟踪和场景规则。
 - 新增监测配置、场景试运行、受保护证据复核与版本化观测记录。
 - 新增独立 Adapter 部署，机器人驱动与视觉进程分别运行。
 - 更新中英文界面、导航与响应式布局。
