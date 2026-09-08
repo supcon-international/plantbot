@@ -1,154 +1,109 @@
 # Plantbot
 
-多场站巡检机器人运营平台。把不同品牌的巡检机器人接进同一个控制台：画好场站地图，排好巡检任务，平台派单给机器人，机器人把发现的异常、读数和视频送回来。
+[English](README.en.md) | 简体中文
 
-在线演示：<https://m3rcyzzz.club/robots>（匿名可浏览）。
+Plantbot 是一个多场站巡检机器人管理平台，用于统一管理不同品牌的机器人、巡检任务、视频和设备异常。路线、地图和设备档案按场站管理，机器人通过适配器接入并执行任务。
 
-版本下载：[Releases](https://github.com/supcon-international/plantbot/releases) · [更新记录](CHANGELOG.md)。预构建包无需重新构建镜像，部署步骤见 [版本部署](docs/release.md)。
+[在线演示](https://m3rcyzzz.club/robots) · [下载版本](https://github.com/supcon-international/plantbot/releases) · [更新记录](CHANGELOG.md) · [使用指南](docs/guide.zh.md)
 
-## 它解决什么问题
+## 功能
 
-一个工厂或园区里往往同时有几种巡检机器人，比如波士顿动力 Spot、云深处 X30 四足、高新兴 F2 轮式安防车。每家的协议都不一样，各有各的后台。Plantbot 不控制机器人的腿和轮子，只做运营层的事：
+- **场站与机队**：场站建模、二维/三维地图、机器人位置和状态、坐标标定。
+- **巡检任务**：任务模板、自动或指定机器人派单、定时排程、日历、执行记录与报告导出。
+- **视频与云台**：实时视频、录像检索与回放、片段下载、云台控制、预置点和定时巡检。
+- **机器人遥操作**：控制权申请、按住移动与松开停止、键盘操作、任务中断确认。
+- **设备与异常**：设备档案、工业位号台账、传感器读数、告警证据及缺陷处理记录。
+- **管理与集成**：场站权限、用户和组织管理、操作审计、OIDC 单点登录、HTTP API、TypeScript SDK 和 Node-RED 节点。
 
-- 场站是什么样：地图、航点、禁行区、固定摄像头、充电桩
-- 什么时候巡哪条路线：任务模板加排程，创建即生效
-- 谁去巡：按电量、距离、能力自动派单，或钉死某一台
-- 发现了什么：事件带证据，可确认、关闭、驳回；设备缺陷记录责任人、处置和关闭说明
-- 证据在哪：实时视频、启用后的录像、快照、读数和巡检报告
+界面支持中英文、明暗主题及 iframe 嵌入。云台入口位于 **LIVE → 云台巡检**，机器人遥操作位于 **FLEET → 机器人 → 遥操作**。
 
-机器人本身经「适配器」接入，见下文。
+## 快速体验
 
-## 五分钟跑起来
+预构建演示包包含平台、视频中继和三家厂商的仿真机器人，无需本地构建。当前提供 Linux x86-64 包，需要 Docker Engine 和 Docker Compose 2.17+。
 
-需要 Node 22.22 以上（推荐 Node 24）、pnpm 10 以上、ffmpeg。
+从 [v2.3.1 Release](https://github.com/supcon-international/plantbot/releases/tag/v2.3.1) 下载压缩包及 `.sha256` 校验文件，放在同一目录后运行：
 
 ```bash
-git clone https://github.com/supcon-international/plantbot.git && cd plantbot
-pnpm install        # 安装依赖，并构建 @plantbot/adapter-sdk
-pnpm run setup      # 下载演示视频、机器人 3D 模型、go2rtc 视频中继（必须带 run）
-pnpm dev            # 打开 http://localhost:5173
+sha256sum -c plantbot-v2.3.1-linux-amd64.tar.gz.sha256
+tar -xzf plantbot-v2.3.1-linux-amd64.tar.gz
+cd plantbot-v2.3.1-linux-amd64
+bash start.sh
 ```
 
-第一次启动会创建三个演示场站，账号 `admin` / `operator` / `viewer`，密码都是 `plantbot`。
+打开 [http://127.0.0.1:18080/robots/](http://127.0.0.1:18080/robots/)。首次登录凭证由启动脚本生成，保存在 `.env.demo`。远程访问、停止服务及保留数据升级见[版本部署文档](docs/release.md)。
 
-想让演示里的机器人真的动起来，把仿真器仓库克隆到本仓库旁边：
+## 本地开发
+
+需要 Node.js 22.22+、pnpm 10+ 和 FFmpeg。
+
+```bash
+git clone https://github.com/supcon-international/plantbot.git
+cd plantbot
+pnpm install
+pnpm run setup
+pnpm dev
+```
+
+打开 [http://localhost:5173](http://localhost:5173)。开发模式会创建三个演示场站，账号为 `admin`、`operator`、`viewer`，默认密码均为 `plantbot`。`pnpm run setup` 下载视频素材、机器人模型和视频中继；请保留命令中的 `run`。
+
+要运行完整的机器人演示，先停止开发服务，在平台仓库目录下安装独立的[仿真器](https://github.com/supcon-international/plantbotsimulator)：
 
 ```bash
 git clone https://github.com/supcon-international/plantbotsimulator.git ../plantbotsimulator
+cd ../plantbotsimulator
+npm install
+npm run setup
+cd ../plantbot
+pnpm dev
 ```
 
-再跑 `pnpm dev`，仿真机器人会和平台一起启动。没有它的时候机器人显示 OFFLINE，这正是生产环境的样子：等真机的适配器连上来。
+`pnpm dev` 会一起启动平台、适配器、仿真器和视频中继。未安装仿真器且未连接真机时，没有在线机器人；仅开发平台界面和 API 可使用 `pnpm dev:core`。
 
-只想看平台本身，不起适配器：`pnpm dev:core`。
+## 机器人接入
 
-## 界面里有什么
+内置适配器支持 Boston Dynamics Spot、云深处 Jueying X30 和高新兴 GS Patrol F2。可在 **INTEG → 托管连接器** 配置机器人地址和凭证，由平台运行适配器；也可在机器人所在网络运行外部适配器，通过场站 API key 接入。
 
-| 页面 | 用途 |
+| 内置适配器 | 机器人遥操作 | 云台能力 |
+| --- | --- | --- |
+| Spot | 前进、横移、转向 | 配备并识别到 Spot CAM 机械云台后，支持控制、预置点和巡检 |
+| GS Patrol F2 | 方向控制 | 相机复位 |
+| X30 robotserver | 当前接口不提供 | 当前接口不提供 |
+
+具体能力取决于机器人硬件及适配器声明，操作方式和接入条件见[遥操作与云台文档](docs/manual-control.md)。
+
+Plantbot 负责调度和数据管理，导航、避障由机器人完成。检测算法可通过集成 API 上报读数、事件和证据。新增型号可使用 [TypeScript SDK](sdk/adapter-sdk-ts/README.md) 或 [Node-RED 节点](sdk/node-red-contrib-plantbot/README.md)，接入流程见[集成指南](docs/integration.md)。
+
+## 项目结构
+
+```text
+server/         Fastify 后端与 SQLite 持久化
+web/            React、Vite、shadcn/ui 和 Three.js 前端
+integrations/   厂商适配器与集成测试
+sdk/            TypeScript SDK 和 Node-RED 节点
+docs/           使用指南、API、协议与部署文档
+scripts/        开发、构建、发布和 UI 测试脚本
+```
+
+## 开发命令
+
+| 命令 | 用途 |
 | --- | --- |
-| OPS | 总览：KPI、实时 3D 作业地图、机队状态、最新事件 |
-| LIVE | 实时视频、录像检索/回放/下载、云台预置点/计划/记录 |
-| TASKS | 任务模板、排程、周/月日历、执行归档与 CSV/可打印报告 |
-| FLEET | 机器人列表、传感器覆盖、3D 数字孪生、接入向导 |
-| MAP | 作业地图：占据栅格底图、航点、区域、实时位姿，点航点即可派遣 |
-| EVENTS | 事件看板、检测规则、设备缺陷的提交/指派/处理/关闭记录 |
-| ASSETS | 被巡设备档案与卡片/表格视图，设备—位号—巡检点—数据地址台账 |
-| SITES | 建站和 Site Builder、用户、组织目录与操作审计（管理员） |
-| INTEG | 接入面板：签发 API key、托管连接器、自定义事件类型（管理员） |
-| DOCS | 在线 API 文档（管理员） |
+| `pnpm dev` | 启动完整开发环境 |
+| `pnpm dev:core` | 仅启动后端和前端 |
+| `pnpm build` | 构建根路径部署的前端 |
+| `WEB_BASE=/robots/ pnpm build` | 构建 `/robots/` 子路径部署的前端 |
+| `pnpm --dir integrations test` | 适配器单元测试与集成测试；厂商行为测试需要仿真器 |
+| `pnpm --dir sdk/adapter-sdk-ts test` | SDK 单元测试 |
 
-顶栏可以切换场站、语言和明暗主题。
-
-录像由管理员按通道启用，只能查询启用后的历史。云台计划可先配置；执行要求 adapter 声明绝对定位能力并回报真实到位，现有 F2 只开放复位，Spot/X30 当前接入未提供云台定位。设备位号的“驱动”沿用 adapter/connector 数据绑定；组织归属不自动授予权限。本次没有部署新的 AI 算法。需求覆盖及能力边界见 [docs/inspection-operations.md](docs/inspection-operations.md)。
-
-## 代码怎么组织
-
-这是一个 pnpm workspace，四个包：
-
-```
-server/         Fastify 5 后端。一个场站一个 World 实例；SQLite 持久化（node:sqlite）
-web/            React 19 + Vite 8 前端，shadcn/ui 组件，three.js 做 3D 地图
-integrations/   三家厂商的适配器（Spot gRPC、X30 TCP+XML、F2 云 REST+WS）和端到端测试
-sdk/            写适配器用的 SDK：TypeScript 包 @plantbot/adapter-sdk，以及 Node-RED 节点
-docs/           指南、集成 API、OpenAPI 定义、厂商协议参考、部署文档
-scripts/        setup 下载素材、go2rtc 中继、Docker 一键演示
-```
-
-后端有两组接口：
-
-- `/api/sites/:siteId/*`：给浏览器用，登录会话加角色控制（viewer、operator、admin）
-- `/api/integration/v1/*`：给适配器和第三方系统用，带场站 API key
-
-## 一台机器人是怎么接进来的
-
-适配器是一个独立的小程序。它一边用厂商自己的协议和机器人说话，一边调用平台的集成 API：
-
-1. 注册：告诉平台自己的序列号、型号、有哪些相机
-2. 每秒上报一次状态：位置、电量、模式。超过 20 秒不上报，平台把它标为离线
-3. 拉取订单：平台把「去某点」「跑这条路线」「暂停」「喊话」「云台」这类命令放进队列，适配器取走执行，完成后回报
-4. 上报事件和读数：发现异常就发事件，可以附证据图；传感器数值按 metric 批量上报
-
-用 SDK 写一个最小适配器大概是这样：
-
-```ts
-import { PlantbotClient, waitForSite, pumpOrders } from '@plantbot/adapter-sdk'
-
-const pb = new PlantbotClient({ base: 'http://plantbot:8787', key: process.env.PLANTBOT_KEY! })
-await waitForSite(pb)
-await pb.registerUntilUp({ serial: 'MY-01', model: 'My Robot', level: 'dispatchable' })
-setInterval(async () => {
-  const rep = await pb.state('MY-01', { x: 0, z: 0, battery: 80, mode: 'idle' })
-  await pumpOrders(pb, 'MY-01', rep, async (order) => pb.orderStatus(order.id, 'done'))
-}, 1000)
-```
-
-两种跑法：
-
-- 托管连接器：平台部署在厂内，能直连机器人。在 INTEG 面板选厂商、填机器人地址和凭证，平台把内置的适配器作为受监督子进程代跑。适用于内置的三种型号。
-- 外部适配器：机器人和平台不在一个网络，或者是内置之外的型号。签发一把场站 API key，用 SDK 自己写、自己跑。
-
-细节见 [docs/integration.md](docs/integration.md)。仓库还自带一个给 code agent 用的接入向导 [.claude/skills/robot-adapter](.claude/skills/robot-adapter/SKILL.md)，可以整个文件夹拷进你自己的工程。
-
-## 常用命令
-
-```bash
-pnpm dev                                          # 全栈开发：后端、前端、视频中继、适配器
-pnpm dev:core                                     # 只起后端和前端
-WEB_BASE=/robots/ pnpm build                      # 生产构建，线上跑在子路径 /robots 下
-cd server && node_modules/.bin/tsc --noEmit       # 后端类型检查
-cd web && node_modules/.bin/tsc --noEmit          # 前端类型检查
-cd integrations && pnpm test                      # 单元测试加全行为端到端测试（需要仿真器在旁边）
-cd sdk/adapter-sdk-ts && pnpm test                # SDK 单元测试
-node scripts/test-inspection-ui.mjs               # 生产子路径 UI 回归（先执行上面的 WEB_BASE 构建）
-```
-
-## 部署
-
-线上形态是 nginx 反代到子路径，后端设置 `PUBLIC_BASE=/robots`，前端用 `WEB_BASE=/robots/` 构建。生产不设 `PB_DEMO`，库是空的，场站在 SITES 页里建。
-
-Linux 服务器上想一键看完整演示（含仿真机器人和视频），用 Docker：
-
-```bash
-./scripts/demo-up.sh
-```
-
-环境变量、nginx 配置、单点登录、清库重播种，都在 [docs/deploy.md](docs/deploy.md)。
+UI 回归脚本为 `scripts/test-inspection-ui.mjs` 和 `scripts/test-control-ui.mjs`，运行前需构建 `/robots/` 子路径前端，并安装仿真器和 Google Chrome。
 
 ## 文档
 
 | 文档 | 内容 |
 | --- | --- |
-| [docs/guide.zh.md](docs/guide.zh.md) / [guide.en.md](docs/guide.en.md) | 给新读者的平台指南 |
-| [docs/integration.md](docs/integration.md) | 集成 API、SDK、嵌入与单点登录 |
-| [docs/openapi.yaml](docs/openapi.yaml) / [openapi-platform.yaml](docs/openapi-platform.yaml) | 机器可读的接口定义，运行中的平台也在 `/api-docs.html` 提供渲染版 |
-| [docs/adapter-sim-architecture.md](docs/adapter-sim-architecture.md) | 仿真器、适配器、平台三层架构与厂商映射 |
-| [docs/vendors/](docs/vendors/) | 三家厂商协议的逐字段参考 |
-| [docs/platform-model.md](docs/platform-model.md) | 视频、读数、事件、任务、地图、控制六个领域的模型 |
-| [docs/inspection-operations.md](docs/inspection-operations.md) | 巡检运营需求覆盖、成熟产品参考、执行边界与验收方法 |
-| [docs/deploy.md](docs/deploy.md) | 生产部署与运维 |
-| [CLAUDE.md](CLAUDE.md) | 给 code agent 的项目约定，与 AGENTS.md 逐字相同 |
-
-## 平台刻意不做的事
-
-- 不做路径规划和运动仿真，路径由机器人自己的导航栈算，平台只给目标点
-- 不在平台里写任何厂商协议，全部在适配器里
-- 平台没有自己的机器人，所有机器人都来自适配器的注册
+| [使用指南](docs/guide.zh.md) | 功能模块与基本操作 |
+| [版本部署](docs/release.md) / [生产部署](docs/deploy.md) | 预构建包、升级、真机部署和运维 |
+| [集成指南](docs/integration.md) | 机器人接入、API、SDK 与嵌入 |
+| [遥操作与云台](docs/manual-control.md) | 操作流程、设备支持和控制约束 |
+| [集成 API](docs/openapi.yaml) / [平台 API](docs/openapi-platform.yaml) | OpenAPI 接口定义 |
+| [平台模型](docs/platform-model.md) / [适配器架构](docs/adapter-sim-architecture.md) | 数据模型与厂商集成设计 |
