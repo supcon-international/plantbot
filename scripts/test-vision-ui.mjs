@@ -2,6 +2,7 @@
 // Run after WEB_BASE=/robots/ pnpm build. Uses an isolated database, the actual
 // production bundle and a subpath reverse proxy. No production services touched.
 import { chromium } from 'playwright'
+import AxeBuilder from '@axe-core/playwright'
 import assert from 'node:assert/strict'
 import { createServer, request } from 'node:http'
 import { connect } from 'node:net'
@@ -187,6 +188,16 @@ try {
  await vp.getByTestId('vision-workspace').waitFor();assert.equal(await vp.getByRole('button',{name:'Add monitoring',exact:true}).count(),0)
  assert.equal(await vp.getByRole('switch',{name:'Enable Gate occupancy',exact:true}).isDisabled(),true)
  await viewer.close();checks.push('Disable persists across reload, mobile layout and viewer permissions')
+ for(const lang of ['en','zh'])for(const theme of ['light','dark'])for(const width of [375,768,1440]){
+  await page.setViewportSize({width,height:1000})
+  await page.evaluate(({lang,theme})=>{localStorage.setItem('aegis-lang',JSON.stringify({state:{lang},version:0}));localStorage.setItem('aegis-theme',JSON.stringify({state:{theme},version:0}))},{lang,theme})
+  await page.reload();await page.getByRole('tab',{name:lang==='zh'?'视觉巡检':'Vision inspection',exact:true}).click();await page.getByTestId('vision-workspace').waitFor()
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`${lang}/${theme}/${width} overflow`)
+  const a11y=await new AxeBuilder({page}).include('[data-testid="vision-workspace"]').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze()
+  assert.deepEqual(a11y.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.html)})),[],`${lang}/${theme}/${width} accessibility`)
+ }
+ checks.push('Vision page: English/Chinese, light/dark, 375/768/1440px; zero WCAG A/AA violations')
+
  assert.deepEqual(errors,[]);assert.deepEqual(badResponses,[])
  writeFileSync(join(out,'result.json'),JSON.stringify({passed:true,checks,errors,badResponses},null,2));console.log(JSON.stringify({passed:true,checks},null,2))
 } catch(error){

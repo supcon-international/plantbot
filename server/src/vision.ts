@@ -1,7 +1,7 @@
 // The server owns configuration and durable results. Inference runs only in the adapter.
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs'
+import { mkdirSync, readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { db, DATA_DIR, inTx } from './db.js'
 import { requestUser, requireRole } from './auth.js'
@@ -502,9 +502,22 @@ export function registerVision(
       used -= rec.fileSize
       rec.fileSize = 0
       rec.file = ''
+      rec.evidence = ''
+      rec.evidenceExpired = true
       db.prepare('UPDATE vision_results SET data=? WHERE id=?').run(JSON.stringify(rec), rec.id)
     }
     db.prepare("DELETE FROM vision_jobs WHERE json_extract(data,'$.createdAt')<?").run(cutoff)
+    const referenced = new Set(
+      rows("SELECT data FROM vision_results WHERE json_extract(data,'$.file')!=''").map((r) => r.file),
+    )
+    for (const file of readdirSync(DIR))
+      if (/^[a-f0-9-]+\.jpg$/.test(file) && !referenced.has(file))
+        try {
+          unlinkSync(join(DIR, file))
+        } catch {}
+    db.prepare(
+      "DELETE FROM vision_episodes WHERE NOT EXISTS (SELECT 1 FROM vision_configs c WHERE c.site_id=vision_episodes.site_id AND c.id||'-'||json_extract(c.data,'$.revision')=vision_episodes.id)",
+    ).run()
   }
   sweep()
   const timer = setInterval(sweep, 60000)

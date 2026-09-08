@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Add as Plus, Edit as Pencil, TrashCan as Trash2, Close as X, Play, Renew as RefreshCw } from '@carbon/icons-react'
+import {
+  Add as Plus,
+  Edit as Pencil,
+  TrashCan as Trash2,
+  Close as X,
+  Play,
+  Renew as RefreshCw,
+} from '@carbon/icons-react'
 import { toast } from 'sonner'
 import { apiFetch, useCan, useSite } from '../lib/store'
 import { useLang } from '../lib/i18n'
@@ -193,6 +200,9 @@ function Evidence({
                 y={Math.max(20, a.box[1] * 1000 - 8)}
                 fill="#ffbf47"
                 fontSize="22"
+                stroke="#111"
+                strokeWidth="3"
+                paintOrder="stroke"
               >
                 {a.label} {Math.round(a.score * 100)}%
               </text>
@@ -218,7 +228,8 @@ function Geometry({
 }) {
   const [mode, setMode] = useState('region')
   const drag = useRef<number | null>(null)
-  const line = mode === 'line',
+  const hasLine = ['line_crossing', 'vehicle_count'].includes(config.preset)
+  const line = hasLine && mode === 'line',
     points = line ? config.line : config.region
   const update = (i: number, p: Point) =>
     set({
@@ -228,11 +239,26 @@ function Geometry({
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-sm">{zh ? '检测区域与计数线' : 'Region & counting line'}</span>
+        <span className="text-sm">
+          {hasLine
+            ? zh
+              ? '检测区域与计数线'
+              : 'Region & counting line'
+            : zh
+              ? '检测区域'
+              : 'Detection region'}
+        </span>
         <div className="flex gap-2">
-          <Button type="button" size="sm" variant="outline" onClick={() => setMode(line ? 'region' : 'line')}>
-            {line ? (zh ? '编辑区域' : 'Edit region') : zh ? '编辑计数线' : 'Edit line'}
-          </Button>
+          {hasLine && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setMode(line ? 'region' : 'line')}
+            >
+              {line ? (zh ? '编辑区域' : 'Edit region') : zh ? '编辑计数线' : 'Edit line'}
+            </Button>
+          )}
           <Button
             type="button"
             size="sm"
@@ -276,50 +302,90 @@ function Geometry({
             stroke="#ffbf47"
             strokeWidth="3"
           />
-          <line
-            x1={config.line[0][0] * 1000}
-            y1={config.line[0][1] * 1000}
-            x2={config.line[1][0] * 1000}
-            y2={config.line[1][1] * 1000}
-            stroke="#6bc5ff"
-            strokeWidth="4"
-          />
-          {points.map((p, i) => (
-            <circle
-              key={`${mode}-${i}`}
-              cx={Math.max(12, Math.min(988, p[0] * 1000))}
-              cy={Math.max(12, Math.min(988, p[1] * 1000))}
-              r="14"
-              fill={line ? '#6bc5ff' : '#ffbf47'}
-              stroke="#000"
-              strokeWidth="2"
-              role="slider"
-              tabIndex={0}
-              aria-label={`${line ? (zh ? '计数线端点' : 'Line point') : zh ? '区域顶点' : 'Region point'} ${i + 1}`}
-              aria-valuetext={`${Math.round(p[0] * 100)}%, ${Math.round(p[1] * 100)}%`}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={p[0] * 100}
-              onPointerDown={(e) => {
-                e.preventDefault()
-                drag.current = i
-                e.currentTarget.parentElement?.setPointerCapture(e.pointerId)
-              }}
-              onKeyDown={(e) => {
-                const d: Record<string, Point> = {
-                  ArrowLeft: [-0.01, 0],
-                  ArrowRight: [0.01, 0],
-                  ArrowUp: [0, -0.01],
-                  ArrowDown: [0, 0.01],
-                }
-                if (d[e.key]) {
-                  e.preventDefault()
-                  update(i, [p[0] + d[e.key][0], p[1] + d[e.key][1]])
-                }
-              }}
+          {hasLine && (
+            <line
+              x1={config.line[0][0] * 1000}
+              y1={config.line[0][1] * 1000}
+              x2={config.line[1][0] * 1000}
+              y2={config.line[1][1] * 1000}
+              stroke="#6bc5ff"
+              strokeWidth="4"
             />
-          ))}
+          )}
         </svg>
+        {points.map((p, i) => (
+          <Button
+            type="button"
+            variant="outline"
+            key={`${mode}-${i}`}
+            className="absolute z-10 h-8 w-8 min-w-8 touch-none p-0 text-xs"
+            style={{
+              left: `clamp(16px, ${p[0] * 100}%, calc(100% - 16px))`,
+              top: `clamp(16px, ${p[1] * 100}%, calc(100% - 16px))`,
+              transform: 'translate(-50%, -50%)',
+              borderColor: line ? '#359bd6' : '#956000',
+            }}
+            role="slider"
+            tabIndex={0}
+            aria-label={`${line ? (zh ? '计数线端点' : 'Line point') : zh ? '区域顶点' : 'Region point'} ${i + 1}`}
+            aria-valuetext={`${Math.round(p[0] * 100)}%, ${Math.round(p[1] * 100)}%`}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={p[0] * 100}
+            onPointerDown={(e) => {
+              e.preventDefault()
+              drag.current = i
+              e.currentTarget.setPointerCapture(e.pointerId)
+            }}
+            onPointerMove={(e) => {
+              if (drag.current !== i) return
+              const b = e.currentTarget.parentElement!.getBoundingClientRect()
+              update(i, [(e.clientX - b.left) / b.width, (e.clientY - b.top) / b.height])
+            }}
+            onPointerUp={() => {
+              drag.current = null
+            }}
+            onPointerCancel={() => {
+              drag.current = null
+            }}
+            onKeyDown={(e) => {
+              const d: Record<string, Point> = {
+                ArrowLeft: [-0.01, 0],
+                ArrowRight: [0.01, 0],
+                ArrowUp: [0, -0.01],
+                ArrowDown: [0, 0.01],
+              }
+              if (d[e.key]) {
+                e.preventDefault()
+                update(i, [p[0] + d[e.key][0], p[1] + d[e.key][1]])
+              }
+            }}
+          >
+            {i + 1}
+          </Button>
+        ))}
+        {hasLine &&
+          ['A', 'B'].map((label, i) => {
+            const a = config.line[0],
+              b = config.line[1],
+              dx = b[0] - a[0],
+              dy = b[1] - a[1],
+              length = Math.hypot(dx, dy) || 1,
+              sign = i === 0 ? 1 : -1
+            return (
+              <span
+                key={label}
+                className="pointer-events-none absolute bg-bg px-1 text-xs font-medium"
+                style={{
+                  left: `${Math.max(3, Math.min(97, (a[0] + b[0]) / 2 + ((sign * dy) / length) * 0.08)) * 100}%`,
+                  top: `${Math.max(3, Math.min(97, (a[1] + b[1]) / 2 - ((sign * dx) / length) * 0.08)) * 100}%`,
+                  transform: 'translate(-50%, -50%)',
+                }}
+              >
+                {label}
+              </span>
+            )
+          })}
       </Evidence>
       <p className="text-xs text-ink-3">
         {zh
@@ -838,11 +904,11 @@ export function VisionInspection() {
                     { value: 'both', label: zh ? '双向' : 'Both' },
                     {
                       value: 'forward',
-                      label: zh ? '右侧到左侧（沿线方向）' : 'Right to left of directed line',
+                      label: 'A → B',
                     },
                     {
                       value: 'reverse',
-                      label: zh ? '左侧到右侧（沿线方向）' : 'Left to right of directed line',
+                      label: 'B → A',
                     },
                   ]}
                   onChange={(v) => change('direction', v)}

@@ -1,4 +1,4 @@
-FROM node:24-bookworm-slim AS plantbot-base
+FROM node:24-bookworm-slim AS runtime-base
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get -o Acquire::Retries=5 update \
@@ -11,14 +11,7 @@ RUN apt-get -o Acquire::Retries=5 update \
 
 WORKDIR /app/robots
 
-# Dependency manifests first, so source changes do not invalidate the install.
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY server/package.json server/package.json
-COPY web/package.json web/package.json
-COPY integrations/package.json integrations/package.json
-COPY sdk/adapter-sdk-ts/ sdk/adapter-sdk-ts/
-RUN pnpm install --frozen-lockfile
-
+FROM runtime-base AS platform-assets
 # Download Linux-native demo footage, robot meshes, Redoc and go2rtc in a
 # cacheable layer. Local macOS binaries/media are excluded by .dockerignore.
 COPY scripts/setup.mjs scripts/setup.mjs
@@ -27,6 +20,21 @@ RUN mkdir -p server/media web/public/assets/robots/spot web/public/vendor bin \
   && PB_SETUP_FETCH_TIMEOUT_MS=${PB_SETUP_FETCH_TIMEOUT_MS} node scripts/setup.mjs \
   && test -x bin/go2rtc
 
+
+FROM runtime-base AS plantbot-base
+# Dependency manifests first, so source changes do not invalidate the install.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY server/package.json server/package.json
+COPY web/package.json web/package.json
+COPY integrations/package.json integrations/package.json
+COPY sdk/adapter-sdk-ts/ sdk/adapter-sdk-ts/
+ARG PB_NPM_REGISTRY=https://registry.npmjs.org
+RUN --mount=type=cache,id=plantbot-pnpm-store,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile --registry=${PB_NPM_REGISTRY}
+
+COPY --from=platform-assets /app/robots/server/media /app/robots/server/media
+COPY --from=platform-assets /app/robots/web/public /app/robots/web/public
+COPY --from=platform-assets /app/robots/bin /app/robots/bin
 COPY . .
 
 

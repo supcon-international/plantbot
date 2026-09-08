@@ -152,6 +152,12 @@ const navigate = async (path, p = page) => {
     await wait(async () => (await robotCard.innerText()).includes('85%'), 'Overview has received the live fixture battery')
     await robotCard.getByText(/steady|稳定/i).waitFor()
   }
+  if (path.split('?')[0].startsWith('/robots/')) {
+    // Wait for the live telemetry history before axe takes its DOM snapshot.
+    // A skeleton can otherwise become a text-bearing Spark during the scan.
+    await p.getByText(/steady|稳定/i).first().waitFor()
+    await wait(async () => p.locator('main .skeleton:visible').count().then((n) => n === 0), 'Robot detail telemetry and model ready', 30000)
+  }
   if (['/', '/map'].includes(path.split('?')[0])) {
     const canvas = p.locator('main canvas').first()
     await canvas.waitFor({ state: 'visible', timeout: 30000 })

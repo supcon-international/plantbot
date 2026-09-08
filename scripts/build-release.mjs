@@ -59,6 +59,9 @@ try {
         platform,
         '--file',
         file,
+        ...(process.env.PB_NPM_REGISTRY
+          ? ['--build-arg', `PB_NPM_REGISTRY=${process.env.PB_NPM_REGISTRY}`]
+          : []),
         '--target',
         service,
         '--tag',

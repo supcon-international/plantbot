@@ -6,7 +6,9 @@ COPY server/package.json server/package.json
 COPY web/package.json web/package.json
 COPY integrations/package.json integrations/package.json
 COPY sdk/adapter-sdk-ts/ sdk/adapter-sdk-ts/
-RUN pnpm install --frozen-lockfile --filter integrations... --ignore-scripts \
+ARG PB_NPM_REGISTRY=https://registry.npmjs.org
+RUN --mount=type=cache,id=plantbot-pnpm-store,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile --filter integrations... --ignore-scripts --registry=${PB_NPM_REGISTRY} \
     && pnpm --filter @plantbot/adapter-sdk build
 COPY integrations/ integrations/
 COPY shared/ shared/
