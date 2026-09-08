@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Run after WEB_BASE=/robots/ pnpm build. Uses an isolated database, the actual
 // production bundle and a subpath reverse proxy. No production services touched.
-import { chromium } from 'playwright'
+import { chromium, firefox, webkit, devices } from 'playwright'
 import assert from 'node:assert/strict'
 import { createServer, request } from 'node:http'
 import { connect } from 'node:net'
@@ -11,11 +11,21 @@ import { mkdtempSync, mkdirSync, readFileSync, existsSync, statSync, writeFileSy
 import { join, resolve, dirname, extname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { tmpdir } from 'node:os'
+import { createHash } from 'node:crypto'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const browserName = process.env.PB_UI_BROWSER ?? 'chromium'
+const engines = { chromium, firefox, webkit }
+assert.ok(engines[browserName], `Unsupported browser: ${browserName}`)
+const touchMode = process.env.PB_UI_TOUCH === '1'
+assert.ok(!touchMode || browserName === 'chromium', 'Native touch hold/cancel uses Chromium CDP')
 const dist = join(root, 'web/dist'),
-  out = join(root, 'demos/control-qa')
+  out = process.env.PB_UI_BROWSER || touchMode
+    ? join(root, 'demos/control-qa/multi-device', `${browserName}${touchMode ? '-touch' : ''}-${process.env.PB_UI_PUBLIC_VIEW === '0' ? 'private' : 'public'}`)
+    : join(root, 'demos/control-qa')
 assert.ok(existsSync(join(dist, 'index.html')), 'Build the production bundle first')
+const bundleHash = () => createHash('sha256').update(readFileSync(join(dist, 'index.html'))).digest('hex')
+const evidence = { startedAt: new Date().toISOString(), bundleSha256: bundleHash() }
 const data = mkdtempSync(join(tmpdir(), 'pb-ui-'))
 mkdirSync(out, { recursive: true })
 const apiPort = 8993,
@@ -114,8 +124,8 @@ const child=(cwd,entry,env)=>{
 try {
  await wait(async()=>(await fetch(`http://127.0.0.1:${apiPort}/api/health`)).ok,'API ready')
  await new Promise(r=>proxy.listen(webPort,'127.0.0.1',r))
- browser=await chromium.launch({channel:'chrome',headless:true})
- const context=await browser.newContext({viewport:{width:1440,height:1000}})
+ browser=await engines[browserName].launch({...(browserName==='chromium'?{channel:'chrome'}:{}),headless:true})
+ const context=await browser.newContext(touchMode?{...devices['Pixel 7']}:{viewport:{width:1440,height:1000}})
  page=await context.newPage();page.setDefaultTimeout(12000)
  page.on('pageerror',e=>errors.push(e.message))
  page.on('console',m=>{if(m.type()==='error')errors.push(m.text())})
@@ -133,6 +143,10 @@ try {
  }
  const schedules=await api('GET','/schedules')
  for(const s of schedules.schedules) await api('PATCH',`/schedules/${s.id}`,{enabled:false})
+ // Demo schedules can enqueue before login disables them. Clear that isolated
+ // startup queue before the adapter registers, so acquiring control starts idle.
+ const seededMissions=await api('GET','/missions')
+ for(const m of seededMissions.missions.filter(m=>m.status==='queued')) await api('POST',`/missions/${m.id}/abort`)
  child(resolve(root,'../plantbotsimulator'),'spot/sim/main.ts',{SPOT_SIM_PORT:'19121',SPOT_SIM_FAULT_S:'0'})
  child(join(root,'integrations'),'spot/adapter/main.ts',{SPOT_PORT:'19121',PLANTBOT_BASE:`http://127.0.0.1:${apiPort}`,PLANTBOT_KEY:'pbk_dev_plant07',STREAM_BASE:'/robots/media'})
  const RID='ext-bd-91250107', cp=`/robots/${RID}/control`
@@ -149,9 +163,25 @@ try {
  const acquire=async(panel)=>{await panel.getByRole('button',{name:/take control/i}).click();if(await page.getByRole('dialog').count())await page.getByRole('dialog').getByRole('button',{name:'End task and take control',exact:true}).click();await wait(async()=>(await panel.innerText()).includes('Control acquired'),'control ready')}
  await acquire(drive)
  const initial=await state(),forward=drive.getByRole('button',{name:'Forward',exact:true})
- const box=await forward.boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await new Promise(r=>setTimeout(r,1100));await page.mouse.up()
+ await forward.scrollIntoViewIfNeeded()
+ const box=await forward.boundingBox()
+ const touch=touchMode?await context.newCDPSession(page):null
+ if(touch){
+  await touch.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:box.x+box.width/2,y:box.y+box.height/2}]})
+  await new Promise(r=>setTimeout(r,1100))
+  await touch.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]})
+ } else {
+  await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await new Promise(r=>setTimeout(r,1100));await page.mouse.up()
+ }
  await wait(async()=>(await state()).speed===0,'pointer release stops')
  const moved=await state();assert.ok(Math.hypot(moved.x-initial.x,moved.z-initial.z)>.08)
+ if(touch){
+  await touch.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:box.x+box.width/2,y:box.y+box.height/2}]})
+  await wait(async()=>(await state()).speed>0,'touch hold starts measured movement')
+  await touch.send('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]})
+  await wait(async()=>(await state()).speed===0,'native touch cancellation stops movement')
+  checks.push('Chromium mobile touch hold/release and touchCancel stop the actual simulator')
+ }
  const other=await api('GET',cp);assert.equal(other.session.status,'active')
  assert.equal(other.session.token,undefined);assert.equal(other.session.tokenHash,undefined)
  await page.keyboard.down('w');await new Promise(r=>setTimeout(r,700));await page.keyboard.up('w')
@@ -197,7 +227,8 @@ try {
  assert.equal(await vp.getByTestId('manual-drive').getByRole('button',{name:'Take control',exact:true}).count(),0)
  await viewer.close();checks.push('Viewer has no manual control actions')
  assert.ok(errors.filter(e=>e==='Failed to load resource: the server responded with a status of 409 (Conflict)').length<=expectedRaces.length);assert.deepEqual(errors.filter(e=>e!=='Failed to load resource: the server responded with a status of 409 (Conflict)'),[],'no browser runtime errors');assert.deepEqual(badResponses,[],'no failed API/assets')
- writeFileSync(join(out,'result.json'),JSON.stringify({passed:true,checks,errors,badResponses},null,2));console.log(JSON.stringify({passed:true,checks},null,2))
+ assert.equal(bundleHash(),evidence.bundleSha256,'Production bundle is unchanged during the test')
+ writeFileSync(join(out,'result.json'),JSON.stringify({...evidence,completedAt:new Date().toISOString(),passed:true,browser:browserName,browserVersion:browser.version(),touchMode,checks,errors,badResponses},null,2));console.log(JSON.stringify({passed:true,browser:browserName,touchMode,checks},null,2))
 } catch(error){
  await page?.screenshot({path:join(out,'failure.png'),fullPage:true}).catch(()=>{})
  writeFileSync(join(out,'result.json'),JSON.stringify({passed:false,checks,error:String(error),errors,badResponses,serverLog},null,2));console.error(error);process.exitCode=1

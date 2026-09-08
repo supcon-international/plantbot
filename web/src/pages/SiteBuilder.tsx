@@ -105,7 +105,7 @@ function EditorCanvas(props: {
   const [aspect, setAspect] = useState(0.62)
   const [wpx, setWpx] = useState(900) // measured screen width (px) for the screen⇄world scale
   const [hover, setHover] = useState<Sel>(null)
-  const drag = useRef<{ mode: 'pan' | 'wp'; id?: string; sx: number; sz: number } | null>(null)
+  const drag = useRef<{ mode: 'pan' | 'wp'; pointerId: number; id?: string; sx: number; sz: number } | null>(null)
   useEffect(() => setView(center(site.bounds)), [site.id]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const measure = () => {
@@ -156,18 +156,19 @@ function EditorCanvas(props: {
   }
 
   const onPointerDown = (e: React.PointerEvent) => {
-    ;(e.target as Element).setPointerCapture?.(e.pointerId)
+    if (!e.isPrimary || e.button !== 0) return
+    ;(e.currentTarget as Element).setPointerCapture?.(e.pointerId)
     const p = toWorld(e)
     if (tool === 'waypoint' || tool === 'zone' || tool === 'calib' || (tool === 'map' && props.measure)) {
       props.onPlace(p)
       return
     }
-    drag.current = { mode: 'pan', sx: p.x, sz: p.z }
+    drag.current = { mode: 'pan', pointerId: e.pointerId, sx: p.x, sz: p.z }
   }
 
   const onPointerMove = (e: React.PointerEvent) => {
     const d = drag.current
-    if (!d) return
+    if (!d || d.pointerId !== e.pointerId) return
     const p = toWorld(e)
     if (d.mode === 'pan') {
       // shift the center by the pointer's world-space delta (anchor point stays under the cursor)
@@ -176,15 +177,17 @@ function EditorCanvas(props: {
       props.onMoveWp(d.id, p)
     }
   }
-  const onPointerUp = () => (drag.current = null)
+  const onPointerUp = (e: React.PointerEvent) => {
+    if (drag.current?.pointerId === e.pointerId) drag.current = null
+  }
 
   const startWpDrag = (e: React.PointerEvent, id: string) => {
-    if (tool !== 'select') return
+    if (tool !== 'select' || !e.isPrimary || e.button !== 0) return
     e.stopPropagation()
     ;(e.currentTarget as Element).setPointerCapture?.(e.pointerId)
     props.onSelect({ kind: 'wp', id })
     const p = toWorld(e)
-    drag.current = { mode: 'wp', id, sx: p.x, sz: p.z }
+    drag.current = { mode: 'wp', pointerId: e.pointerId, id, sx: p.x, sz: p.z }
   }
 
   const b = site.bounds
@@ -204,6 +207,8 @@ function EditorCanvas(props: {
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      onLostPointerCapture={onPointerUp}
     >
       {/* occupancy underlay */}
       {site.map && (
@@ -232,7 +237,7 @@ function EditorCanvas(props: {
           <g
             key={zn.id}
             onPointerDown={(e) => {
-              if (tool !== 'select') return
+              if (tool !== 'select' || !e.isPrimary || e.button !== 0) return
               e.stopPropagation()
               props.onSelect({ kind: 'zone', id: zn.id })
             }}

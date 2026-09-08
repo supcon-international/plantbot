@@ -190,7 +190,7 @@ setInterval(async () => {
                   <span className="microlabel">2 · {t('fl.wiz.launch')}</span>
                   <CopyBtn text={launchCmd} tag="launch" copied={copied} setCopied={setCopied} t={t} />
                 </div>
-                <pre className="mono overflow-x-auto border border-line bg-surface-2 p-3 text-[12px] leading-relaxed text-ink-2">
+                <pre tabIndex={0} className="mono overflow-x-auto border border-line bg-surface-2 p-3 text-[12px] leading-relaxed text-ink-2">
                   {launchCmd}
                 </pre>
               </div>
@@ -211,14 +211,14 @@ setInterval(async () => {
                   <span className="mono text-[12px] tracking-normal text-ink-2">TYPESCRIPT · @plantbot/adapter-sdk</span>
                   <CopyBtn text={SDK_TS} tag="sdkts" copied={copied} setCopied={setCopied} t={t} />
                 </div>
-                <pre className="mono mb-3 overflow-x-auto border border-line bg-surface-2 p-3 text-[12px] leading-relaxed text-ink-2">
+                <pre tabIndex={0} className="mono mb-3 overflow-x-auto border border-line bg-surface-2 p-3 text-[12px] leading-relaxed text-ink-2">
                   {SDK_TS}
                 </pre>
                 <div className="mb-1.5 flex items-center justify-between">
                   <span className="mono text-[12px] tracking-normal text-ink-2">NODE-RED · node-red-contrib-plantbot</span>
                   <CopyBtn text={SDK_NR} tag="sdknr" copied={copied} setCopied={setCopied} t={t} />
                 </div>
-                <pre className="mono overflow-x-auto border border-line bg-surface-2 p-3 text-[12px] leading-relaxed text-ink-2">
+                <pre tabIndex={0} className="mono overflow-x-auto border border-line bg-surface-2 p-3 text-[12px] leading-relaxed text-ink-2">
                   {SDK_NR}
                 </pre>
               </div>

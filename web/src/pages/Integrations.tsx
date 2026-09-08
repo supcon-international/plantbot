@@ -399,7 +399,7 @@ function SiteIntegrations() {
             </a>
           }
         />
-        <pre className="mono overflow-x-auto p-3 text-[12px] leading-relaxed text-ink-3">
+        <pre tabIndex={0} className="mono overflow-x-auto p-3 text-[12px] leading-relaxed text-ink-3">
 {`# register a robot (factsheet)   levels: state-only | dispatchable
 curl -X POST ${curlBase}/robots -H 'authorization: Bearer ${demoKey}' \\
   -H 'content-type: application/json' \\
@@ -742,7 +742,7 @@ function ConnectorLogsModal({ siteId, connector, onClose }: { siteId: string; co
           <span className="microlabel">{connector.name} · {t('conn.logs')}</span>
           <Button variant="ghost" size="iconSm" onClick={onClose} aria-label={t('c.close')}><X size={16} /></Button>
         </div>
-        <pre className="mono min-h-40 flex-1 overflow-auto bg-surface-2 p-3 text-[12px] leading-relaxed text-ink-2">
+        <pre tabIndex={0} className="mono min-h-40 flex-1 overflow-auto bg-surface-2 p-3 text-[12px] leading-relaxed text-ink-2">
           {lines.length ? lines.join('\n') : t('conn.noLogs')}
         </pre>
       </div>
