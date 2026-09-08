@@ -5,7 +5,7 @@
 v2.4.0 起分别提供 **Server** 和 **Adapter** 两个预构建包。安装需要 Docker Engine 与 Docker Compose 2.17+，不需要 Node、Python、源码构建或运行时下载模型。当前发布 Linux x86-64 包；请选择经过发布验证的体系架构。
 
 - **Server**：Web、平台 API、SQLite、视频中继。可部署在云端或现场服务器。
-- **Adapter**：机器人厂商驱动与 11 项视觉预置能力，包含预训练模型。部署在能访问机器人/摄像头的网络中，通过场站 API key 连接 Server。驱动和视觉是独立进程与容器，分别重启；视觉默认限制为 2 CPU / 2 GiB。
+- **Adapter**：机器人厂商驱动与 11 项视觉预置能力，包含预训练模型。部署在能访问机器人/摄像头的网络中，通过场站 API key 连接 Server。驱动和视觉是独立进程与容器，分别重启；启动时读取私有配置后以 UID 1000 运行；视觉默认限制为 2 CPU / 2 GiB。
 
 建议 Server 配置 2 vCPU / 4 GiB，Adapter 从 4 vCPU / 4 GiB 开始，并根据路数和实测采样间隔调整资源。安装两包需预留至少 10 GiB 镜像空间；录像与证据另计。新安装不生成演示机器人或随机告警。
 
@@ -76,7 +76,7 @@ docker compose --env-file .env.server -f compose.yaml down
 
 Starting with v2.4.0, releases provide separate **Server** and **Adapter** packages. Both require Docker Engine and Docker Compose 2.17+. Node, Python, source builds and runtime model downloads are unnecessary. Published packages currently target Linux x86-64.
 
-Server contains the web application, platform API, SQLite storage and video relay. Adapter contains vendor robot drivers and eleven vision presets with pretrained models. Run Adapter on a network that can reach the devices. Its driver and vision containers restart independently; vision defaults to 2 CPUs and 2 GiB RAM. A fresh Server starts without simulated robots or generated alarms.
+Server contains the web application, platform API, SQLite storage and video relay. Adapter contains vendor robot drivers and eleven vision presets with pretrained models. Run Adapter on a network that can reach the devices. Its driver and vision containers read the private configuration at startup, then run as UID 1000 and restart independently; vision defaults to 2 CPUs and 2 GiB RAM. A fresh Server starts without simulated robots or generated alarms.
 
 Verify each archive's `.sha256`, extract it, and run `bash start.sh`. Server opens at `http://127.0.0.1:18080/robots/`; initial account passwords are stored in `.env.server`. Sign in as `admin`, create a site and issue its API key. For Adapter, configure `serverUrl`, `sources` and optional `devices` in `adapter.json`, then set `PB_SITE_KEY` in `.env.adapter`. Protect both files with mode 600. `serverUrl` must be reachable from Adapter and must include the deployment prefix. Use routable device addresses, not Server's loopback address.
 

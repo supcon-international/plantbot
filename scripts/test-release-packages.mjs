@@ -102,6 +102,59 @@ try {
   assert.equal(manifest.revision, other.revision)
   assert.equal(manifest.version, other.version)
   assert.equal(manifest.platform, 'linux/amd64')
+  await run('docker', ['load', '--input', 'images.tar'], adapterDir)
+  // A Linux named volume preserves real UID ownership, unlike desktop file sharing.
+  const privateConfig = `${adapterProject}-private-config`
+  await run('docker', ['volume', 'create', privateConfig])
+  try {
+    await run('docker', [
+      'run',
+      '--rm',
+      '--network',
+      'none',
+      '--platform',
+      manifest.platform,
+      '--user',
+      '0',
+      '--entrypoint',
+      'node',
+      '-v',
+      `${privateConfig}:/config`,
+      other.images.adapter.tag,
+      '-e',
+      "const fs=require('node:fs');fs.writeFileSync('/config/adapter.json',JSON.stringify({id:'linux-private'}),{mode:0o600});fs.chownSync('/config/adapter.json',0,0)",
+    ])
+    for (const service of ['adapter', 'vision']) {
+      const command =
+        service === 'adapter'
+          ? [
+              'node',
+              '-e',
+              "const fs=require('node:fs'),a=require('node:assert/strict'),p=process.env.PB_ADAPTER_CONFIG;a.equal(process.getuid(),1000);a.equal(fs.statSync(p).mode&511,384);a.equal(JSON.parse(fs.readFileSync(p)).id,'linux-private')",
+            ]
+          : [
+              'python',
+              '-c',
+              "import os,json;from pathlib import Path;p=Path(os.environ['PB_ADAPTER_CONFIG']);assert os.getuid()==1000;assert p.stat().st_mode&0o777==0o600;assert json.loads(p.read_text())['id']=='linux-private'",
+            ]
+      await run('docker', [
+        'run',
+        '--rm',
+        '--network',
+        'none',
+        '--platform',
+        manifest.platform,
+        '-v',
+        `${privateConfig}:/config:ro`,
+        other.images[service].tag,
+        ...command,
+      ])
+    }
+    checks.push('Root-owned Linux configuration remains private; both Adapter runtimes execute as UID 1000')
+  } finally {
+    await run('docker', ['volume', 'rm', privateConfig])
+  }
+
   await run('bash', ['start.sh'], serverDir, {
     COMPOSE_PROJECT_NAME: serverProject,
     PLANTBOT_PORT: '18094',
@@ -170,7 +223,6 @@ try {
   sim.stderr.on('data', (b) => {
     log += b
   })
-  await run('docker', ['load', '--input', 'images.tar'], adapterDir)
   await adapterCompose('up', '-d', '--wait')
   await wait(async () => {
     const x = await api('/sites/release-qa/vision')

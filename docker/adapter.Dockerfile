@@ -12,7 +12,9 @@ RUN --mount=type=cache,id=plantbot-pnpm-store,target=/root/.local/share/pnpm/sto
     && pnpm --filter @plantbot/adapter-sdk build
 COPY integrations/ integrations/
 COPY shared/ shared/
-USER node
+COPY --chmod=755 docker/adapter-entrypoint.sh /usr/local/bin/plantbot-adapter-entrypoint
+ENV PB_ADAPTER_CONFIG=/config/adapter.json
+ENTRYPOINT ["/usr/local/bin/plantbot-adapter-entrypoint"]
 WORKDIR /app/robots/integrations
 CMD ["node", "node_modules/tsx/dist/cli.mjs", "runtime.ts"]
 
@@ -30,7 +32,8 @@ RUN python integrations/vision/setup_models.py
 COPY shared/ shared/
 COPY integrations/vision/ integrations/vision/
 RUN mkdir -p /data && chown plantbot:plantbot /data
-USER plantbot
+COPY --chmod=755 docker/adapter-entrypoint.sh /usr/local/bin/plantbot-adapter-entrypoint
+ENTRYPOINT ["/usr/local/bin/plantbot-adapter-entrypoint"]
 HEALTHCHECK --interval=15s --timeout=3s --start-period=90s --retries=3 \
   CMD python -c "import time,pathlib; assert time.time()-float(pathlib.Path('/data/health').read_text()) < 30"
 CMD ["python", "integrations/vision/worker.py"]
