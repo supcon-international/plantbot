@@ -20,5 +20,5 @@ The media manifest describes expected inputs, not precomputed detections.
 
 Native robot protocol simulation comes from the separate
 [plantbotsimulator repository](https://github.com/supcon-international/plantbotsimulator),
-fixed at `49ba9419ca245f5e060a597bb75bb9d12be9d919` in `pack.json`.
+fixed at `deedc083da5334f6c8aa76e074db63d1382e35f8` in `pack.json`.
 No robot simulation is added to Plantbot Server or its production vendor adapters.

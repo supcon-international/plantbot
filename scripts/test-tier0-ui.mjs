@@ -133,7 +133,12 @@ const recordPage = (p) => {
         return
       }
       errors.push(value)
-      Promise.all(m.args().map((arg) => arg.jsonValue().catch(() => '[context disposed]'))).then((args) => { value.args = args })
+      Promise.all(m.args().map((arg) => arg.jsonValue().catch((error) => {
+        const message = String(error)
+        ;(value.argReadErrors ??= []).push(message)
+        return /Execution context was destroyed|Target page, context or browser has been closed|Execution context is not available in detached frame/.test(message)
+          ? '[context disposed]' : `[argument read failed: ${message}]`
+      }))).then((args) => { value.args = args })
     }
   })
   p.on('response', (r) => {
@@ -195,7 +200,7 @@ const auditAccessibility = async (name, p = page) => {
   })) })
 }
 const collectMediaPlaybackProof = async (p = page) => {
-  if (engine !== 'webkit' || new URL(p.url()).pathname !== '/robots/live') return
+  if (engine !== 'webkit') return
   const sample = () => p.locator('video').evaluateAll((videos) => videos.flatMap((v) => {
     const r = v.getBoundingClientRect(), src = v.currentSrc || v.src
     if (!src || r.width <= 0 || r.height <= 0) return []
@@ -204,6 +209,10 @@ const collectMediaPlaybackProof = async (p = page) => {
     return [{ url: url.href, autoplay: v.autoplay, time: v.currentTime, frames: v.getVideoPlaybackQuality?.().totalVideoFrames ?? null,
       readyState: v.readyState, width: v.videoWidth, height: v.videoHeight, error: v.error?.message ?? null }]
   }))
+  const pathname = new URL(p.url()).pathname
+  const expectsPlayer = (pathname === '/robots/live' && await p.getByRole('tab', { name: /^Live video$|^实时视频$/ }).getAttribute('aria-selected').catch(() => null) === 'true')
+    || (pathname.startsWith('/robots/robots/') && await p.getByRole('tab', { name: /Teleoperation|遥操作/ }).getAttribute('aria-selected').catch(() => null) === 'true')
+  if (expectsPlayer) await wait(async () => (await sample()).length > 0, 'Selected video workspace mounts its actual player', 15000)
   let before = await sample()
   if (!before.length) return
   let after = before
@@ -217,14 +226,14 @@ const collectMediaPlaybackProof = async (p = page) => {
       const first = before[i]
       return video.url === first.url && !video.error && video.width > 0 && video.height > 0 && (video.autoplay
         ? video.readyState >= 2 && (video.time > first.time + .02 || (video.frames ?? 0) > (first.frames ?? 0))
-        : video.readyState >= 1)
+        : video.readyState >= 2 && ((video.frames ?? 0) > 0 || video.time > 0))
     })
-  }, 'WebKit Live media loads metadata and active players advance their real decoded video', 15000)
+  }, 'WebKit visible media decodes a frame and active players advance their real decoded video', 15000)
   const lifecycle = pageLifecycle.get(p)
   for (let i = 0; i < after.length; i++) {
     const video = after[i], first = before[i]
     evidence.mediaPlaybackProofs.push({ pageId: lifecycle.pageId, revision: lifecycle.revision, recordedAt: Date.now(), pageUrl: p.url(), url: video.url,
-      decoded: video.readyState >= 2 && ((video.frames ?? 0) > 0 || video.time > first.time + .02), before: first, after: video })
+      decoded: video.readyState >= 2 && ((video.frames ?? 0) > 0 || (video.autoplay ? video.time > first.time + .02 : video.time > 0)), before: first, after: video })
   }
 }
 const inspect = async (name, p = page) => {
@@ -233,10 +242,15 @@ const inspect = async (name, p = page) => {
     const visible = (e) => e.getBoundingClientRect().width > 0 && e.getBoundingClientRect().height > 0 && getComputedStyle(e).visibility !== 'hidden'
     const name = (e) => (e.getAttribute('aria-label') || e.getAttribute('title') || (e.getAttribute('aria-labelledby') || '').split(' ').map((id) => document.getElementById(id)?.textContent || '').join(' ') || e.labels?.[0]?.textContent || e.innerText || '').trim()
     const main = document.querySelector('main')
-    // Radix Switch adds a noninteractive, aria-hidden checkbox inside forms to
-    // bubble native form events. Audit the visible named switch, while keeping
-    // invisible but focusable/interactable inputs in the checks.
-    const formProxy = (e) => e.tagName === 'INPUT' && e.getAttribute('aria-hidden') === 'true' && e.tabIndex < 0 && getComputedStyle(e).opacity === '0' && getComputedStyle(e).pointerEvents === 'none'
+    // Radix Switch/Select add hidden native form proxies. Audit their visible
+    // named controls; keep any hidden control that is still focusable or visible.
+    const formProxy = (e) => {
+      if (e.getAttribute('aria-hidden') !== 'true' || e.tabIndex >= 0) return false
+      const style = getComputedStyle(e)
+      if (e.tagName === 'INPUT') return style.opacity === '0' && style.pointerEvents === 'none'
+      const rect = e.getBoundingClientRect()
+      return e.tagName === 'SELECT' && style.position === 'absolute' && rect.width <= 1 && rect.height <= 1 && style.overflow === 'hidden' && style.clip === 'rect(0px, 0px, 0px, 0px)'
+    }
     const controls = [...document.querySelectorAll('button,a[href],input:not([type=hidden]),select,textarea,[role=combobox]')].filter(e => visible(e) && !formProxy(e))
     const describe = (e) => ({ tag: e.tagName, name: name(e), className: String(e.className).slice(0, 150), width: Math.round(e.getBoundingClientRect().width), html: e.outerHTML.slice(0, 800) })
     const clippedControls = controls.filter((e) => {
@@ -340,6 +354,16 @@ const activate = async (locator) => {
       state.panelRevision++
       state.lastPanelTransition = { role: 'tab', name: await locator.innerText(), pageUrl: page.url() }
     }
+  }
+  const href = await locator.getAttribute('href')
+  if (href?.startsWith('/robots')) {
+    const state = pageLifecycle.get(page), target = new URL(href, base).href
+    if (state) state.pendingNavigation = target
+    try {
+      await (currentDevice ? locator.tap() : locator.click())
+      await page.waitForURL(target)
+    } finally { if (state) state.pendingNavigation = null }
+    return
   }
   return currentDevice ? locator.tap() : locator.click()
 }
@@ -905,6 +929,9 @@ try {
     checks.push('Payload video link is independently keyboard accessible and reaches its selected live stream')
 
     await page.getByRole('combobox', { name: /^site$|^场站$/i }).click()
+    const siteTransition = pageLifecycle.get(page)
+    siteTransition.panelRevision++
+    siteTransition.lastPanelTransition = { role: 'option', name: 'Site: campus', pageUrl: page.url() }
     await page.getByRole('option').filter({ hasText: /campus/i }).click()
     await wait(async () => (await page.getByRole('combobox', { name: /^site$|^场站$/i }).innerText()).toLowerCase().includes('campus'), 'site selection reflected')
     await navigate('/robots')
@@ -928,9 +955,11 @@ try {
         await page.getByRole('button', { name: /more|更多/i }).click()
         link = page.locator(`a[href="/robots${path === '/' ? '' : path}"], a[href="/robots${path}"]`).filter({ visible: true }).first()
       }
-      await link.click()
+      await activate(link)
       await page.waitForURL((u) => u.pathname.replace(/\/$/, '') === `/robots${path === '/' ? '' : path}`)
+      await page.locator('.mobile-more-nav').waitFor({ state: 'hidden' })
       await wait(async () => (await page.locator('main').innerText()).trim().length > 10, `mobile nav ${path}`)
+      if (path === '/live') await collectMediaPlaybackProof(page)
     }
     checks.push('All 10 modules reachable through real mobile navigation and More menu')
 
@@ -988,6 +1017,24 @@ try {
         && p.url === failure.url && p.recordedAt >= failure.failedAt && p.decoded)
       if (proof) { evidence.mediaCancellationDiagnostics.push({ failure, proof }); failedRequests.splice(i, 1) }
     }
+    // Independent unmodified troika-worker-utils probes reproduce this exact
+    // paired Firefox failure only while hard navigation destroys importScripts.
+    // Preserve both messages; a lone, readable, SPA or stable-page error fails.
+    if (engine === 'firefox') {
+      const paired = new Set()
+      for (const failure of errors) {
+        if (failure.error !== 'worker module init function failed to rehydrate') continue
+        const { lifecycle, location } = failure
+        if (!lifecycle.pendingNavigation || lifecycle.pendingNavigation === failure.url || !location.url.startsWith(`blob:${new URL(base).origin}/`)) continue
+        const object = errors.find((candidate) => candidate.error === 'JSHandle@object' && candidate.location.url === location.url
+          && candidate.url === failure.url && candidate.lifecycle.pageId === lifecycle.pageId && candidate.lifecycle.revision === lifecycle.revision
+          && candidate.lifecycle.pendingNavigation === lifecycle.pendingNavigation && candidate.args.length === 1 && candidate.args[0] === '[context disposed]')
+        if (!object) continue
+        paired.add(object); paired.add(failure)
+        evidence.unloadDiagnostics.push({ type: 'Firefox Troika importScripts destroyed by explicit hard navigation (paired messages)', messages: [object, failure] })
+      }
+      for (let i = errors.length - 1; i >= 0; i--) if (paired.has(errors[i])) errors.splice(i, 1)
+    }
     assert.deepEqual(errors, [], 'No JavaScript or unexpected console errors')
     assert.deepEqual(badResponses, [], 'No unexpected failed API, media or asset responses')
     assert.deepEqual(failedRequests, [], 'No failed browser requests')
@@ -1010,18 +1057,22 @@ try {
   // The watchdog is scoped to its own sockets and child, never another service.
   const closeSockets = () => { for (const socket of [...sockets, ...upstreamSockets]) socket.destroy() }
   const childRunning = () => proc.exitCode === null && proc.signalCode === null
+  let teardownStep = 'closing browser contexts'
   const watchdog = setTimeout(() => { closeSockets(); if (childRunning()) proc.kill('SIGTERM') }, 10000)
   const fatalWatchdog = setTimeout(() => {
     closeSockets(); if (childRunning()) proc.kill('SIGKILL')
     const report = JSON.parse(readFileSync(join(out, 'result.json'), 'utf8'))
-    writeFileSync(join(out, 'result.json'), JSON.stringify({ ...report, passed: false, teardownError: 'Isolated browser/fixture failed to close within 25 seconds' }, null, 2))
+    writeFileSync(join(out, 'result.json'), JSON.stringify({ ...report, passed: false, teardownError: 'Isolated browser/fixture failed to close within 25 seconds', teardownStep }, null, 2))
     console.error('Isolated UI runner teardown exceeded 25 seconds')
     process.exit(1)
   }, 25000)
   for (const c of browser?.contexts() ?? []) await closeContext(c)
+  teardownStep = 'closing browser process'
   await browser?.close()
   closeSockets()
+  teardownStep = 'closing HTTP proxy'
   await new Promise((done) => proxy.close(done))
+  teardownStep = 'closing isolated API process'
   if (childRunning()) {
     const closed = once(proc, 'close'); proc.kill('SIGTERM')
     const forceChild = setTimeout(() => { if (childRunning()) proc.kill('SIGKILL') }, 3000)

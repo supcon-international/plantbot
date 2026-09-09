@@ -2,7 +2,7 @@
 set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 sim_dir="${PLANTBOT_SIM_DIR:-$repo_root/../plantbotsimulator}"
-sim_ref=49ba9419ca245f5e060a597bb75bb9d12be9d919
+sim_ref="$(node -e 'const pack = require(process.argv[1]); if (!/^[0-9a-f]{40}$/.test(pack.simulator.revision)) process.exit(1); process.stdout.write(pack.simulator.revision)' "$repo_root/integrations/demo/pack.json")"
 command -v docker >/dev/null
 docker compose version >/dev/null
 if [[ ! -e "$sim_dir" ]]; then

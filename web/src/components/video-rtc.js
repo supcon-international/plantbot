@@ -140,6 +140,9 @@ export class VideoRTC extends HTMLElement {
          * @type {Object.<string,Function>}
          */
         this.onmessage = null;
+
+        /** @type {AbortController|null} MSE callbacks belong to one playback instance. */
+        this.mseLifecycle = null;
     }
 
     /**
@@ -323,6 +326,10 @@ export class VideoRTC extends HTMLElement {
     }
 
     ondisconnect() {
+        // Detaching a MediaSource can queue updateend on a removed SourceBuffer.
+        // Remove its listeners before clearing the video source.
+        this.mseLifecycle?.abort();
+        this.mseLifecycle = null;
         this.wsState = WebSocket.CLOSED;
         if (this.ws) {
             this.ws.close();
@@ -419,25 +426,31 @@ export class VideoRTC extends HTMLElement {
     }
 
     onmse() {
+        this.mseLifecycle?.abort();
+        const lifecycle = new AbortController();
+        this.mseLifecycle = lifecycle;
         /** @type {MediaSource} */
         let ms;
+        const active = () => !lifecycle.signal.aborted && this.isConnected && ms.readyState === 'open';
 
         if ('ManagedMediaSource' in window) {
             const MediaSource = window.ManagedMediaSource;
 
             ms = new MediaSource();
             ms.addEventListener('sourceopen', () => {
+                if (!active()) return;
                 this.send({type: 'mse', value: this.codecs(MediaSource.isTypeSupported)});
-            }, {once: true});
+            }, {once: true, signal: lifecycle.signal});
 
             this.video.disableRemotePlayback = true;
             this.video.srcObject = ms;
         } else {
             ms = new MediaSource();
             ms.addEventListener('sourceopen', () => {
+                if (!active()) return;
                 URL.revokeObjectURL(this.video.src);
                 this.send({type: 'mse', value: this.codecs(MediaSource.isTypeSupported)});
-            }, {once: true});
+            }, {once: true, signal: lifecycle.signal});
 
             this.video.src = URL.createObjectURL(ms);
             this.video.srcObject = null;
@@ -448,13 +461,15 @@ export class VideoRTC extends HTMLElement {
         this.mseCodecs = '';
 
         this.onmessage['mse'] = msg => {
-            if (msg.type !== 'mse') return;
+            if (msg.type !== 'mse' || !active()) return;
 
             this.mseCodecs = msg.value;
 
             const sb = ms.addSourceBuffer(msg.value);
+            const attached = () => active() && Array.from(ms.sourceBuffers).includes(sb);
             sb.mode = 'segments'; // segments or sequence
             sb.addEventListener('updateend', () => {
+                if (!attached()) return;
                 if (!sb.updating && bufLen > 0) {
                     try {
                         const data = buf.slice(0, bufLen);
@@ -480,12 +495,13 @@ export class VideoRTC extends HTMLElement {
                     this.video.playbackRate = gap > 0.1 ? gap : 0.1;
                     // console.debug('VideoRTC.buffered', gap, this.video.playbackRate, this.video.readyState);
                 }
-            });
+            }, {signal: lifecycle.signal});
 
             const buf = new Uint8Array(2 * 1024 * 1024);
             let bufLen = 0;
 
             this.ondata = data => {
+                if (!attached()) return;
                 if (sb.updating || bufLen > 0) {
                     const b = new Uint8Array(data);
                     buf.set(b, bufLen);

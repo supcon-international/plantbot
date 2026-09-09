@@ -7,8 +7,7 @@
 
 import { mkdirSync } from 'node:fs'
 import { readdir, stat, unlink, writeFile } from 'node:fs/promises'
-import { join, dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 import {
   type RobotSpec,
   type PayloadSpec,
@@ -39,6 +38,7 @@ import {
 } from './fleet.js'
 import type { SiteDef, SeedMissionDef } from './sites.js'
 import type { Persist } from './config.js'
+import { DATA_DIR } from './db.js'
 import { grabFrame, type FrameSource } from './frames.js'
 import { ensureRelayStream, relayConfigured, relayName } from './media.js'
 import type { Waypoint, Zone, Building, SiteCamera, SiteMapMeta } from './fleet.js'
@@ -58,9 +58,8 @@ export interface SiteRuntime {
   transforms: FrameTransform[]
 }
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const PUB = process.env.PUBLIC_BASE ?? ''
-export const SNAP_DIR = join(ROOT, 'data', 'snapshots')
+export const SNAP_DIR = join(DATA_DIR, 'snapshots')
 mkdirSync(SNAP_DIR, { recursive: true })
 
 // evidence snapshots are unbounded otherwise (events cap at 400, files don't):

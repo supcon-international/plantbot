@@ -10,8 +10,8 @@ const children = new Set(), timers = new Set()
 const processes = [
   { name: 'demo-rtsp', cwd: root, args: ['demo/rtsp.mjs'] },
   { name: 'spot-simulator', cwd: sim, args: ['node_modules/tsx/dist/cli.mjs', 'spot/sim/main.ts'], env: { SPOT_SIM_PORT: '9103', SPOT_SERIAL: 'DEMO-SPOT', SPOT_SIM_DOCK_X: '-11', SPOT_SIM_DOCK_Y: '6', SPOT_SIM_FAULT_S: '0' } },
-  { name: 'x30-simulator', cwd: sim, args: ['node_modules/tsx/dist/cli.mjs', 'deeprobotics/sim/main.ts'], env: { DR_SIM_PORT: '30000', DR_SIM_LOCAL_PATROL_MS: '0', DR_SIM_FAULT_S: '0' } },
-  { name: 'f2-simulator', cwd: sim, args: ['node_modules/tsx/dist/cli.mjs', 'gosuncn/sim/main.ts'], env: { GOSUNCN_SIM_PORT: '9101', SIM_RTSP_BASE: rtsp } },
+  { name: 'x30-simulator', cwd: sim, args: ['node_modules/tsx/dist/cli.mjs', 'deeprobotics/sim/main.ts'], env: { DR_SIM_PORT: '30000', DR_SIM_LOCAL_PATROL_MS: '0', DR_SIM_FAULT_S: '0', DR_SIM_FAULTS: '0' } },
+  { name: 'f2-simulator', cwd: sim, args: ['node_modules/tsx/dist/cli.mjs', 'gosuncn/sim/main.ts'], env: { GOSUNCN_SIM_PORT: '9101', GOSUNCN_SIM_ALARMS: '0', SIM_RTSP_BASE: rtsp } },
   { name: 'production-adapter-runtime', cwd: root, args: ['node_modules/tsx/dist/cli.mjs', 'runtime.ts'] }
 ]
 function start(spec) {

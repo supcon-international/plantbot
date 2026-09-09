@@ -1,5 +1,5 @@
 import { apiFetch } from './store'
-import type { DetectionRule, MetricDef, Severity } from './types'
+import type { DetectionEvent, DetectionRule, MetricDef, Severity } from './types'
 
 export type Point = [number, number]
 export interface VisionConfig {
@@ -115,6 +115,14 @@ export async function monitoringRequest<T>(
   if (!response.ok) throw new Error(json.message || json.error || `HTTP ${response.status}`)
   return json as T
 }
+export const eventConfidence = (event: DetectionEvent): number | null => {
+  if (event.trigger) return event.trigger.confidence
+  // Older visual events used a synthetic 1; without the retained observation,
+  // that value cannot establish the model's actual confidence.
+  if (event.type.startsWith('vision-')) return null
+  return event.confidence
+}
+
 export const confidenceText = (value: number | null | undefined, zh: boolean) =>
   typeof value === 'number' && Number.isFinite(value)
     ? `${Math.round(value * 100)}%`

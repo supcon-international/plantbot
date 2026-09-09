@@ -7,7 +7,7 @@
   "adapterId": "demo-vision",
   "simulator": {
     "repository": "https://github.com/supcon-international/plantbotsimulator",
-    "revision": "49ba9419ca245f5e060a597bb75bb9d12be9d919"
+    "revision": "deedc083da5334f6c8aa76e074db63d1382e35f8"
   },
   "rules": [
     {"name": "Demo · Display over 80 C / 仪表超限", "preset": "ocr", "sourceId": "demo-display", "numeric": true, "unit": "C", "max": 80, "region": [[0.53,0.1],[1,0.1],[1,0.92],[0.53,0.92]], "severity": "high"},

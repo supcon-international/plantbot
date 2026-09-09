@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
-import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { once } from 'node:events'
@@ -41,6 +41,13 @@ test('monitoring: real thresholds, immutable provenance, lifecycle, legacy upgra
     await ready(); await stop() // seed geometry only, before the 6-second synthetic seed timer
     proc = spawnProc('server/src/index.ts', { ...env, PB_DEMO: '0' }, 'monitoring-production'); await ready()
     const admin = await login('admin'), operator = await login('operator'), viewer = await login('viewer')
+    const snapshots = join(dir, 'snapshots')
+    assert.ok(existsSync(snapshots), 'snapshot storage follows the isolated PB_DATA_DIR')
+    const snapshot = readFileSync(new URL('../vision/tests/fixtures/evidence.jpg', import.meta.url))
+    writeFileSync(join(snapshots, 'monitoring-isolation.jpg'), snapshot)
+    const snapshotResponse = await fetch(`${base}/api/snapshots/monitoring-isolation.jpg`, { headers: { cookie: viewer.cookie } })
+    assert.equal(snapshotResponse.status, 200, 'snapshot serving reads the isolated storage directory')
+    assert.deepEqual(Buffer.from(await snapshotResponse.arrayBuffer()), snapshot)
     const event = async (id: string) => (await api(viewer, 'GET', `${site}/events/${id}`)).body.event
     const eventList = async () => (await api(viewer, 'GET', `${site}/events?limit=500`)).body.events as any[]
     const index = async () => (await api(viewer, 'GET', `${site}/monitoring-rules`)).body

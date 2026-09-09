@@ -140,7 +140,7 @@ try {
   let camera
   for (const name of selected) {
     const spec = cases[name]
-    const result = { name, passed: false, device: spec.device ?? 'desktop', deviceEmulation: !!spec.device, consoleErrors: [], nativeMediaProbe: [], pageErrors: [], pageErrorDetails: [], navigations: [], websocket: [], sessions: [], playback: [] }
+    const result = { name, passed: false, device: spec.device ?? 'desktop', deviceEmulation: !!spec.device, consoleErrors: [], nativeMediaProbe: [], pageErrors: [], pageErrorDetails: [], mediaLifecycle: [], navigations: [], websocket: [], sessions: [], playback: [] }
     results.push(result)
     let context, page
     try {
@@ -176,7 +176,7 @@ try {
         camera = (await created.json()).camera
       }
       page = await context.newPage()
-      page.on('pageerror', error => { result.pageErrors.push(error.message); result.pageErrorDetails.push({ url: page.url(), phase: result.phase, message: error.message, stack: error.stack }) })
+      page.on('pageerror', error => { result.pageErrors.push(error.message); result.pageErrorDetails.push({ at: Date.now(), url: page.url(), phase: result.phase, name: error.name, message: error.message, stack: error.stack }) })
       page.on('framenavigated', frame => { if (frame === page.mainFrame()) result.navigations.push({ url: frame.url(), at: Date.now() }) })
       page.on('console', message => { if (message.type() === 'error') result.consoleErrors.push({ text: message.text(), location: message.location() }) })
       page.on('websocket', ws => {
@@ -196,6 +196,50 @@ try {
       await page.addInitScript(() => {
         localStorage.setItem('aegis-lang', JSON.stringify({ state: { lang: 'en' }, version: 0 }))
         localStorage.setItem('aegis-theme', JSON.stringify({ state: { theme: 'dark' }, version: 0 }))
+        // Diagnostic only: preserve all native semantics and rethrow the same
+        // exception. Relate detached SourceBuffer failures to the owning media
+        // source without relaxing the uncaught-error gate.
+        window.__streamMediaLifecycle = []
+        window.__streamBuffers = []
+        const owners = new WeakMap(), seen = new WeakSet()
+        const record = (type, extra = {}) => {
+          window.__streamMediaLifecycle.push({ at: Date.now(), url: location.href, type, ...extra })
+          if (window.__streamMediaLifecycle.length > 250) window.__streamMediaLifecycle.shift()
+        }
+        for (const Constructor of [window.MediaSource, window.ManagedMediaSource]) {
+          if (!Constructor) continue
+          const prototype = Constructor.prototype
+          // ManagedMediaSource may inherit the already wrapped method.
+          if (!Object.hasOwn(prototype, 'addSourceBuffer')) continue
+          const add = prototype.addSourceBuffer
+          prototype.addSourceBuffer = function(...args) {
+            const source = this, buffer = Reflect.apply(add, source, args)
+            owners.set(buffer, source)
+            window.__streamBuffers.push({ buffer, source })
+            if (!seen.has(source)) {
+              seen.add(source)
+              for (const type of ['sourceopen', 'sourceended', 'sourceclose']) source.addEventListener(type, () => record(type, { readyState: source.readyState, bufferCount: source.sourceBuffers.length }))
+            }
+            record('addSourceBuffer', { readyState: source.readyState, codecs: args[0] })
+            buffer.addEventListener('updateend', () => {
+              if (source.readyState !== 'open' || !Array.from(source.sourceBuffers).includes(buffer))
+                record('detached-updateend', { readyState: source.readyState, bufferCount: source.sourceBuffers.length, present: Array.from(source.sourceBuffers).includes(buffer), updating: buffer.updating })
+            })
+            return buffer
+          }
+        }
+        const descriptor = window.SourceBuffer && Object.getOwnPropertyDescriptor(SourceBuffer.prototype, 'buffered')
+        if (descriptor?.get && descriptor.configurable) Object.defineProperty(SourceBuffer.prototype, 'buffered', {
+          ...descriptor,
+          get() {
+            try { return Reflect.apply(descriptor.get, this, []) }
+            catch (error) {
+              const source = owners.get(this)
+              record('buffered-getter-threw', { name: error.name, message: error.message, stack: error.stack, readyState: source?.readyState, bufferCount: source?.sourceBuffers.length, present: source ? Array.from(source.sourceBuffers).includes(this) : null, updating: this.updating })
+              throw error
+            }
+          },
+        })
       })
       const activate = async locator => { if (spec.device) await locator.tap(); else await locator.click() }
       const navigateModule = async path => {
@@ -282,9 +326,21 @@ try {
             return consumers.length === 0
           }, `${name}: go2rtc confirms leaving LIVE released the MSE consumer`, 8000)
           result.playback.at(-1).cleanup = { destinationRendered: '/assets', videoComponentRemoved: true, observedSocketClosed: true, relayConsumers: consumers }
+          if (process.env.PB_STREAM_STALE_CALLBACK_PROBE === '1') {
+            // Deterministically replay a queued updateend on the actual retired
+            // RTSP SourceBuffer. This supplements natural SPA cleanup; it does
+            // not substitute for decoded playback or observed socket closure.
+            result.staleCallbackProbe = await page.evaluate(() => window.__streamBuffers.map(({ buffer, source }) => {
+              const before = { readyState: source.readyState, bufferCount: source.sourceBuffers.length, present: Array.from(source.sourceBuffers).includes(buffer) }
+              buffer.dispatchEvent(new Event('updateend'))
+              return before
+            }))
+          }
+          result.mediaLifecycle = await page.evaluate(() => window.__streamMediaLifecycle)
         }
       }
       assert.ok(result.websocket.some(ws => ws.sent.some(message => JSON.parse(message).type === 'mse') && ws.binaryFrames > 0), 'go2rtc MSE negotiation and fMP4 payloads observed')
+      result.mediaLifecycle = await page.evaluate(() => window.__streamMediaLifecycle)
       const testedSessions = result.sessions.filter(s => s.channelId === `cam:${camera.id}`)
       assert.ok(testedSessions.length >= 2 && testedSessions.every(s => s.protocol === 'mse' && s.relayOnline === true && s.expiresAt !== null), 'Actual RTSP playback leases, never a file session')
       assert.deepEqual(result.pageErrors, [], 'No uncaught player errors')
@@ -298,7 +354,7 @@ try {
       result.passed = true
     } catch (error) {
       result.error = String(error)
-      if (page) { result.visibleText = await page.locator('main').innerText().catch(() => ''); await page.screenshot({ path: join(out, `${name}-failed.png`) }).catch(() => {}) }
+      if (page) { result.mediaLifecycle = await page.evaluate(() => window.__streamMediaLifecycle).catch(() => []); result.visibleText = await page.locator('main').innerText().catch(() => ''); await page.screenshot({ path: join(out, `${name}-failed.png`) }).catch(() => {}) }
     } finally {
       await context?.close().catch(() => {})
       await browser?.close().catch(() => {}); browser = undefined

@@ -32,7 +32,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { MonitoringRules } from '../components/MonitoringRules'
 import { FrozenRuleDetails } from '../components/FrozenRuleDetails'
 import { VisionEvidence, VisionObservationDialog } from '../components/VisionInspection'
-import { confidenceText, monitoringRequest, type VisionResult } from '../lib/monitoring'
+import { confidenceText, eventConfidence, monitoringRequest, type VisionResult } from '../lib/monitoring'
 
 const MODEL_IDS: DetectionModel[] = [
   'person',
@@ -218,7 +218,7 @@ function DetailModal({
             [t('c.source'), ev.sourceName],
             [
               zh ? '模型置信度' : 'Model confidence',
-              confidenceText(trigger ? trigger.confidence : ev.confidence, zh),
+              confidenceText(eventConfidence(ev), zh),
             ],
             [t('c.status'), t(`lc.${ev.lifecycle}`)],
             [
@@ -337,7 +337,7 @@ function BoardCard({ e, onOpen }: { e: DetectionEvent; onOpen: () => void }) {
           <span className="mono text-[12px] text-ink-3">{ago(e.ts, clock)}</span>
           <span className="mono ml-auto text-[12px] text-ink-3">
             {confidenceText(
-              e.trigger ? e.trigger.confidence : e.confidence,
+              eventConfidence(e),
               useLang.getState().lang === 'zh',
             )}
           </span>
@@ -431,11 +431,10 @@ export function Events() {
     rules = useApp((s) => s.rules),
     ack = useApp((s) => s.ack),
     clock = useApp((s) => s.clock)
-  const [params, setParams] = useSearchParams(),
-    [view, setView] = useState<View>(
-      params.get('view') === 'rules' ? 'rules' : params.get('view') === 'defects' ? 'defects' : 'events',
-    ),
-    [presentation, setPresentation] = useState(params.get('view') === 'table' ? 'table' : 'board')
+  const [params, setParams] = useSearchParams()
+  const view: View =
+    params.get('view') === 'rules' ? 'rules' : params.get('view') === 'defects' ? 'defects' : 'events'
+  const [presentation, setPresentation] = useState(params.get('view') === 'table' ? 'table' : 'board')
   const [selId, setSelId] = useState<string | null>(params.get('ev')),
     [ruleFilter, setRuleFilter] = useState<string | null>(params.get('ruleFilter')),
     [catFilter, setCatFilter] = useState<EventCategory | null>(null)
@@ -467,7 +466,6 @@ export function Events() {
   }, [site, selId, !!liveEvent])
   useEffect(() => {
     const v = params.get('view')
-    setView(v === 'rules' ? 'rules' : v === 'defects' ? 'defects' : 'events')
     if (v === 'table') setPresentation('table')
     if (params.get('ev')) setSelId(params.get('ev'))
     if (params.get('ruleFilter')) setRuleFilter(params.get('ruleFilter'))
@@ -479,7 +477,6 @@ export function Events() {
     setParams(next, { replace: true })
   }
   const changeView = (v: string) => {
-    setView(v as View)
     const next = new URLSearchParams(params)
     next.set('view', v)
     next.delete('ev')
@@ -595,7 +592,7 @@ export function Events() {
                         <div className="text-xs text-ink-3">{e.sourceName}</div>
                       </TableCell>
                       <TableCell className="mono text-xs">
-                        {confidenceText(e.trigger ? e.trigger.confidence : e.confidence, zh)}
+                        {confidenceText(eventConfidence(e), zh)}
                       </TableCell>
                       <TableCell>
                         <Snapshot ev={e} />
@@ -621,7 +618,6 @@ export function Events() {
             onViewEvents={(id) => {
               setRuleFilter(id)
               setPresentation('table')
-              setView('events')
               setParams({ view: 'events', ruleFilter: id }, { replace: true })
             }}
           />

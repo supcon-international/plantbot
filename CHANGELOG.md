@@ -8,7 +8,7 @@
 - 事件保留触发时的规则版本、读数、观测与证据，配置修改和删除不重写历史；试运行与正常观测不生成异常事件。
 - 区分规则启用状态与 Adapter 实际运行状态，公开真实预置能力，禁止随机演示生成器触发真实阈值规则。
 - 新增独立 Adapter Demo 发布包：原生协议模拟器经真实厂商 Adapter 接入，演示视频经实际模型推理，一键启动和保留数据重启。
-- Server 与 Adapter 生产包保持独立，Demo 包明确标记演示场站并关闭 Server 随机事件。
+- Server 与 Adapter 生产包保持独立，Demo 包明确标记演示场站并关闭 Server 和模拟器随机告警。
 
 兼容性：原有视觉配置、结果与规则继续使用现有持久化来源；新建传感器规则必须显式声明类型和阈值条件。演示验证不代表现场模型准确率或实机协议验收。
 
@@ -18,7 +18,7 @@
 - Preserved triggering rule revisions, values, observations and evidence without rewriting event history after configuration changes or deletion. Previews and normal observations do not raise anomaly events.
 - Distinguished configured enablement from actual Adapter runtime state, advertised supported presets and excluded real thresholds from random demo event generation.
 - Added an independent Adapter Demo release bundle with native-protocol simulators, real vendor adapters, actual model inference from sample videos and one-command startup with persistent data.
-- Kept production Server and Adapter packages separate; the Demo package labels its site and disables Server-generated random events.
+- Kept production Server and Adapter packages separate; the Demo package labels its site and disables random Server and simulator alarms.
 
 Compatibility: Existing configuration and result stores remain authoritative. New sensor rules require an explicit type and threshold condition. Demo acceptance does not establish site-specific model accuracy or physical-robot certification.
 

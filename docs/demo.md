@@ -11,7 +11,7 @@ cd plantbot-adapter-demo-v2.5.0-linux-amd64
 bash start.sh
 ```
 
-打开 `http://127.0.0.1:18080/robots/?site=demo-lab`。首次生成的 `.env.demo` 权限为 600，包含 `admin`、`operator`、`viewer` 三个账户密码。管理员可编辑监测规则；演示日常巡检使用 operator。服务端设置 `PB_DEMO=0`，只创建标记清晰的 `demo-lab` 场站，没有随机 Server 告警或伪造历史结果。初次启动可能需要等待镜像导入和模型初始化；规则启用后一个素材周期为 90 秒。
+打开 `http://127.0.0.1:18080/robots/?site=demo-lab`。首次生成的 `.env.demo` 权限为 600，包含 `admin`、`operator`、`viewer` 三个账户密码。管理员可编辑监测规则；演示日常巡检使用 operator。服务端设置 `PB_DEMO=0`，只创建标记清晰的 `demo-lab` 场站，没有随机 Server 告警或伪造历史结果；模拟器的随机设备/厂商告警也显式关闭，视觉异常只由真实推理生成。初次启动可能需要等待镜像导入和模型初始化；规则启用后一个素材周期为 90 秒。
 
 默认服务只监听本机网页端口 18080 和 RTSP 端口 18554。通过 `.env.demo` 的 `PLANTBOT_BIND`、`PLANTBOT_PORT`、`PB_DEMO_RTSP_BIND`、`PB_DEMO_RTSP_PORT` 调整；只给需要访问的网络开放。已有同名端口时可首次运行 `PLANTBOT_PORT=18081 PB_DEMO_RTSP_PORT=18555 bash start.sh`。不同演示使用不同的 `PB_DEMO_PROJECT`，它隔离全部数据卷；后续启动、停止也使用同一项目名。
 
@@ -45,9 +45,9 @@ bash start.sh --external
 ## 运行与停止
 
 ```bash
-docker compose --env-file .env.demo -f compose.yaml --profile server ps
-docker compose --env-file .env.demo -f compose.yaml logs --tail=100 demo-adapter vision
-docker compose --env-file .env.demo -f compose.yaml --profile server stop
+docker compose -p "${PB_DEMO_PROJECT:-plantbot-demo}" --env-file .env.demo -f compose.yaml --profile server ps
+docker compose -p "${PB_DEMO_PROJECT:-plantbot-demo}" --env-file .env.demo -f compose.yaml logs --tail=100 demo-adapter vision
+docker compose -p "${PB_DEMO_PROJECT:-plantbot-demo}" --env-file .env.demo -f compose.yaml --profile server stop
 ```
 
 普通停止保留数据；再次 `bash start.sh` 继续使用它。确实需要删除本演示的数据时，在确认 Compose 项目名后执行 `down -v`；外接模式的场站在远端 Server 中，必须由管理员单独删除，停止本地容器不会删除它。不要向现有生产 Server 隐式清库。
@@ -69,6 +69,6 @@ node scripts/test-release-packages.mjs SERVER.tar.gz ADAPTER.tar.gz ADAPTER_DEMO
 
 ## English
 
-The Adapter Demo archive is a self-contained offline installation: the same-version Server images, native Spot/X30/F2 simulators from a pinned separate repository, the production Adapter runtime and vision worker, locked ONNX/OCR weights, and labelled distributable input videos. Run `bash start.sh` and open `/robots/?site=demo-lab`. Credentials are generated in private `.env.demo`. No Server random alarms or fabricated historical observations are enabled.
+The Adapter Demo archive is a self-contained offline installation: the same-version Server images, native Spot/X30/F2 simulators from a pinned separate repository, the production Adapter runtime and vision worker, locked ONNX/OCR weights, and labelled distributable input videos. Run `bash start.sh` and open `/robots/?site=demo-lab`. Credentials are generated in private `.env.demo`. Random Server and simulator alarms are disabled; visual events come only from actual inference. No historical observations are fabricated.
 
 The display cycles through 70, 85.2 and 72 C, 30 seconds per phase. A public-domain NASA person photograph appears and disappears in a fixed synthetic scene. Real inference generates count observations and intrusion/OCR events. Recovery and human event resolution remain separate. These fixtures demonstrate operation, not accuracy on factory footage. For an existing Server, configure `.env.demo.example` and use `bash start.sh --external`; only a dedicated demo site is created. Source provenance is in `DEMO_SOURCES.md`, with asset hashes in `media/manifest.json` and model licences beside `models.lock.json`.
