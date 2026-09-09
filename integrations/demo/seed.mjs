@@ -28,10 +28,11 @@ if (!auth.ok) throw new Error(`Demo bootstrap requires a working platform admin 
 cookie = auth.headers.get('set-cookie')?.split(';')[0] ?? ''
 const saved = existsSync(statePath) ? JSON.parse(readFileSync(statePath)) : null
 if (saved && (saved.packId !== pack.id || saved.serverUrl !== base)) throw new Error('Demo state belongs to another pack or Server; use a separate Compose project')
+if (saved && saved.mediaRevision !== pack.mediaRevision) throw new Error(`Demo media revision ${saved.mediaRevision ?? 'legacy synthetic'} is incompatible with ${pack.mediaRevision}; existing rules and history were preserved. Back up the old installation, then use a new PB_DEMO_PROJECT and PB_DEMO_ENV_FILE for the recorded-camera demo.`)
 const sites = (await api('/sites')).sites
 const existing = sites.find(x => x.id === site)
 if (existing && (!saved || existing.operator !== pack.operator)) throw new Error(`Refusing to adopt or overwrite existing site ${site}; choose a clean Server or remove only an obsolete demo installation explicitly`)
-const state = saved ?? { packId: pack.id, serverUrl: base, siteId: site, createdAt: Date.now() }
+const state = saved ?? { packId: pack.id, mediaRevision: pack.mediaRevision, serverUrl: base, siteId: site, createdAt: Date.now() }
 if (!existing) {
   if (saved) throw new Error('Demo site was removed; do not silently recreate it with stale keys')
   await api('/sites', 'POST', { id: site, name: pack.siteName, operator: pack.operator, bounds: { x: [-24,24], z: [-14,14] } })
@@ -62,24 +63,24 @@ if (process.argv.includes('--rules')) {
     state.rules[rule.preset] = config.id
     save(statePath, state)
   }
-  console.log('[demo] Three real monitoring rules ready; first full input cycle takes 90 seconds. No historical observations/events were fabricated.')
+  console.log('[demo] Three real monitoring rules ready; recorded IR loop is 13.28 seconds and recorded area loop is 30 seconds. No historical observations/events were fabricated.')
 } else {
   if (!state.geometry) {
     await api(`${S}/geometry`, 'PUT', { dockWp: 'DEMO-DOCK',
       waypoints: [
         { id: 'DEMO-DOCK', name: 'Demo · Charge dock', x: -11, z: -6, kind: 'dock' },
-        { id: 'DEMO-WP-1', name: 'Demo · Display station', x: -4, z: -2, kind: 'inspect' },
+        { id: 'DEMO-WP-1', name: 'Demo · Thermal display station', x: -4, z: -2, kind: 'inspect' },
         { id: 'DEMO-WP-2', name: 'Demo · Restricted area', x: 4, z: 3, kind: 'inspect' },
         { id: 'DEMO-WP-3', name: 'Demo · Return lane', x: 8, z: -4, kind: 'nav' }],
       zones: [{ id: 'DEMO-ZONE', name: 'Demo · Restricted area', kind: 'restricted', polygon: [[1,0],[7,0],[7,6],[1,6]] }],
       cameras: [
-        { id: 'demo-display', name: 'Demo · Instrument loop', x: -4, z: -2, heading: 0, stream: 'demo-display', rtsp: `${rtsp}/instrument` },
-        { id: 'demo-area', name: 'Demo · Public-domain person fixture', x: 4, z: 3, heading: 0, stream: 'demo-area', rtsp: `${rtsp}/restricted-area` }]
+        { id: 'demo-display', name: 'Demo · Recorded IR display', x: -4, z: -2, heading: 0, stream: 'demo-display', rtsp: `${rtsp}/instrument` },
+        { id: 'demo-area', name: 'Demo · Recorded stairwell camera', x: 4, z: 3, heading: 0, stream: 'demo-area', rtsp: `${rtsp}/restricted-area` }]
     })
     state.geometry = true; save(statePath, state)
   }
   if (!state.assetId) {
-    state.assetId = (await api(`${S}/assets`, 'POST', { name: 'Demo · Instrument panel', kind: 'Demo display', location: 'Synthetic input', waypointId: 'DEMO-WP-1', notes: 'Generated 70 → 85.2 → 72 C video. Real OCR; not a measured factory temperature.' })).id
+    state.assetId = (await api(`${S}/assets`, 'POST', { name: 'Demo · Thermal camera display', kind: 'IR display reading', location: 'Recorded coal conveyor inspection', waypointId: 'DEMO-WP-1', notes: 'OCR reads the original thermal camera maximum-temperature display (31.1–34.3℃). The scene hotspot includes a person; this is not an equipment-overheat diagnosis or temperature inferred from image colours. 33℃ is a demonstration threshold.' })).id
     save(statePath, state)
   }
   if (!state.templateId) {
@@ -89,15 +90,15 @@ if (process.argv.includes('--rules')) {
     })).template.id
     save(statePath, state)
   }
-  const stream = { id: 'front', name: 'Demo · Fixture camera', kind: 'camera', url: `${rtsp}/restricted-area` }
-  save(join(stateDir, 'adapter.json'), { id: pack.adapterId, name: 'Demo · Real Adapter / synthetic sources', serverUrl: base, siteKey: state.key,
+  const stream = { id: 'front', name: 'Demo · Recorded camera', kind: 'camera', url: `${rtsp}/restricted-area` }
+  save(join(stateDir, 'adapter.json'), { id: pack.adapterId, name: 'Demo · Real Adapter / recorded camera sources', serverUrl: base, siteKey: state.key,
     devices: [
       { vendor: 'spot', config: { serial: 'DEMO-SPOT', callsign: 'Demo · Spot', host: '127.0.0.1', port: 9103, user: 'admin', pass: 'spotdev2026', dockX: -11, dockZ: -6, streams: [stream] } },
       { vendor: 'deeprobotics', config: { serial: 'DEMO-X30', callsign: 'Demo · X30', host: '127.0.0.1', port: 30000, dockX: -11, dockZ: -6, streams: [stream] } },
       { vendor: 'gosuncn', config: { serial: 'DEMO-F2', callsign: 'Demo · F2', base: 'http://127.0.0.1:9101', user: 'campus01', pass: 'gorobot@2025', sn: 'F2230204117', streams: [stream] } }],
     sources: [
-      { id: 'demo-display', label: 'Demo · Instrument loop', channelId: 'cam:demo-display', view: 'fixed', url: '/opt/plantbot-demo/media/instrument.mp4', loop: true },
-      { id: 'demo-area', label: 'Demo · Public-domain person fixture', channelId: 'cam:demo-area', view: 'fixed', url: '/opt/plantbot-demo/media/restricted-area.mp4', loop: true }]
+      { id: 'demo-display', label: 'Demo · Recorded IR display', channelId: 'cam:demo-display', view: 'fixed', url: '/opt/plantbot-demo/media/instrument.mp4', loop: true },
+      { id: 'demo-area', label: 'Demo · Recorded stairwell camera', channelId: 'cam:demo-area', view: 'fixed', url: '/opt/plantbot-demo/media/restricted-area.mp4', loop: true }]
   })
   console.log('[demo] Site, two fixed cameras, equipment, route and private Adapter configuration ready')
 }

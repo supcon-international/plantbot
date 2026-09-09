@@ -10,8 +10,83 @@
     "revision": "deedc083da5334f6c8aa76e074db63d1382e35f8"
   },
   "rules": [
-    {"name": "Demo · Display over 80 C / 仪表超限", "preset": "ocr", "sourceId": "demo-display", "numeric": true, "unit": "C", "max": 80, "region": [[0.53,0.1],[1,0.1],[1,0.92],[0.53,0.92]], "severity": "high"},
-    {"name": "Demo · People counting / 人数统计", "preset": "people_count", "sourceId": "demo-area", "region": [[0.28,0.15],[0.72,0.15],[0.72,0.9],[0.28,0.9]], "severity": "info"},
-    {"name": "Demo · Restricted area / 禁区持续有人", "preset": "intrusion", "sourceId": "demo-area", "region": [[0.28,0.15],[0.72,0.15],[0.72,0.9],[0.28,0.9]], "threshold": 0, "durationS": 3, "severity": "high"}
-  ]
+    {
+      "name": "Demo · IR display over 33℃ / 热像画面最高温读数超限",
+      "preset": "ocr",
+      "sourceId": "demo-display",
+      "numeric": true,
+      "unit": "℃",
+      "max": 33,
+      "region": [
+        [
+          0.7,
+          0.12
+        ],
+        [
+          1,
+          0.12
+        ],
+        [
+          1,
+          0.5
+        ],
+        [
+          0.7,
+          0.5
+        ]
+      ],
+      "severity": "high"
+    },
+    {
+      "name": "Demo · People counting / 人数统计",
+      "preset": "people_count",
+      "sourceId": "demo-area",
+      "region": [
+        [
+          0.38,
+          0.43
+        ],
+        [
+          0.65,
+          0.43
+        ],
+        [
+          0.65,
+          1
+        ],
+        [
+          0.38,
+          1
+        ]
+      ],
+      "severity": "info"
+    },
+    {
+      "name": "Demo · Restricted area / 禁区持续有人",
+      "preset": "intrusion",
+      "sourceId": "demo-area",
+      "region": [
+        [
+          0.38,
+          0.43
+        ],
+        [
+          0.65,
+          0.43
+        ],
+        [
+          0.65,
+          1
+        ],
+        [
+          0.38,
+          1
+        ]
+      ],
+      "threshold": 0,
+      "durationS": 2,
+      "severity": "high"
+    }
+  ],
+  "mediaRevision": "recorded-2026-09-v1"
 }

@@ -20,12 +20,12 @@ Plantbot 是一个多场站巡检机器人管理平台，用于统一管理不�
 
 ## 快速部署
 
-[下载 v2.5.0](https://github.com/supcon-international/plantbot/releases/tag/v2.5.0) 的 **Server** 和 **Adapter** 两个包。Server 运行管理界面、API 和视频中继；Adapter 接入机器人与摄像头，并在现场运行视觉模型。当前提供 Linux x86-64 预构建镜像，需要 Docker Engine 和 Docker Compose 2.17+，无需本地构建。
+[下载 v2.5.1](https://github.com/supcon-international/plantbot/releases/tag/v2.5.1) 的 **Server** 和 **Adapter** 两个包。Server 运行管理界面、API 和视频中继；Adapter 接入机器人与摄像头，并在现场运行视觉模型。当前提供 Linux x86-64 预构建镜像，需要 Docker Engine 和 Docker Compose 2.17+，无需本地构建。
 
 ```bash
-sha256sum -c plantbot-server-v2.5.0-linux-amd64.tar.gz.sha256
-tar -xzf plantbot-server-v2.5.0-linux-amd64.tar.gz
-cd plantbot-server-v2.5.0-linux-amd64
+sha256sum -c plantbot-server-v2.5.1-linux-amd64.tar.gz.sha256
+tar -xzf plantbot-server-v2.5.1-linux-amd64.tar.gz
+cd plantbot-server-v2.5.1-linux-amd64
 bash start.sh
 ```
 
@@ -33,7 +33,7 @@ bash start.sh
 
 首次安装从空场站开始。详细安装、分机部署、旧版迁移和保留数据升级见[版本部署文档](docs/release.md)，监测配置见[事件中的视觉监测](docs/vision.md)。
 
-只需演示时，下载同版本的 **Adapter Demo** 包，解压后运行 `bash start.sh`。它包含完整平台、三家原生协议机器人模拟器和实际视觉推理所需的模型、示例视频，入口为 `http://127.0.0.1:18080/robots/?site=demo-lab`。仪表超限、人数和禁区事件由真实 Adapter 输出，Server 随机告警关闭。重启、外接 Server 和演示步骤见[演示包](docs/demo.md)。
+只需演示时，下载同版本的 **Adapter Demo** 包，解压后运行 `bash start.sh`，打开 `http://127.0.0.1:18080/robots/?site=demo-lab`。它包含完整平台、三家原生协议机器人模拟器、视觉模型和可再分发的真实录像。Adapter 对 MEVA 安防训练场楼梯画面识别人流，对 InspecSafe 原始热像的最高温叠字执行 OCR；33℃ 是演示阈值，热点含人物，不能解释为设备过热。人数属于观测，超限和禁区条件产生事件；Server 与模拟器随机告警关闭。启动、重启及外接 Server 见[演示包](docs/demo.md)，来源、署名与限制见[演示素材](docs/demo-media.md)。
 
 ## 本地开发
 
@@ -47,7 +47,7 @@ pnpm run setup
 pnpm dev
 ```
 
-打开 [http://localhost:5173](http://localhost:5173)。开发模式会创建三个演示场站，账号为 `admin`、`operator`、`viewer`，默认密码均为 `plantbot`。`pnpm run setup` 下载视频素材、机器人模型和视频中继；请保留命令中的 `run`。
+打开 [http://localhost:5173](http://localhost:5173)。开发模式会创建三个演示场站，账号为 `admin`、`operator`、`viewer`，默认密码均为 `plantbot`。`pnpm run setup` 校验仓库内录像的 SHA-256 并更新已知演示视频缓存，下载机器人模型、视频中继等依赖；请保留命令中的 `run`。
 
 要运行完整的机器人演示，先停止开发服务，在平台仓库目录下安装独立的[仿真器](https://github.com/supcon-international/plantbotsimulator)：
 
@@ -55,12 +55,11 @@ pnpm dev
 git clone https://github.com/supcon-international/plantbotsimulator.git ../plantbotsimulator
 cd ../plantbotsimulator
 npm install
-npm run setup
 cd ../plantbot
 pnpm dev
 ```
 
-`pnpm dev` 会一起启动平台、适配器、仿真器和视频中继。未安装仿真器且未连接真机时，没有在线机器人；仅开发平台界面和 API 可使用 `pnpm dev:core`。
+`pnpm dev` 会一起启动平台、适配器、仿真器和视频中继。录像由 Plantbot 的 `docker/bench-rtsp.mjs` 提供，不读取独立仿真器仓库的旧视频缓存；机器人协议与运动仍由独立仿真器执行。未安装仿真器且未连接真机时，没有在线机器人；仅开发平台界面和 API 可使用 `pnpm dev:core`。开发环境的 `PB_DEMO=1` 仍含模拟事件；只验证真实视觉事件时使用上述 Adapter Demo 包。
 
 ## 机器人接入
 
@@ -106,6 +105,7 @@ UI 回归脚本为 `scripts/test-inspection-ui.mjs` 和 `scripts/test-control-ui
 | --- | --- |
 | [使用指南](docs/guide.zh.md) | 功能模块与基本操作 |
 | [版本部署](docs/release.md) / [生产部署](docs/deploy.md) | 预构建包、升级、真机部署和运维 |
+| [演示包](docs/demo.md) / [演示素材](docs/demo-media.md) | 一键启动、真实录像来源、许可与算法边界 |
 | [集成指南](docs/integration.md) | 机器人接入、API、SDK 与嵌入 |
 | [遥操作与云台](docs/manual-control.md) | 操作流程、设备支持和控制约束 |
 | [集成 API](docs/openapi.yaml) / [平台 API](docs/openapi-platform.yaml) | OpenAPI 接口定义 |

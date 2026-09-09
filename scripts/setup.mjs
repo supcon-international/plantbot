@@ -1,21 +1,22 @@
 #!/usr/bin/env node
 /**
  * One-shot asset bootstrap. Downloads every external resource the app needs:
- *  - Mixkit stock footage (free license) + Wikimedia Spot clip → server/media/
+ *  - Reviewed recorded inspection clips (bundled, checksum verified) → server/media/
  *  - URDF twins: DeepRobotics X30 (official model repo) and Boston Dynamics
  *    Spot (RAI Institute spot_description visual meshes, MIT; the flattened
  *    spot.urdf lives in-repo) — GS F2 renders as a silhouette
  *                                                      → web/public/assets/robots/
- * Everything is skipped if already present. Per-asset failures are collected and
+ * Recorded media is reused only when its checksum matches. Per-asset failures are collected and
  * reported at the end (non-zero exit) without aborting the other downloads.
  * Host requirements: node ≥ 22.22, ffmpeg on PATH.
  *   (unzip is used to unpack the go2rtc mac/win zip; checked in preflight there.)
  */
-import { mkdirSync, existsSync, readFileSync, writeFileSync, statSync, unlinkSync, renameSync } from 'node:fs'
+import { mkdirSync, existsSync, readFileSync, writeFileSync, statSync, unlinkSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
+import { installDemoMedia } from './demo-media.mjs'
 
 // per-asset failures collected here; setup exits non-zero at the end but never
 // aborts mid-way (one bad CDN shouldn't cost you every other asset)
@@ -118,26 +119,6 @@ function preflight() {
 }
 preflight()
 
-// ---------- footage (Mixkit free license) ----------
-const FOOTAGE = {
-  'switchgear.mp4': 'https://assets.mixkit.co/videos/23377/23377-720.mp4',
-  'substation.mp4': 'https://assets.mixkit.co/videos/23107/23107-720.mp4',
-  'plant_aerial.mp4': 'https://assets.mixkit.co/videos/14631/14631-720.mp4',
-  'smokestack.mp4': 'https://assets.mixkit.co/videos/14051/14051-720.mp4',
-  'pumpjack.mp4': 'https://assets.mixkit.co/videos/48884/48884-360.mp4', // OGI channel source
-  'perimeter.mp4': 'https://assets.mixkit.co/videos/36318/36318-720.mp4', // night container yard — perimeter cam
-  'tanknight.mp4': 'https://assets.mixkit.co/videos/4360/4360-720.mp4', // petrochemical plant at night
-  // ---- Campus East security patrol footage ----
-  'campus_quad.mp4': 'https://assets.mixkit.co/videos/4560/4560-720.mp4', // students w/ backpacks crossing the quad
-  'campus_gate.mp4': 'https://assets.mixkit.co/videos/4503/4503-720.mp4', // students exiting a teaching building
-  'campus_walk.mp4': 'https://assets.mixkit.co/videos/6252/6252-720.mp4', // main walkway pedestrians
-  'theft_cctv.mp4': 'https://assets.mixkit.co/videos/31372/31372-720.mp4', // CCTV: pair stuffing backpacks — bag-event evidence
-  'intruder.mp4': 'https://assets.mixkit.co/videos/12830/12830-720.mp4', // intruder looks up at the camera
-  'parking_night.mp4': 'https://assets.mixkit.co/videos/40735/40735-720.mp4', // parking structure at night
-  'night_walkway.mp4': 'https://assets.mixkit.co/videos/40640/40640-720.mp4', // illuminated walkway at night — perimeter round
-  'stadium_field.mp4': 'https://assets.mixkit.co/videos/14190/14190-720.mp4', // low flight over the field — mast cam
-}
-
 // ---------- robot URDF twins ----------
 // DeepRobotics X30 — official model repo (URDF + STL). Pinned to a commit so an
 // upstream retag/force-push can't silently change the meshes under us.
@@ -214,88 +195,13 @@ async function relayBinary() {
   }
 }
 
-// Egress-budget encode: these loops are public-internet demo tiles, not
-// archival footage. 640w · 12 fps · CRF 30 with a hard 450 kbps cap keeps a
-// full LIVE wall in the hundreds-of-kbps range instead of tens of Mbps.
-// GOP stays at 1 s (g=12 @ 12 fps) so channel switching starts fast, and
-// +faststart puts moov first so playback begins before the file finishes.
-// Encode lands in a temp file and renames in, so a running server never
-// serves a half-written loop.
-const FFMPEG = process.env.FFMPEG_BIN ?? 'ffmpeg'
-const VF = "scale='min(640,iw)':-2,fps=12"
-const ENC =
-  '-c:v libx264 -crf 30 -maxrate 450k -bufsize 900k -preset slow -g 12 -keyint_min 12 -pix_fmt yuv420p -movflags +faststart -an'
-// argv form for execFileSync (no shell): each token is its own array element.
-// VF keeps its inner single quotes — ffmpeg needs them to quote the min() expr.
-const ENC_ARGS = ENC.split(' ')
-async function footage(name, url) {
-  const dest = join(ROOT, 'server', 'media', name)
-  if (existsSync(dest) && statSync(dest).size > 1e5) return console.log(`  ✓ ${name} (cached)`)
-  const tmp = `${dest}.dl`
-  const enc = `${dest}.enc.mp4`
-  try {
-    await download(url, tmp, name)
-    execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-i', tmp, '-vf', VF, ...ENC_ARGS, enc])
-    renameSync(enc, dest)
-    unlinkSync(tmp)
-    console.log(`  ✓ ${name} transcoded (640w · 12fps · ≤450kbps)`)
-  } catch (e) {
-    cleanupTemp(tmp, enc)
-    failures.push(`footage ${name}: ${e.message}`)
-    console.log(`  ✗ ${name} failed (${e.message})`)
-  }
+console.log('[1/4] recorded inspection footage (bundled, SHA-256 verified)')
+try {
+  installDemoMedia(join(ROOT, 'integrations/demo/media'), join(ROOT, 'server/media'))
+} catch (error) {
+  failures.push(`recorded footage: ${error.message}`)
+  console.log(`  ✗ recorded footage failed (${error.message})`)
 }
-
-async function stagingFeed() {
-  const dest = join(ROOT, 'server', 'media', 'staging.mp4')
-  if (existsSync(dest) && statSync(dest).size > 1e5) return console.log('  ✓ staging.mp4 (cached)')
-  const webm = `${dest}.webm`
-  const enc = `${dest}.enc.mp4`
-  try {
-    await download(
-      'https://upload.wikimedia.org/wikipedia/commons/5/52/Spot_construction_robot.webm',
-      webm,
-      'Spot staging footage (Wikimedia Commons CC)',
-    )
-    // boomerang (forward + reversed) so the short clip loops seamlessly
-    execFileSync(FFMPEG, [
-      '-y', '-loglevel', 'error', '-i', webm,
-      '-filter_complex', `[0:v]${VF},split[a][b];[b]reverse[r];[a][r]concat=n=2:v=1[out]`,
-      '-map', '[out]', ...ENC_ARGS, enc,
-    ])
-    renameSync(enc, dest)
-    unlinkSync(webm)
-    console.log('  ✓ staging.mp4 transcoded (seamless loop)')
-  } catch (e) {
-    cleanupTemp(webm, enc)
-    failures.push(`staging.mp4: ${e.message}`)
-    console.log(`  ✗ staging.mp4 failed (${e.message})`)
-  }
-}
-
-/** Pre-render the thermal / OGI looks once — playback stays native & smooth. */
-async function filteredFeed(name, srcName, vf) {
-  const dest = join(ROOT, 'server', 'media', name)
-  if (existsSync(dest) && statSync(dest).size > 1e5) return console.log(`  ✓ ${name} (cached)`)
-  const src = join(ROOT, 'server', 'media', srcName)
-  const enc = `${dest}.enc.mp4`
-  process.stdout.write(`  ⚙ rendering ${name} … `)
-  try {
-    execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-i', src, '-vf', `${vf},${VF}`, ...ENC_ARGS, enc])
-    renameSync(enc, dest)
-    console.log('done')
-  } catch (e) {
-    cleanupTemp(enc)
-    failures.push(`${name}: ${e.message}`)
-    console.log(`✗ failed (${e.message})`)
-  }
-}
-
-console.log('[1/4] camera footage (Mixkit free license + Commons)')
-for (const [name, url] of Object.entries(FOOTAGE)) await footage(name, url)
-await stagingFeed()
-await filteredFeed('thermal.mp4', 'smokestack.mp4', 'format=gray,format=gbrp,pseudocolor=preset=inferno')
-await filteredFeed('ogi.mp4', 'pumpjack.mp4', 'format=gray,eq=contrast=1.55:brightness=-0.06,unsharp=5:5:0.8,noise=alls=5:allf=t')
 // the data-saver (.low.mp4) tier is retired — sweep any twins from old checkouts
 {
   const { readdirSync } = await import('node:fs')

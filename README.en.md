@@ -20,12 +20,12 @@ The interface follows the [Tier0 product design guidelines](docs/ui-design-audit
 
 ## Quick start
 
-[Download v2.5.0](https://github.com/supcon-international/plantbot/releases/tag/v2.5.0) as separate **Server** and **Adapter** packages. Server runs the web application, API and video relay. Adapter connects robots and cameras and runs vision models near the devices. The prebuilt Linux x86-64 packages require Docker Engine and Docker Compose 2.17+; no source build is needed.
+[Download v2.5.1](https://github.com/supcon-international/plantbot/releases/tag/v2.5.1) as separate **Server** and **Adapter** packages. Server runs the web application, API and video relay. Adapter connects robots and cameras and runs vision models near the devices. The prebuilt Linux x86-64 packages require Docker Engine and Docker Compose 2.17+; no source build is needed.
 
 ```bash
-sha256sum -c plantbot-server-v2.5.0-linux-amd64.tar.gz.sha256
-tar -xzf plantbot-server-v2.5.0-linux-amd64.tar.gz
-cd plantbot-server-v2.5.0-linux-amd64
+sha256sum -c plantbot-server-v2.5.1-linux-amd64.tar.gz.sha256
+tar -xzf plantbot-server-v2.5.1-linux-amd64.tar.gz
+cd plantbot-server-v2.5.1-linux-amd64
 bash start.sh
 ```
 
@@ -33,7 +33,7 @@ Open [http://127.0.0.1:18080/robots/](http://127.0.0.1:18080/robots/) and sign i
 
 Fresh installations start with an empty platform. See the [deployment guide](docs/release.md) for installation, separate hosts and upgrades, and [vision monitoring](docs/vision.md) for monitoring configuration.
 
-For a complete demonstration, download the same-version **Adapter Demo** package, extract it and run `bash start.sh`. It includes Server, three native-protocol robot simulators, real adapters, models and labelled sample videos. Open `http://127.0.0.1:18080/robots/?site=demo-lab`. Actual inference produces instrument threshold, occupancy and intrusion results; Server random alarms are disabled. See [Demo package](docs/demo.md) for the walkthrough, persistent restarts and external Server mode.
+For a complete demonstration, download the same-version **Adapter Demo** package, extract it and run `bash start.sh`. It includes Server, three native-protocol robot simulators, real adapters, models and attributed, real industrial and security-training recordings. Open `http://127.0.0.1:18080/robots/?site=demo-lab`. Actual inference reads the native thermal maximum-temperature overlay and produces occupancy and intrusion results; Server random alarms are disabled. Media provenance and processing are documented in [Recorded demo media](docs/demo-media.md). See [Demo package](docs/demo.md) for the walkthrough, persistent restarts and external Server mode.
 
 ## Local development
 
@@ -47,7 +47,7 @@ pnpm run setup
 pnpm dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173). Development mode creates three demo sites with the accounts `admin`, `operator` and `viewer`, all using `plantbot` as the default password. `pnpm run setup` downloads video assets, robot models and the video relay; keep `run` in this command.
+Open [http://localhost:5173](http://localhost:5173). Development mode creates three demo sites with the accounts `admin`, `operator` and `viewer`, all using `plantbot` as the default password. `pnpm run setup` verifies and installs the bundled recorded videos, then downloads robot models and the video relay; keep `run` in this command.
 
 For the complete robot demo, stop the development server and install the separate [simulator repository](https://github.com/supcon-international/plantbotsimulator) from the platform repository directory:
 

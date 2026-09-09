@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto'
 import {
   createReadStream,
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -12,7 +13,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, posix, resolve } from 'node:path'
 import { createRequire } from 'node:module'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
@@ -29,6 +30,53 @@ async function checksum(path) {
   const hash = createHash('sha256')
   for await (const chunk of createReadStream(path)) hash.update(chunk)
   return hash.digest('hex')
+}
+// The copied guides use inline links and optional reference definitions. Keep
+// external attribution URLs and fragments intact; only relocate local targets.
+function mapMarkdownLinks(markdown, replace) {
+  const target = value => value.startsWith('<') ? `<${replace(value.slice(1, -1))}>` : replace(value)
+  return markdown
+    .replace(/(\]\(\s*)(<[^>\n]+>|[^\s)]+)(?=\s*(?:["'][^"'\n]*["']\s*)?\))/g,
+      (_, prefix, value) => prefix + target(value))
+    .replace(/^( {0,3}\[[^\]\n]+\]:[ \t]*)(<[^>\n]+>|\S+)/gm,
+      (_, prefix, value) => prefix + target(value))
+}
+function rewriteBundleDocumentation(bundle, copiedSources, files, revision) {
+  const external = value => /^(?:#|[a-z][a-z\d+.-]*:|\/\/)/i.test(value)
+  const split = value => {
+    const at = value.search(/[?#]/)
+    return at < 0 ? [value, ''] : [value.slice(0, at), value.slice(at)]
+  }
+  const documents = [...copiedSources].filter(([, dest]) => dest.endsWith('.md'))
+    .sort((a, b) => Number(a[1] === 'README.md') - Number(b[1] === 'README.md'))
+  let localLinks = 0, sourceLinks = 0
+  for (const [src, dest] of documents) {
+    const updated = mapMarkdownLinks(readFileSync(join(bundle, dest), 'utf8'), value => {
+      if (external(value)) return value
+      const [path, suffix] = split(value)
+      const decoded = decodeURIComponent(path)
+      const sourcePath = posix.normalize(decoded.startsWith('/') ? decoded.slice(1) : posix.join(posix.dirname(src), decoded))
+      if (sourcePath === '..' || sourcePath.startsWith('../')) throw new Error(`Documentation link escapes source: ${src} -> ${value}`)
+      const bundled = copiedSources.get(sourcePath)
+      if (bundled) {
+        localLinks++
+        return posix.relative(posix.dirname(dest), bundled) + suffix
+      }
+      sourceLinks++
+      return `https://github.com/supcon-international/plantbot/blob/${revision}/${sourcePath.split('/').map(encodeURIComponent).join('/')}${suffix}`
+    })
+    mapMarkdownLinks(updated, value => {
+      if (!external(value)) {
+        const [path] = split(value)
+        const target = posix.normalize(posix.join(posix.dirname(dest), decodeURIComponent(path)))
+        if (!files.includes(target) || !existsSync(join(bundle, target)))
+          throw new Error(`Broken bundle documentation link: ${dest} -> ${value}`)
+      }
+      return value
+    })
+    writeFileSync(join(bundle, dest), updated)
+  }
+  return { documents: documents.length, localLinks, sourceLinks }
 }
 const platform = process.argv[2] ?? 'linux/amd64'
 if (!['linux/amd64', 'linux/arm64'].includes(platform)) throw new Error('Use linux/amd64 or linux/arm64')
@@ -111,9 +159,16 @@ try {
         .replaceAll('plantbot/demo-adapter:VERSION', images['demo-adapter'].tag),
       { mode: 0o755 },
     )
-    cpSync(join(source, kind === 'adapter-demo' ? 'docs/demo.md' : 'docs/release.md'), join(bundle, 'README.md'))
+    const readmeSource = kind === 'adapter-demo' ? 'docs/demo.md' : 'docs/release.md'
+    const copiedSources = new Map([[readmeSource, 'README.md'], ['CHANGELOG.md', 'CHANGELOG.md']])
+    cpSync(join(source, readmeSource), join(bundle, 'README.md'))
     cpSync(join(source, 'CHANGELOG.md'), join(bundle, 'CHANGELOG.md'))
     const files = ['images.tar', 'compose.yaml', 'start.sh', 'README.md', 'CHANGELOG.md', 'release.json']
+    for (const [src, dest] of [['docs/demo-media.md', 'DEMO_MEDIA.md'], ['integrations/demo/THIRD_PARTY.md', 'DEMO_SOURCES.md'], ['integrations/demo/media/manifest.json', 'MEDIA_MANIFEST.json']]) {
+      cpSync(join(source, src), join(bundle, dest))
+      files.push(dest)
+      copiedSources.set(src, dest)
+    }
     if (kind === 'adapter' || kind === 'adapter-demo') {
       for (const [src, dest] of [
         ['integrations/adapter.example.json', 'adapter.example.json'],
@@ -123,18 +178,27 @@ try {
       ]) {
         cpSync(join(source, src), join(bundle, dest))
         files.push(dest)
+        copiedSources.set(src, dest)
       }
       cpSync(join(source, 'integrations/vision/licenses'), join(bundle, 'licenses'), { recursive: true })
-      for (const file of readdirSync(join(bundle, 'licenses'))) files.push(`licenses/${file}`)
+      for (const file of readdirSync(join(bundle, 'licenses'))) {
+        files.push(`licenses/${file}`)
+        copiedSources.set(`integrations/vision/licenses/${file}`, `licenses/${file}`)
+      }
     }
     if (kind === 'adapter-demo') {
       cpSync(join(source, 'docker/release/demo.env.example'), join(bundle, '.env.demo.example'))
       cpSync(join(source, 'integrations/demo/pack.json'), join(bundle, 'demo.pack.json'))
       cpSync(join(source, 'integrations/demo/media'), join(bundle, 'media'), { recursive: true })
-      cpSync(join(source, 'integrations/demo/THIRD_PARTY.md'), join(bundle, 'DEMO_SOURCES.md'))
-      files.push('.env.demo.example', 'demo.pack.json', 'DEMO_SOURCES.md')
-      for (const file of readdirSync(join(bundle, 'media'))) files.push(`media/${file}`)
+      files.push('.env.demo.example', 'demo.pack.json')
+      copiedSources.set('docker/release/demo.env.example', '.env.demo.example')
+      copiedSources.set('integrations/demo/pack.json', 'demo.pack.json')
+      for (const file of readdirSync(join(bundle, 'media'))) {
+        files.push(`media/${file}`)
+        copiedSources.set(`integrations/demo/media/${file}`, `media/${file}`)
+      }
     }
+    rewriteBundleDocumentation(bundle, copiedSources, files, revision)
     writeFileSync(
       join(bundle, 'release.json'),
       JSON.stringify({ version, revision, component: kind, platform, images: selected,

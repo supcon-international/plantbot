@@ -30,8 +30,8 @@ const DR_PROFILES: Record<string, VendorProfile> = {
     key: 'pbk_dev_plant12',
     dock: { x: -11, z: -6 },
     streams: [
-      { id: 'x30hb-optical', name: 'Front optical', kind: 'camera', file: 'substation.mp4' },
-      { id: 'x30hb-therm', name: 'Thermal', kind: 'thermal', file: 'thermal.mp4' },
+      { id: 'x30hb-optical', name: 'Recorded · High-voltage equipment', kind: 'camera', file: 'substation.mp4' },
+      { id: 'x30hb-therm', name: 'Recorded · Conveyor thermal', kind: 'thermal', file: 'thermal_conveyor.mp4' },
     ],
   },
   campus: {
@@ -40,8 +40,8 @@ const DR_PROFILES: Record<string, VendorProfile> = {
     key: 'pbk_dev_campuseast',
     dock: { x: 0, z: -9 },
     streams: [
-      { id: 'x30ce-optical', name: 'Front optical', kind: 'camera', file: 'night_walkway.mp4' },
-      { id: 'x30ce-therm', name: 'Thermal', kind: 'thermal', file: 'thermal.mp4' },
+      { id: 'x30ce-optical', name: 'Recorded · Facility stairs', kind: 'camera', file: 'night_walkway.mp4' },
+      { id: 'x30ce-therm', name: 'Recorded · Valve thermal', kind: 'thermal', file: 'thermal_valve.mp4' },
     ],
   },
 }

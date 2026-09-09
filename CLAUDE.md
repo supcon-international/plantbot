@@ -4,14 +4,14 @@ Plantbot：多场站巡检机器人运营平台——**纯集成层**，机器�
 
 - `server/` — Fastify 5 平台：会话面 `/api/sites/:siteId/*`（RBAC）+ 开放面 `/api/integration/v1`（Bearer 场站 key）；node:sqlite 持久化；一个场站一个 `World` 实例（`server/src/world.ts`）
 - `web/` — Vite 8 + React 19 SPA（shadcn/ui 对齐 Tier0 产品设计规范 + R3F 3D）
-- `integrations/` — 三厂商 **adapter**（Spot·gRPC / 云深处 X30·TCP+XML / 高新兴 F2·REST+WS），经 profile 起五个 adapter 进程。**simulator 层已剥离到独立仓库 [plantbotsimulator](https://github.com/supcon-international/plantbotsimulator)**（三家仿真机器人 + 自带 RTSP 视频）——adapter 指向它=仿真,指向真机=生产
+- `integrations/` — 三厂商 **adapter**（Spot·gRPC / 云深处 X30·TCP+XML / 高新兴 F2·REST+WS），经 profile 起五个 adapter 进程。**simulator 层已剥离到独立仓库 [plantbotsimulator](https://github.com/supcon-international/plantbotsimulator)**（三家仿真机器人；Plantbot 开发环境的 RTSP 素材统一来自本仓库）——adapter 指向它=仿真,指向真机=生产
 - `sdk/` — adapter SDK 双形态：TypeScript `@plantbot/adapter-sdk`（workspace 包，零依赖，**构建产物 `dist/`**——`pnpm install` 经包内 `prepare` + 根 `postinstall` 自动构建，`exports` 指向 dist；`integrations/shared` 是薄 re-export——内置 adapter 用的就是这个包，不会漂移）+ Node-RED `node-red-contrib-plantbot`（config/robot/orders/event 四节点 + 示例 flow，凭证存 Node-RED credential store；`plantbot-client.js` 是 SDK 的手抄 JS 副本，改 SDK 契约要同步）。SDK `pumpOrders` 语义：按 `order.id` 去重（重启重放不重复执行）；`goto/mission` 运动类对同一 serial 串行 FIFO，新运动到达先调可选 `preempt(inflight, incoming)` 钩子再等在飞单结束；`pause/resume/abort/announce/ptz` 干预类立即执行不排队；exec 处理运动类必须返回「运动真正完成才 resolve」的 Promise。
 
 ## 命令
 
 ```bash
 pnpm install              # 要求 Node ≥ 22.22（react-router 8 / vite 8 要求;平台用内建 node:sqlite）；全新安装会构建 sdk/adapter-sdk-ts/dist
-pnpm run setup            # 必须带 run（裸 `pnpm setup` 是 pnpm 内置命令）；下载素材+X30/Spot URDF(钉 commit)+go2rtc(bin/)+redoc(钉版本+sha256)
+pnpm run setup            # 必须带 run（裸 `pnpm setup` 是 pnpm 内置命令）；校验安装实拍素材+下载X30/Spot URDF(钉 commit)+go2rtc(bin/)+redoc(钉版本+sha256)
 pnpm dev                  # server :8787（PB_DEMO=1 + PB_DEV_KEYS=1 + 固定 SESSION_SECRET + MEDIA_RELAY→:1984）+ web :5173 + go2rtc 中继 + 五个 adapter（+仿真机器人若 plantbotsimulator 在侧）
 pnpm dev:core             # 仅 server + web（不起集成层）；同样带 PB_DEMO/PB_DEV_KEYS/SESSION_SECRET
 WEB_BASE=/robots/ pnpm build   # 生产构建（见下）；本地根路径构建用 pnpm build
@@ -109,3 +109,7 @@ Server 保存配置、试运行、结果和证据；模型只在 Adapter 中运�
 契约：`POST /api/integration/v1/vision/heartbeat`（15 秒租约、每次启动唯一 runtimeId）与 `/vision/results`（X-Vision-Token、幂等 ID、配置 revision）；会话面 `/api/sites/:siteId/vision`，统一只读索引 `/monitoring-rules` 聚合既有视觉与阈值存储。入口为 EVENTS → 监测规则，LIVE 仅按明确 channelId 提供快捷入口。心跳 capabilities.presets 声明实际支持预置；事件 trigger 冻结当时配置、结果与证据，未知置信度为 null。修改接口同步两份 OpenAPI 和镜像 skill。结果未知/失败不等于恢复；超过 60 秒的迟到结果只归档。模型来源/SHA 在 `models.lock.json`，禁止运行时隐式下载。修改模型或规则后运行 Python 测试、`integrations/test/vision.e2e.ts` 与子路径构建后的 `scripts/test-vision-ui.mjs`。
 
 `release:build` 从已提交代码生成 Server、Adapter、Adapter Demo 三个独立 Docker 包。生产两包不包含 simulator；Demo 包使用独立仓库的原生协议模拟器、真实 Adapter 与真实视频推理，PB_DEMO=0 禁止 Server 随机告警。部署/迁移见 `docs/release.md`；视觉边界见 `docs/vision.md`。
+
+## 实拍演示素材（v2.5.1）
+
+`integrations/demo/media/manifest.json` 是素材、许可、变换和 SHA-256 的事实源：InspecSafe 工业巡检 RGB/原生热像 + MEVA 安防训练场录像，禁止生成仪表读数、照片动画或将普通视频伪彩成热像/OGI。`pnpm run setup` 按哈希替换 `server/media` 的旧文件；保留旧 URL 别名，开发 RTSP 与打包共用 `docker/bench-rtsp.mjs`。`make-media.py` 默认全解码校验，仅从显式提供且校验通过的原片重建。OCR 示例读取原热像最高温字幕（含人物热点），不代表特定设备温度或事故。更换素材须跑 `integrations/demo/test-media.py`、Python 推理测试、真实 UI/RTSP 和 Demo 包验收；旧 Demo 安装缺少 mediaRevision 时明确拒绝覆盖，保留原卷/历史，见 `docs/demo-media.md` 和 `docs/demo.md`。

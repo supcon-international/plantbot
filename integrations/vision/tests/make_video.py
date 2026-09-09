@@ -1,11 +1,21 @@
-"""Deterministic test feed: public-domain person photograph plus a synthetic display."""
-import sys
+"""Copy one bundled, licensed real recording for an isolated test source."""
+import argparse
 from pathlib import Path
-import cv2
-import numpy as np
-image=np.full((512,1024,3),230,np.uint8)
-image[:,:512]=cv2.imread(str(Path(__file__).parent/'fixtures/astronaut.png'))
-cv2.putText(image,'85.2 C',(560,260),cv2.FONT_HERSHEY_SIMPLEX,2.5,(20,20,20),4)
-writer=cv2.VideoWriter(sys.argv[1],cv2.VideoWriter_fourcc(*'mp4v'),10,(1024,512))
-for _ in range(1200):writer.write(image)
-writer.release()
+import shutil
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('output', type=Path)
+    parser.add_argument('--source', choices=('person', 'instrument'), default='person')
+    args = parser.parse_args()
+    media = Path(__file__).resolve().parents[2] / 'demo' / 'media'
+    source = media / ('restricted-area.mp4' if args.source == 'person' else 'instrument.mp4')
+    if not source.is_file():
+        parser.error(f'Missing bundled recording: {source}')
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source, args.output)
+
+
+if __name__ == '__main__':
+    main()

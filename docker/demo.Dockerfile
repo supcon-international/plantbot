@@ -12,9 +12,10 @@ RUN apt-get -o Acquire::Retries=5 update \
 WORKDIR /app/robots
 
 FROM runtime-base AS platform-assets
-# Download Linux-native demo footage, robot meshes, Redoc and go2rtc in a
-# cacheable layer. Local macOS binaries/media are excluded by .dockerignore.
-COPY scripts/setup.mjs scripts/setup.mjs
+# Verify bundled recorded footage; download robot meshes, Redoc and go2rtc.
+# Local runtime media caches are excluded by .dockerignore.
+COPY scripts/setup.mjs scripts/demo-media.mjs scripts/
+COPY integrations/demo/media/ integrations/demo/media/
 ARG PB_SETUP_FETCH_TIMEOUT_MS=60000
 RUN mkdir -p server/media web/public/assets/robots/spot web/public/vendor bin \
   && PB_SETUP_FETCH_TIMEOUT_MS=${PB_SETUP_FETCH_TIMEOUT_MS} node scripts/setup.mjs \
@@ -80,18 +81,15 @@ COPY --from=simulator shared ./shared
 # the public-demo egress budget: 640px, 12 fps and at most 450 kbps per feed.
 # Keep the encoder ceiling below that budget to leave room for mux overhead.
 # Main profile without B-frames keeps go2rtc's fMP4 remux stable in Chrome.
-# campus_quad consistently trips macOS VideoToolbox after go2rtc remuxing, so
-# its public RTSP alias uses the verified campus walkway loop in this demo tier.
 RUN set -eu; \
   mkdir -p /opt/rtsp-media; \
-  for file in switchgear.mp4 thermal.mp4 night_walkway.mp4 substation.mp4 theft_cctv.mp4 campus_walk.mp4 campus_gate.mp4; do \
+  for file in instrument.mp4 switchgear.mp4 thermal.mp4 thermal_conveyor.mp4 thermal_valve.mp4 night_walkway.mp4 substation.mp4 theft_cctv.mp4 campus_walk.mp4 campus_gate.mp4 campus_quad.mp4; do \
     ffmpeg -y -loglevel error -i "/app/robots/server/media/$file" \
       -vf "scale=640:-2" -r 12 -c:v libx264 -profile:v main -level:v 3.1 \
       -bf 0 -refs 1 -crf 30 -maxrate 400k -bufsize 800k -preset slow \
       -g 12 -keyint_min 12 -sc_threshold 0 -pix_fmt yuv420p -an -movflags +faststart \
       "/opt/rtsp-media/$file"; \
-  done; \
-  cp /opt/rtsp-media/campus_walk.mp4 /opt/rtsp-media/campus_quad.mp4
+  done
 COPY docker/bench-rtsp.mjs ./rtsp/serve.mjs
 RUN chown -R node:node /opt/plantbotsimulator
 USER node

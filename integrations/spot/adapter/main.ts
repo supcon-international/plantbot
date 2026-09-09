@@ -32,8 +32,8 @@ const PROFILES: Record<string, VendorProfile> = {
     callsign: 'SPOT·A',
     key: 'pbk_dev_plant07',
     streams: [
-      { id: 'spot07-front', name: 'Fisheye front', kind: 'camera', file: 'switchgear.mp4' },
-      { id: 'spot07-therm', name: 'Spot CAM IR', kind: 'thermal', file: 'thermal.mp4' },
+      { id: 'spot07-front', name: 'Recorded · Switchgear', kind: 'camera', file: 'switchgear.mp4' },
+      { id: 'spot07-therm', name: 'Recorded · Substation thermal', kind: 'thermal', file: 'thermal.mp4' },
     ],
   },
   campus: {
@@ -41,8 +41,8 @@ const PROFILES: Record<string, VendorProfile> = {
     callsign: 'SPOT·CE',
     key: 'pbk_dev_campuseast',
     streams: [
-      { id: 'spotce-front', name: 'Fisheye front', kind: 'camera', file: 'campus_gate.mp4' },
-      { id: 'spotce-therm', name: 'Spot CAM IR', kind: 'thermal', file: 'night_walkway.mp4' },
+      { id: 'spotce-front', name: 'Recorded · Campus parking', kind: 'camera', file: 'campus_gate.mp4' },
+      { id: 'spotce-therm', name: 'Recorded · Conveyor thermal', kind: 'thermal', file: 'thermal_conveyor.mp4' },
     ],
   },
 }

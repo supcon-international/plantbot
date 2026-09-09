@@ -181,7 +181,7 @@ try {
   cookie = auth.headers.get('set-cookie').split(';')[0]
   await api('/sites', 'POST', { id: 'release-qa', name: 'Release QA' })
   const key = (await api('/sites/release-qa/api-keys', 'POST', { label: 'Release QA adapter' })).apiKey.key
-  await run(python, ['integrations/vision/tests/make_video.py', join(adapterDir, 'feed.mp4')])
+  await run(python, ['integrations/vision/tests/make_video.py', join(adapterDir, 'feed.mp4'), '--source', 'instrument'])
   const configuration = {
     id: 'release-edge',
     name: 'Release QA adapter',
@@ -238,26 +238,26 @@ try {
     'standalone vendor adapter registers native simulator',
   )
   const rule = await api('/sites/release-qa/vision/configs', 'POST', {
-    name: 'QA display',
+    name: 'QA recorded IR display',
     preset: 'ocr',
     adapterId: 'release-edge',
     sourceId: 'display',
     enabled: true,
     numeric: true,
-    unit: 'C',
-    max: 80,
+    unit: '℃',
+    max: 33,
     confidence: 0.5,
     region: [
-      [0.53, 0],
-      [1, 0],
-      [1, 1],
-      [0.53, 1],
+      [0.7, 0.12],
+      [1, 0.12],
+      [1, 0.5],
+      [0.7, 0.5],
     ],
     intervalS: 1,
   })
   const observed = await wait(async () => {
     const x = await api('/sites/release-qa/vision')
-    return x.results.find((r) => r.config.id === rule.id && r.value === 85.2 && r.status === 'alert')
+    return x.results.find((r) => r.config.id === rule.id && !r.jobId && !r.late && [33.1, 33.2, 34.3].includes(r.value) && r.status === 'alert' && r.eventId)
   }, 'Linux container OCR and alarm')
   const image = await fetch('http://127.0.0.1:18094' + observed.evidence, { headers: { cookie } })
   assert.equal(image.status, 200)

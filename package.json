@@ -1,7 +1,7 @@
 {
   "name": "aegis-robotics-platform",
   "private": true,
-  "version": "2.5.0",
+  "version": "2.5.1",
   "scripts": {
     "setup": "node scripts/setup.mjs",
     "postinstall": "pnpm --filter @plantbot/adapter-sdk build",

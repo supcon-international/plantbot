@@ -12,7 +12,24 @@
 // health loop keeps it truthful so the LIVE page never claims a dead relay
 // is online.
 
+import { statSync } from 'node:fs'
+
 const RELAY = (process.env.MEDIA_RELAY ?? '').replace(/\/$/, '')
+const FILE_PREFIX = `${process.env.PUBLIC_BASE ?? ''}/media/`
+
+/** Changing a recorded file must also invalidate an already cached browser URL.
+ * Keep raw Channel sources unchanged for recordings and snapshot resolution. */
+export function filePlaybackUrl(source: string): string {
+  if (!source.startsWith(FILE_PREFIX)) return source
+  const filename = source.slice(FILE_PREFIX.length).split(/[?#]/)[0]
+  if (!/^[A-Za-z0-9._-]+\.mp4$/.test(filename)) return source
+  try {
+    const info = statSync(new URL(`../media/${filename}`, import.meta.url))
+    const url = new URL(source, 'http://plantbot.local')
+    url.searchParams.set('v', `${info.size}-${Math.trunc(info.mtimeMs)}`)
+    return `${url.pathname}${url.search}${url.hash}`
+  } catch { return source }
+}
 
 export const relayConfigured = () => !!RELAY
 

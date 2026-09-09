@@ -108,6 +108,7 @@ try {
   assert.match(demoPack.simulator.revision,/^[a-f0-9]{40}$/,'Demo must pin an exact simulator commit')
   assert.equal(manifest.simulator.revision,demoPack.simulator.revision)
   assert.deepEqual(demoPack.simulator,expectedSimulator,'Packaged simulator pin must match the release source')
+  assert.equal(demoPack.mediaRevision,'recorded-2026-09-v1')
   for (const name of ['api','gateway','relay','demo-adapter','vision-demo']) assert.ok(manifest.images[name]?.id)
   assert.doesNotMatch(readFileSync(join(folder,'compose.yaml'),'utf8'), /\bbuild:/)
   const port = await freePort(), rtspPort = await freePort()
@@ -124,6 +125,16 @@ try {
   const S='/sites/demo-lab'
   const installed = JSON.parse(await composePrivate('exec','-T','demo-adapter','node','-e',"console.log(require('node:fs').readFileSync('/config/installation.json','utf8'))"))
   secrets.add(installed.key)
+  assert.equal(installed.mediaRevision,demoPack.mediaRevision)
+  const beforeLegacyProbe=await api(S+'/vision')
+  await compose('exec','-T','demo-adapter','node','-e',"const fs=require('node:fs'),p='/config/installation.json';fs.copyFileSync(p,p+'.qa-backup');const state=JSON.parse(fs.readFileSync(p));delete state.mediaRevision;fs.writeFileSync(p,JSON.stringify(state));")
+  try {
+    await assert.rejects(compose('run','--rm','--no-deps','demo-seed'),/legacy synthetic.*incompatible.*existing rules and history were preserved/)
+  } finally {
+    await compose('exec','-T','demo-adapter','node','-e',"const fs=require('node:fs'),p='/config/installation.json';fs.renameSync(p+'.qa-backup',p);")
+  }
+  assert.deepEqual((await api(S+'/vision')).configs,beforeLegacyProbe.configs,'Legacy installation refusal preserves all existing monitoring rules')
+  checks.push('Legacy media state fails explicitly without changing rules; the same installation file is restored before restart tests')
   // Keep secrets out of QA artefacts; this key is used only for readback.
   const fleet = async () => {
     const r=await fetch(base+'/api/integration/v1/fleet',{headers:{authorization:`Bearer ${installed.key}`}})
@@ -135,15 +146,22 @@ try {
   const observed = await wait(async()=>{
     const data=await api(S+'/vision'), records=data.results.filter(r=>!r.jobId&&!r.late).sort((a,b)=>a.capturedAt-b.capturedAt)
     const ocr=records.filter(r=>r.config.preset==='ocr')
-    const first=ocr.find(r=>r.status==='normal'&&r.value===70)
-    const alarm=first&&ocr.find(r=>r.capturedAt>first.capturedAt&&r.status==='alert'&&r.value===85.2&&r.eventId)
-    const recovery=alarm&&ocr.find(r=>r.capturedAt>alarm.capturedAt&&r.status==='normal'&&r.value===72)
+    for(const r of ocr) {
+      if(['unknown','failed'].includes(r.status)) assert.equal(r.value,null,'Unavailable OCR must not claim a temperature or recovery')
+      else {
+        assert.ok([31.1,32.3,32.6,33.1,33.2,34.3].includes(r.value),`Unexpected real IR display value: ${r.value}`)
+        assert.equal(r.status,r.value>33?'alert':'normal')
+      }
+    }
+    const first=ocr.find(r=>r.status==='normal'&&[31.1,32.3,32.6].includes(r.value))
+    const alarm=first&&ocr.find(r=>r.capturedAt>first.capturedAt&&r.status==='alert'&&[33.1,33.2,34.3].includes(r.value)&&r.eventId)
+    const recovery=alarm&&ocr.find(r=>r.capturedAt>alarm.capturedAt&&r.status==='normal'&&[31.1,32.3,32.6].includes(r.value))
     const occupied=records.find(r=>r.config.preset==='people_count'&&r.status==='normal'&&r.value===1&&!r.eventId)
     const vacant=occupied&&records.find(r=>r.config.preset==='people_count'&&r.capturedAt>occupied.capturedAt&&r.status==='normal'&&r.value===0)
     const intrusion=records.find(r=>r.config.preset==='intrusion'&&r.status==='alert'&&r.eventId)
     const clear=intrusion&&records.find(r=>r.config.preset==='intrusion'&&r.capturedAt>intrusion.capturedAt&&r.status==='normal')
     return recovery&&vacant&&clear ? {first,alarm,recovery,occupied,vacant,intrusion,clear} : null
-  },'real OCR normal → 85.2 alert → recovery plus person counting/intrusion and clearing',240000)
+  },'recorded IR normal → over 33℃ alert → observed recovery plus real person counting/intrusion and clearing',240000)
   const events=(await api(S+'/events')).events
   const event=events.find(e=>e.id===observed.alarm.eventId)
   assert.ok(event); assert.equal(event.lifecycle,'new','Recovered reading must not falsely claim manual resolution')
@@ -152,7 +170,7 @@ try {
     assert.equal(r.status,200); const image=Buffer.from(await r.arrayBuffer())
     assert.equal(image.readUInt16BE(0),0xffd8); assert.ok(image.length>1000)
   }
-  checks.push('Actual packaged ONNX/OCR produce 70 → 85.2 → 72, person 0/1, real alert/recovery and protected JPEG evidence; counting stays observational')
+  checks.push('Actual packaged ONNX/OCR read 31.1–34.3℃ across the 33℃ threshold; recorded people enter and leave, real alerts recover with protected JPEG evidence; unknown is never recovery and counting stays observational')
   const native = await Promise.allSettled(['ext-demo-spot','ext-demo-x30','ext-demo-f2'].map(async id => {
     const {mission} = await api(S+'/missions','POST',{name:`Demo package QA · ${id}`,requestedRobot:id,steps:[
       {waypointId:'DEMO-WP-1',actions:[{type:'capture_photo',durationS:3}]},
@@ -268,7 +286,7 @@ try {
   const externalObservation=await wait(async()=>{
     const state=await api(S+'/vision')
     assert.equal(state.configs.length,3)
-    return state.results.find(r=>!r.jobId&&!r.late&&r.config.preset==='ocr'&&[70,85.2,72].includes(r.value)&&r.status===(r.value>80?'alert':'normal')&&r.evidence)
+    return state.results.find(r=>!r.jobId&&!r.late&&r.config.preset==='ocr'&&[31.1,32.3,32.6,33.1,33.2,34.3].includes(r.value)&&r.status===(r.value>33?'alert':'normal')&&r.evidence)
   },'external Server receives an actual OCR observation from the packaged model',120000)
   const externalEvidence=await fetch(new URL(externalObservation.evidence,base),{headers:{cookie}})
   assert.equal(externalEvidence.status,200)

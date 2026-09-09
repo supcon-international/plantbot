@@ -1,5 +1,23 @@
 # Changelog
 
+## v2.5.1 — 2026-09-09
+
+### 中文
+
+- 全面替换演示视频：采用有来源与许可记录的真实配电柜、变压器、输送机、阀组、原生热像和安防训练场录像。
+- 删除照片动画、生成温度画面和伪 OGI；真实 Adapter OCR 读取热像原有最高温字幕，人员规则检测录像中的实际出入。
+- 开发 RTSP、平台视频与 Demo 发布包共用校验过的素材，旧缓存按 SHA-256 替换；模型及视角检查保持原样。
+- 主播放器保留完整画面，避免裁掉热像读数；修复 Vite 代理改写 Host 导致本地 RTSP 黑屏的问题，保留 WebSocket 同源校验。
+- 演示包使用新的素材版本标识。旧演示数据保留，新素材从新的专用演示项目启动，避免旧规则阈值和用户修改被覆盖。
+
+### English
+
+- Replaced demo videos with attributed recordings of real industrial inspections, native thermal cameras and security-training activity.
+- Removed photo animation, generated readings and simulated OGI. Adapter OCR reads the original thermal maximum-temperature overlay, while person rules observe actual movement.
+- Unified development RTSP, platform footage and Demo package assets with SHA-256 verified cache replacement; model and view checks are unchanged.
+- Kept the full video frame visible and fixed local RTSP playback by preserving Host through the Vite proxy without bypassing WebSocket origin checks.
+- Added a media revision boundary for persistent Demo installations. A fresh dedicated demo project preserves older data and user-edited rules.
+
 ## v2.5.0 — 2026-09-09
 
 ### 中文

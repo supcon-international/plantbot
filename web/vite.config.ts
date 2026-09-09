@@ -42,7 +42,9 @@ export default defineConfig({
       '/stream/api/ws': {
         target: 'http://127.0.0.1:1984',
         ws: true,
-        changeOrigin: true,
+        // Preserve the browser-facing Host together with Origin so go2rtc's
+        // same-origin WebSocket check works through Vite without bypassing it.
+        changeOrigin: false,
         rewrite: (p) => p.replace(/^\/stream/, ''),
       },
     },

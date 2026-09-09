@@ -1,23 +1,27 @@
 #!/usr/bin/env node
 
-// Docker-only RTSP origin for the simulator bench. The built-in adapter demo
+// Shared dev/Docker RTSP origin for the simulator bench. The built-in adapter demo
 // profiles name MP4 files; exposing the same names over RTSP lets one env var
 // (STREAM_BASE=rtsp://bench:8554) exercise the real RTSP -> relay -> MSE path.
 
 import { spawn } from 'node:child_process'
-import { existsSync, writeFileSync } from 'node:fs'
+import { existsSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 
 const ROOT = process.env.PLANTBOT_ROOT ?? '/app/robots'
 const BIN = process.env.GO2RTC_BIN ?? join(ROOT, 'bin', 'go2rtc')
 const MEDIA = process.env.SIM_RTSP_MEDIA_DIR ?? join(ROOT, 'server', 'media')
 const PORT = process.env.SIM_RTSP_PORT ?? '8554'
-const CONF = '/tmp/go2rtc.sim.yaml'
+const CONF = join(tmpdir(), `plantbot-rtsp-${PORT}-${process.pid}.yaml`)
 
 const streams = {
   // Names used directly by the bundled Spot/X30/GS adapter profiles.
   'switchgear.mp4': 'switchgear.mp4',
+  'instrument.mp4': 'instrument.mp4',
   'thermal.mp4': 'thermal.mp4',
+  'thermal_conveyor.mp4': 'thermal_conveyor.mp4',
+  'thermal_valve.mp4': 'thermal_valve.mp4',
   'campus_gate.mp4': 'campus_gate.mp4',
   'night_walkway.mp4': 'night_walkway.mp4',
   'substation.mp4': 'substation.mp4',
@@ -47,7 +51,7 @@ for (const file of new Set(Object.values(streams))) {
 }
 
 const streamYaml = Object.entries(streams)
-  // setup.mjs already normalizes every clip to H.264/yuv420p with a short GOP.
+  // The bundled media already normalizes every clip to H.264/yuv420p with a short GOP.
   // Copy that bitstream instead of starting one libx264 encoder per open tile.
   .map(([name, file]) => `  ${JSON.stringify(name)}: ${JSON.stringify(`ffmpeg:${join(MEDIA, file)}#video=copy`)}`)
   .join('\n')
@@ -57,7 +61,7 @@ writeFileSync(
   `log:\n  level: warn\nffmpeg:\n  file: "-re -stream_loop -1 -i {input}"\nrtsp:\n  listen: ":${PORT}"\nwebrtc:\n  listen: ""\napi:\n  listen: ""\nstreams:\n${streamYaml}\n`,
 )
 
-console.log(`[rtsp] Docker simulator origin ready on :${PORT} (${Object.keys(streams).length} streams)`)
+console.log(`[rtsp] Recorded simulator origin ready on :${PORT} (${Object.keys(streams).length} streams)`)
 const child = spawn(BIN, ['-config', CONF], { stdio: 'inherit' })
 
 for (const signal of ['SIGINT', 'SIGTERM']) {
@@ -65,6 +69,7 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
 }
 
 child.on('exit', (code, signal) => {
+  rmSync(CONF, { force: true })
   if (signal) process.kill(process.pid, signal)
   else process.exit(code ?? 1)
 })

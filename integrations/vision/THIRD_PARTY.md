@@ -14,4 +14,4 @@ Plantbot distributes the following unchanged runtime components and converted pr
 
 These model files are not trained or fine-tuned by Plantbot. People and vehicles use COCO classes `person`, `car`, `bus`, `truck`. OCR uses Chinese/English/numeric recognition and is not a general sensor-measurement model. Site performance must be evaluated against representative footage.
 
-The test fixture `astronaut.png` is a public-domain NASA photograph distributed by scikit-image. Attribution is in `tests/fixtures/README.md`. Synthetic test feeds are generated locally and are not installed as production sources.
+Recorded demonstration inputs come from InspecSafe-V1 (TetraBOT) and MEVA (Kitware Inc. and IARPA), both under CC BY 4.0. Source files, acquisition ranges and transformations are recorded in `integrations/demo/media/manifest.json`; attribution is in `integrations/demo/THIRD_PARTY.md` (`DEMO_SOURCES.md` in the Demo release). Test fixture details are in `tests/fixtures/README.md`. Footage licensing is separate from model licensing. OCR reads the original thermal-camera display text; it does not measure temperature from image colours or establish equipment overheating.

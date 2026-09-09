@@ -2,31 +2,31 @@
 
 ## 中文
 
-v2.5.0 提供 **Server**、**Adapter** 和 **Adapter Demo** 三个预构建包。安装需要 Docker Engine 与 Docker Compose 2.17+，不需要 Node、Python、源码构建或运行时下载模型。当前发布 Linux x86-64 包；请选择经过发布验证的体系架构。
+v2.5.1 提供 **Server**、**Adapter** 和 **Adapter Demo** 三个预构建包。安装需要 Docker Engine 与 Docker Compose 2.17+，不需要 Node、Python、源码构建或运行时下载模型。当前发布 Linux x86-64 包；请选择经过发布验证的体系架构。
 
 - **Server**：Web、平台 API、SQLite、视频中继。可部署在云端或现场服务器。
 - **Adapter**：机器人厂商驱动与 11 项视觉预置能力，包含预训练模型。部署在能访问机器人/摄像头的网络中，通过场站 API key 连接 Server。驱动和视觉是独立进程与容器，分别重启；启动时读取私有配置后以 UID 1000 运行；视觉默认限制为 2 CPU / 2 GiB。
-- **Adapter Demo**：自带 Server 镜像的完整演示环境，也可连接已有 Server。三家原生协议模拟器经真实 Adapter 接入，示例视频经过真实模型推理；仅创建明确标记的演示场站，不启动 Server 随机告警。
+- **Adapter Demo**：自带 Server 镜像的完整演示环境，也可连接已有 Server。三家原生协议模拟器经真实 Adapter 接入，随包实拍录像经过真实模型推理；仅创建明确标记的演示场站，关闭 Server 与模拟器随机告警。
 
 建议 Server 配置 2 vCPU / 4 GiB，Adapter 从 4 vCPU / 4 GiB 开始，并根据路数和实测采样间隔调整资源。安装两包需预留至少 10 GiB 镜像空间；录像与证据另计。新安装不生成演示机器人或随机告警。
 
 ### 一键演示
 
 ```bash
-sha256sum -c plantbot-adapter-demo-v2.5.0-linux-amd64.tar.gz.sha256
-tar -xzf plantbot-adapter-demo-v2.5.0-linux-amd64.tar.gz
-cd plantbot-adapter-demo-v2.5.0-linux-amd64
+sha256sum -c plantbot-adapter-demo-v2.5.1-linux-amd64.tar.gz.sha256
+tar -xzf plantbot-adapter-demo-v2.5.1-linux-amd64.tar.gz
+cd plantbot-adapter-demo-v2.5.1-linux-amd64
 bash start.sh
 ```
 
-打开 `http://127.0.0.1:18080/robots/?site=demo-lab`，使用 `.env.demo` 的初始密码登录。查看事件 → 监测规则中的仪表 OCR、人数统计与禁区监测；输入视频每 90 秒循环一次，三段分别为 70 / 85.2 / 72 C 与无人 / 有人 / 无人。异常和恢复必须等待 Adapter 实际读取对应画面。任务页可向演示机器人派发巡检路线。外接已有 Server、端口修改和保留数据重启见 [demo.md](demo.md)。
+打开 `http://127.0.0.1:18080/robots/?site=demo-lab`，使用 `.env.demo` 的初始密码登录。在事件 → 监测规则查看热像叠字 OCR、人数统计与禁区监测。MEVA 楼梯片段约 30 秒，来自安防训练场；InspecSafe 原始热像为 13.28 秒，最高温文字约 31.1–34.3℃，示例上限 33℃。这是相机显示读数，热点含人物，不是设备过热诊断。两片独立循环，异常和恢复须由 Adapter 实际推理产生；未知或失败不代表恢复。任务页可向演示机器人派发巡检路线。外接 Server、端口、重启和旧演示隔离升级见 [demo.md](demo.md)，全部录像来源、许可和修改记录见[演示素材](demo-media.md)。
 
 ### 安装 Server
 
 ```bash
-sha256sum -c plantbot-server-v2.5.0-linux-amd64.tar.gz.sha256
-tar -xzf plantbot-server-v2.5.0-linux-amd64.tar.gz
-cd plantbot-server-v2.5.0-linux-amd64
+sha256sum -c plantbot-server-v2.5.1-linux-amd64.tar.gz.sha256
+tar -xzf plantbot-server-v2.5.1-linux-amd64.tar.gz
+cd plantbot-server-v2.5.1-linux-amd64
 bash start.sh
 ```
 
@@ -37,9 +37,9 @@ bash start.sh
 ### 安装 Adapter
 
 ```bash
-sha256sum -c plantbot-adapter-v2.5.0-linux-amd64.tar.gz.sha256
-tar -xzf plantbot-adapter-v2.5.0-linux-amd64.tar.gz
-cd plantbot-adapter-v2.5.0-linux-amd64
+sha256sum -c plantbot-adapter-v2.5.1-linux-amd64.tar.gz.sha256
+tar -xzf plantbot-adapter-v2.5.1-linux-amd64.tar.gz
+cd plantbot-adapter-v2.5.1-linux-amd64
 cp adapter.example.json adapter.json
 chmod 600 adapter.json
 # 编辑 adapter.json 的 serverUrl、sources 和 devices
@@ -86,9 +86,9 @@ docker compose --env-file .env.server -f compose.yaml down
 
 ## English
 
-v2.5.0 provides separate **Server**, **Adapter** and **Adapter Demo** packages. They require Docker Engine and Docker Compose 2.17+. Node, Python, source builds and runtime model downloads are unnecessary. Published packages currently target Linux x86-64.
+v2.5.1 provides separate **Server**, **Adapter** and **Adapter Demo** packages. They require Docker Engine and Docker Compose 2.17+. Node, Python, source builds and runtime model downloads are unnecessary. Published packages currently target Linux x86-64.
 
-For a complete demo, extract `plantbot-adapter-demo-v2.5.0-linux-amd64.tar.gz` and run `bash start.sh`. Open `http://127.0.0.1:18080/robots/?site=demo-lab` and use the generated `.env.demo` password. The bundle includes Server, three native-protocol simulators, real vendor adapters and actual inference from labelled sample videos. Its 90-second loop changes the display from 70 to 85.2 to 72 C and the monitored area from empty to occupied to empty. Server random event generation is disabled. See [demo.md](demo.md) for external Server mode and persistent restarts.
+For a complete demo, extract `plantbot-adapter-demo-v2.5.1-linux-amd64.tar.gz` and run `bash start.sh`. Open `http://127.0.0.1:18080/robots/?site=demo-lab` and use the generated `.env.demo` password. The bundle includes Server, three native-protocol simulators, real vendor adapters and actual inference from recorded inputs. A roughly 30-second MEVA security-training stairwell recording demonstrates people monitoring; a 13.28-second InspecSafe infrared recording supplies an original camera overlay of approximately 31.1–34.3℃ for OCR with an example limit of 33℃. The hotspot includes a person, so the result is not an equipment-overheat diagnosis. Server and simulator random alarms are disabled. See [demo.md](demo.md) for external Server mode, persistent restarts and the separate-project upgrade required for older demo media; [demo-media.md](demo-media.md) records footage provenance and limitations.
 
 Server contains the web application, platform API, SQLite storage and video relay. Adapter contains vendor robot drivers and eleven vision presets with pretrained models. Run Adapter on a network that can reach the devices. Its driver and vision containers read the private configuration at startup, then run as UID 1000 and restart independently; vision defaults to 2 CPUs and 2 GiB RAM. A fresh Server starts without simulated robots or generated alarms.
 

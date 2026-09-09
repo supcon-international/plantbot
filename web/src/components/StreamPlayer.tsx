@@ -82,7 +82,7 @@ export function LoopPlayer({ src, className = '' }: { src: string; className?: s
       playsInline
       preload="auto"
       className={className}
-      style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover', background: '#060708' }}
+      style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain', background: '#060708' }}
     />
   )
 }

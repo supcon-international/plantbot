@@ -40,7 +40,7 @@ import type { SiteDef, SeedMissionDef } from './sites.js'
 import type { Persist } from './config.js'
 import { DATA_DIR } from './db.js'
 import { grabFrame, type FrameSource } from './frames.js'
-import { ensureRelayStream, relayConfigured, relayName } from './media.js'
+import { ensureRelayStream, filePlaybackUrl, relayConfigured, relayName } from './media.js'
 import type { Waypoint, Zone, Building, SiteCamera, SiteMapMeta } from './fleet.js'
 
 /** everything a World needs at runtime — geometry is data (SQLite), not code */
@@ -652,7 +652,8 @@ export class World {
    *  session leases, snapshots through the evidence service) */
   publicChannels(robotId?: string): Channel[] {
     return this.channels(robotId).map((c) =>
-      c.source.kind === 'rtsp' ? { ...c, source: { kind: 'rtsp' as const, url: '' } } : c,
+      c.source.kind === 'rtsp' ? { ...c, source: { kind: 'rtsp' as const, url: '' } }
+        : c.source.kind === 'file' ? { ...c, source: { kind: 'file' as const, file: filePlaybackUrl(c.source.file) } } : c,
     )
   }
 
@@ -695,7 +696,7 @@ export class World {
     const id = `SS-${this.id}-${String(this.sessSeq++).padStart(4, '0')}`
     let s: StreamSession
     if (ch.source.kind === 'file') {
-      s = { id, channelId, url: ch.source.file, protocol: 'file', createdAt: Date.now(), expiresAt: null }
+      s = { id, channelId, url: filePlaybackUrl(ch.source.file), protocol: 'file', createdAt: Date.now(), expiresAt: null }
     } else if (ch.source.kind === 'rtsp') {
       const name = relayName(this.id, ch.streamKey ?? ch.id)
       // await the relay registration so relayOnline reflects reality: green

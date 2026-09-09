@@ -48,9 +48,10 @@ const SIMS = [
   { name: 'x30CE·sim', entry: 'deeprobotics/sim/main.ts', color: '36', env: { DR_SIM_PORT: '30010', DR_SIM_HOME_X: '0', DR_SIM_HOME_Y: '9' } },
 ].map((p) => ({ ...p, layer: 'sim' }))
 
-// the sibling also serves its cameras over RTSP (go2rtc) — start that too so
-// the demo pulls real rtsp:// video from the sims, not just file loops
-const RTSP = { name: 'sim·rtsp', entry: 'rtsp/serve.mjs', color: '32', env: {}, layer: 'rtsp' }
+// Dev and packaged demos share the reviewed media origin. The separate
+// simulator still owns robot behavior; its old private video cache is unused.
+const RTSP = { name: 'sim·rtsp', entry: join(ROOT, '..', 'docker', 'bench-rtsp.mjs'), color: '32',
+  env: { PLANTBOT_ROOT: join(ROOT, '..'), SIM_RTSP_MEDIA_DIR: process.env.SIM_RTSP_MEDIA_DIR || join(ROOT, '..', 'server', 'media') }, layer: 'rtsp' }
 
 const procs = SIMS_UP ? [RTSP, ...SIMS, ...ADAPTERS] : ADAPTERS
 

@@ -66,6 +66,14 @@ flowchart LR
 
 固定视角是连续规则的前提。移动机器人或运动中的云台不能用于连续人数/越线/停留判断。画面发生明显平移、旋转、缩放、黑屏或中断时，推理暂停并重置规则；图像运动检查只是额外保护，不能替代正确的固定机位配置。`view: mobile` 仅支持 OCR，必须指定设备驱动写入的 `stationaryFile`，内容为 `{"stationary":true,"observedAt":<Unix毫秒>}`，有效期 2 秒。没有可信停稳反馈时不读取。云台巡检目前不会自动触发 OCR；可通过试运行 API 显式触发，并保留这个能力边界。
 
+### 真实录像演示
+
+v2.5.1 的 [Adapter Demo](demo.md) 使用两条独立循环的录像：MEVA 安防训练场楼梯通行画面约 30 秒，InspecSafe 煤廊原始 IR 画面 13.28 秒。前者由 RT-DETRv2 和 ByteTrack 检测、跟踪实际人物；后者由 RapidOCR 读取相机原生最高温叠字约 31.1–34.3℃。OCR 示例只框选右上角读数，启用单值解析，单位使用画面实际字符 `℃`（U+2103），上限为 33。
+
+热像中的热点包括人物，33℃ 是演示阈值，不是现场报警标准；读出文字不等于确认某台设备温度，也不提供从伪彩像素反算辐射温度的能力。MEVA 的禁区由演示规则指定，不表示训练录像中的人物实际违规。人物遮挡、远距小目标、视角变化、预热和循环边界均可能影响有效观测，原有 ViewGuard 与未知/失败语义照常执行。录像中的人物漏检不能以预写计数补齐。
+
+演示 worker 解码本地原始 MP4，执行实际模型和规则，再通过集成 API 上传观测与原图；RTSP 播放同一份文件但与采样不逐帧同步。正常人数观测不创建事件，试运行也不创建正式事件；正式 OCR/入侵异常才进入事件中心。恢复观测与人工处置分别记录。文件来源、许可、加工步骤及逐项语义边界见[演示素材](demo-media.md)。
+
 ### 可靠性与访问控制
 
 - 一个场站内同名 Adapter 只有一个有效运行实例；每 3 秒心跳续期，租约 15 秒失效。Server 重启后令牌全部失效，Adapter 自动重连。
@@ -92,7 +100,7 @@ PB_UI_BROWSER=firefox node scripts/test-vision-ui.mjs
 PB_UI_BROWSER=webkit node scripts/test-vision-ui.mjs
 ```
 
-测试包含 11 项确定性规则、真实权重检测与 OCR、视角变化和黑屏、服务端权限/重放/版本/重启，以及真实 Adapter + 子路径生产前端的浏览器操作。模拟与标准样例验收不等于特定工厂的误报率承诺。
+测试包含 11 项确定性规则、真实权重检测与 OCR、视角变化和黑屏、服务端权限/重放/版本/重启，以及真实 Adapter + 子路径生产前端的浏览器操作。录像解码、模型输出、RTSP 播放与完整包运行分别验证；固定录像的成功不等于特定工厂的误报率或所有机位的可用性承诺。
 
 ## English
 
@@ -107,5 +115,7 @@ Continuous rules require fixed views. Large camera motion, unusable frames, disc
 Configuration writes require admin; previews require operator; results follow existing site viewer permissions. Previews run for up to 40 seconds, expire after 60 seconds and do not raise production alarms. Unknown or failed observations never mean recovery. Results received over 60 seconds late are archived without raising current alarms. Numeric OCR accepts one unambiguous value within the configured ROI; no character substitution is applied.
 
 The Adapter uses an exclusive 15-second lease, reconnects automatically, and retries immutable observation IDs through a bounded SQLite outbox (128 records or 64 MiB, oldest discarded with a warning on overflow). Server retains observations for seven days and periodically trims evidence to `PB_VISION_MAX_MB` (default 1024 MiB). Keep deployment secrets and data volumes when upgrading. Detection confidence, sample rate and scene suitability must be validated against site footage; the bundled models do not provide a site-specific accuracy guarantee.
+
+The v2.5.1 Demo uses a real MEVA security-training stairwell recording and an original InspecSafe infrared inspection video. OCR reads the camera's maximum-temperature text (approximately 31.1–34.3℃), with `℃` as the exact unit and 33 as an illustrative upper limit. A person contributes to the hotspot; this is neither equipment-overheat diagnosis nor radiometric measurement from pixel colours. The worker performs actual decoding and inference on the local MP4, while a separate RTSP loop supplies playback. No results are injected from the manifest. Scene suitability, missed small targets and unusable frames remain visible in observations. See [the media guide](demo-media.md) for original sources, transformations and licensing.
 
 See the commands above for local setup and tests, [release.md](release.md) for deployment, and [OpenAPI](openapi.yaml) for the integration contract.

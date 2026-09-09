@@ -48,7 +48,7 @@ fi
 "${compose[@]}" up -d --no-build --pull never --wait --wait-timeout 180 demo-adapter vision
 "${compose[@]}" run --rm --no-deps --pull never demo-seed --rules
 "${compose[@]}" ps
-printf '\nDemo ready. Open /robots/?site=demo-lab on your Server.\nCredentials: %s\nNo random Server alarms. Three real monitoring rules; input loop: 70 → 85.2 → 72 C, absent → person → absent (30 seconds each).\n' "$env_file"
+printf '\nDemo ready. Open /robots/?site=demo-lab on your Server.\nCredentials: %s\nNo random Server alarms. Three real monitoring rules; recorded IR display: 31.1–34.3℃ against a demo threshold of 33℃ (13.28 s loop); recorded people enter/leave the area (30 s loop).\n' "$env_file"
 if [[ "$external" == 0 ]]; then
   binding="$("${compose[@]}" port gateway 8080)"
   printf 'Plantbot: http://%s/robots/?site=demo-lab\n' "$binding"
