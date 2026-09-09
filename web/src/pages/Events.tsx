@@ -320,7 +320,8 @@ function RuleRow({ r, hi, onViewEvents }: { r: DetectionRule; hi?: boolean; onVi
 }
 
 function NewRuleModal({ onClose }: { onClose: () => void }) {
-  const customTypes = useApp((s) => s.eventTypes.filter((x) => !x.builtin))
+  const eventTypes = useApp((s) => s.eventTypes)
+  const customTypes = useMemo(() => eventTypes.filter((x) => !x.builtin), [eventTypes])
   const robots = useApp((s) => s.robots)
   const cameras = useApp((s) => s.cameras)
   const zonesList = useApp((s) => s.zones)
@@ -367,8 +368,9 @@ function NewRuleModal({ onClose }: { onClose: () => void }) {
       </div>
       <div className="space-y-3.5 p-4">
         <div>
-          <Label className="mb-1.5">{t('ev.ruleName')}</Label>
+          <Label htmlFor="rule-name" className="mb-1.5">{t('ev.ruleName')}</Label>
           <Input
+            id="rule-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={t('ev.ruleNamePh')}
@@ -377,9 +379,9 @@ function NewRuleModal({ onClose }: { onClose: () => void }) {
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <Label className="mb-1.5">{t('ev.model')}</Label>
+            <Label htmlFor="rule-model" className="mb-1.5">{t('ev.model')}</Label>
             <Select value={model} onValueChange={setModel}>
-              <SelectTrigger className="w-full bg-surface-2 text-[12px] normal-case tracking-normal">
+              <SelectTrigger id="rule-model" className="w-full bg-surface-2 text-[12px] normal-case tracking-normal">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -397,9 +399,9 @@ function NewRuleModal({ onClose }: { onClose: () => void }) {
             </Select>
           </div>
           <div>
-            <Label className="mb-1.5">{t('ev.videoSource')}</Label>
-            <Select value={source || undefined} onValueChange={setSource}>
-              <SelectTrigger className="w-full bg-surface-2 text-[12px] normal-case tracking-normal">
+            <Label htmlFor="rule-source" className="mb-1.5">{t('ev.videoSource')}</Label>
+            <Select value={source} onValueChange={setSource}>
+              <SelectTrigger id="rule-source" className="w-full bg-surface-2 text-[12px] normal-case tracking-normal">
                 <SelectValue placeholder={t('ev.select')} />
               </SelectTrigger>
               <SelectContent>
@@ -413,9 +415,9 @@ function NewRuleModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
         <div>
-          <Label className="mb-1.5">{t('ev.zoneLabel')}</Label>
+          <Label htmlFor="rule-zone" className="mb-1.5">{t('ev.zoneLabel')}</Label>
           <Select value={zone || '__site__'} onValueChange={(v) => setZone(v === '__site__' ? '' : v)}>
-            <SelectTrigger className="w-full bg-surface-2 text-[12px] normal-case tracking-normal">
+            <SelectTrigger id="rule-zone" className="w-full bg-surface-2 text-[12px] normal-case tracking-normal">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -439,6 +441,7 @@ function NewRuleModal({ onClose }: { onClose: () => void }) {
             <Label className="mb-1.5">{t('ev.severity')}</Label>
             <ToggleGroup
               type="single"
+              aria-label={t('ev.severity')}
               value={severity}
               onValueChange={(v) => v && setSeverity(v as Severity)}
               className="w-full"

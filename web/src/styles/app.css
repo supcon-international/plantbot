@@ -23,8 +23,9 @@
   --tier0-highlight-bg: #f0fbd2;
   --tier0-highlight-text: #48640c;
   --tier0-success-color: #2f7657;
-  --tier0-warning-color: #a35c00;
-  --tier0-error-color: #dc2626;
+  /* Keep 12px status text readable on tinted badges and selected controls. */
+  --tier0-warning-color: #985400;
+  --tier0-error-color: #c82020;
   --tier0-error-foreground: #ffffff;
   --tier0-radius: 4px;
   --rail-width: 72px;

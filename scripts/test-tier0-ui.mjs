@@ -750,6 +750,64 @@ try {
     context = await browser.newContext({ storageState: storage, viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' })
     page = await context.newPage(); recordPage(page)
     await verifyBuilderPointerCancellation()
+    // Events uses radio toggles, so the generic role=tab traversal does not
+    // exercise Rules or mount its modal. Cover the real action explicitly.
+    await navigate('/events')
+    await page.getByRole('radio', { name: /^Rules$|^规则$/i }).click()
+    const newRuleButton = page.getByRole('button', { name: /^New rule$|^新建规则$/i })
+    const ruleIds = []
+    const customType = { id: `qa-ui-rule-${engine}`, label: `QA rule type ${engine}`, severity: 'info', category: 'equipment' }
+    let customTypeCreated = false
+    try {
+      for (const kind of ['builtin', 'custom']) {
+        await newRuleButton.click()
+        const ruleDialog = page.getByRole('dialog', { name: /^Define detection rule$|^定义检测规则$/i })
+        await ruleDialog.waitFor()
+        const ruleName = ruleDialog.getByRole('textbox', { name: /^Rule name$|^规则名称$/i })
+        const submitRule = ruleDialog.getByRole('button', { name: /^Activate rule$|^启用规则$/i })
+        assert.equal(await ruleName.inputValue(), '', 'Opening New rule starts a fresh draft')
+        assert.ok(await submitRule.isDisabled(), 'An incomplete rule cannot be activated')
+        if (kind === 'custom') {
+          // Update the dictionary while the modal is mounted: this catches both
+          // unstable snapshot selectors and fixes that accidentally freeze it.
+          await api('POST', '/sites/plant-07/event-types', customType)
+          customTypeCreated = true
+        }
+        const name = `QA ${engine} ${kind} detection rule`
+        await ruleName.fill(name)
+        await ruleDialog.getByRole('combobox', { name: /^Detection model$|^检测模型$/i }).click()
+        await page.getByRole('option', { name: kind === 'custom' ? customType.label : /^Gauge OCR$|^仪表识别$/i, exact: true }).click()
+        await ruleDialog.getByRole('combobox', { name: /^Video source$|^视频源$/i }).click()
+        await page.getByRole('option', { name: /QA Inspection 01/ }).click()
+        assert.ok(await submitRule.isEnabled(), 'A named rule with a source can be activated')
+        await inspect(`interaction-new-rule-${kind}`)
+        await auditAccessibility(`interaction-new-rule-${kind}`)
+        const createdResponse = page.waitForResponse((r) => new URL(r.url()).pathname === '/robots/api/sites/plant-07/rules' && r.request().method() === 'POST')
+        await submitRule.click()
+        const response = await createdResponse
+        assert.ok(response.ok(), `New ${kind} rule saved: ${await response.text()}`)
+        const { rule } = await response.json()
+        assert.ok(rule?.id, 'Rule creation returns its persisted identity')
+        ruleIds.push(rule.id)
+        assert.equal(rule.name, name)
+        assert.equal(rule.model, kind === 'custom' ? customType.id : 'gauge')
+        assert.equal(rule.enabled, true)
+        assert.match(rule.sourceName, /QA Inspection 01/)
+        await ruleDialog.waitFor({ state: 'hidden' })
+        await page.locator('main').getByText(name, { exact: true }).waitFor()
+        await newRuleButton.click()
+        await ruleDialog.waitFor()
+        assert.equal(await ruleName.inputValue(), '', 'New rule can reopen after saving without retaining the prior draft')
+        assert.ok(await submitRule.isDisabled())
+        await page.keyboard.press('Escape')
+        await ruleDialog.waitFor({ state: 'hidden' })
+      }
+      checks.push('Events Rules opens a stable named dialog, updates custom types live, saves builtin/custom rules and reopens a fresh draft')
+    } finally {
+      // Only remove data created by this case, including when an assertion fails.
+      for (const id of ruleIds) await api('DELETE', `/sites/plant-07/rules/${id}`)
+      if (customTypeCreated) await api('DELETE', `/sites/plant-07/event-types/${customType.id}`)
+    }
     await navigate('/assets')
     await page.getByRole('button', { name: /^add asset$/i }).click()
     const dialog = page.getByRole('dialog')

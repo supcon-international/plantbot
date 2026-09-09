@@ -68,3 +68,13 @@ PB_UI_PUBLIC_VIEW=0 node scripts/test-control-ui.mjs
 测试过程中修正了一处已有时序假设：云台取消测试原先固定等待 650ms，在并发负载下可能早于 adapter 接单。现等待真实订单 `acked` 后取消，继续严格验证停止订单和回执，未修改生产控制逻辑。
 
 多浏览器、手机/平板横竖屏及安全区的后续修复与复测见 [多端 UI 验证](multi-device-ui-audit.md)。上述 Chromium 首轮结果保留为本轮之前的历史证据。
+
+## 2026-09-09 新建规则白屏回归
+
+用户实测发现“事件 → 规则 → 新建规则”白屏。`NewRuleModal` 在 Zustand selector 内直接 `filter` 事件类型，每次产生新数组，触发 `getSnapshot` / `Maximum update depth exceeded`。修复为订阅原始 `eventTypes` 后用 `useMemo` 派生；同时补齐表单标签关联，并保持视频源 Select 从首次渲染起受控。
+
+此前按 `role=tab` 遍历的测试没有进入 Events 的 radio 视图，因而漏掉规则弹窗。`test-tier0-ui.mjs` 现在显式验证规则入口、必填状态、内置和自定义类型保存、弹窗打开时字典更新、保存后重新新建，以及临时数据清理。新覆盖还发现浅色严重级别文字对比不足：warning/error token 分别适配为 `#985400` / `#c82020`，保证着色徽标与选中控件上的 12px 文字可读。
+
+最终 `/robots/` 构建及三引擎 `TIER0_UI_PHASE=interactions TIER0_UI_BROWSER=chromium|firefox|webkit node scripts/test-tier0-ui.mjs` 均通过：合计 48 组检查、39 个界面状态、15 次 axe 扫描，0 项违规。开发页面另实测中文/英文、明暗主题、375px/768px/默认桌面宽度的新建和下拉交互，并经 UI 保存、停用、删除仅本次创建的临时规则；修复后无新增浏览器 error/warn。
+
+WebKit 首次最终构建回归的规则用例已通过，但后续 Live 页出现一次媒体请求 `cancelled`，整轮判失败；原始记录保留在 `demos/vision-demo/rule-fix-webkit-first-result.json`。同一构建单独完整复跑通过，没有放宽失败分类。三引擎最终机器报告在 `demos/tier0-ui-qa/<engine>/interactions/result.json`，共同构建入口 SHA-256 为 `30a484f74c76608ebfa01708efe793e84f42acca1b0581952850b4605d36f57b`。本次仍为本地浏览器与视口验证，不代表实体手机或生产部署。
