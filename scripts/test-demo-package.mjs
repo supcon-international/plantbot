@@ -127,11 +127,11 @@ try {
   secrets.add(installed.key)
   assert.equal(installed.mediaRevision,demoPack.mediaRevision)
   const beforeLegacyProbe=await api(S+'/vision')
-  await compose('exec','-T','demo-adapter','node','-e',"const fs=require('node:fs'),p='/config/installation.json';fs.copyFileSync(p,p+'.qa-backup');const state=JSON.parse(fs.readFileSync(p));delete state.mediaRevision;fs.writeFileSync(p,JSON.stringify(state));")
+  await compose('run','--rm','--no-deps','--entrypoint','node','demo-seed','-e',"const fs=require('node:fs'),p='/config/installation.json';fs.copyFileSync(p,p+'.qa-backup');const state=JSON.parse(fs.readFileSync(p));delete state.mediaRevision;fs.writeFileSync(p,JSON.stringify(state));")
   try {
     await assert.rejects(compose('run','--rm','--no-deps','demo-seed'),/legacy synthetic.*incompatible.*existing rules and history were preserved/)
   } finally {
-    await compose('exec','-T','demo-adapter','node','-e',"const fs=require('node:fs'),p='/config/installation.json';fs.renameSync(p+'.qa-backup',p);")
+    await compose('run','--rm','--no-deps','--entrypoint','node','demo-seed','-e',"const fs=require('node:fs'),p='/config/installation.json';fs.renameSync(p+'.qa-backup',p);")
   }
   assert.deepEqual((await api(S+'/vision')).configs,beforeLegacyProbe.configs,'Legacy installation refusal preserves all existing monitoring rules')
   checks.push('Legacy media state fails explicitly without changing rules; the same installation file is restored before restart tests')
