@@ -48,7 +48,9 @@ async function login(password) {
   cookie=auth.headers.get('set-cookie').split(';')[0]; secrets.add(cookie)
 }
 async function noRandomNativeAlarms(command) {
-  const policy=JSON.parse(await command('exec','-T','demo-adapter','node','-e',`
+  // Match the production entrypoint's unprivileged UID; container root lacks
+  // SYS_PTRACE and cannot read another UID's /proc/<pid>/environ.
+  const policy=JSON.parse(await command('exec','--user','1000:1000','-T','demo-adapter','node','-e',`
     const fs=require('node:fs'), policies={f2:[],x30:[]};
     for(const pid of fs.readdirSync('/proc').filter(x=>/^\\d+$/.test(x))) {
       try {
@@ -58,12 +60,12 @@ async function noRandomNativeAlarms(command) {
             policies[vendor].push(fs.readFileSync('/proc/'+pid+'/environ','utf8').split('\\0').includes(flag));
           }
         }
-      } catch(error) { if(!['ENOENT','EACCES'].includes(error.code)) throw error; }
+      } catch(error) { if(error.code!=='ENOENT') throw new Error('Cannot inspect simulator process '+pid+': '+error.code); }
     }
     console.log(JSON.stringify(Object.fromEntries(Object.entries(policies).map(([vendor,states])=>[vendor,{processes:states.length,disabled:states.length>0&&states.every(Boolean)}]))));
   `))
-  assert.ok(policy.f2.disabled,'Actual F2 simulator processes must disable random inspection and native fault generation')
-  assert.ok(policy.x30.disabled,'Actual X30 simulator processes must disable random localization faults')
+  assert.ok(policy.f2.disabled,`Actual F2 simulator processes must disable random inspection and native fault generation: ${JSON.stringify(policy.f2)}`)
+  assert.ok(policy.x30.disabled,`Actual X30 simulator processes must disable random localization faults: ${JSON.stringify(policy.x30)}`)
   const events=(await api('/sites/demo-lab/events?limit=500')).events
   assert.ok(events.every(e=>['vision-ocr','vision-intrusion'].includes(e.type)),'All demo Events must come from the real visual rules')
   const nativeLogs=await command('logs','--no-color','demo-adapter')
