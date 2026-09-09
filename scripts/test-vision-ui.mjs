@@ -21,8 +21,15 @@ const dist = join(root, 'web/dist'),
 assert.ok(existsSync(join(dist, 'index.html')), 'Build the production bundle first')
 const data = mkdtempSync(join(tmpdir(), 'pb-ui-'))
 mkdirSync(out, { recursive: true })
-const apiPort = 8994,
-  webPort = 5188,
+const freePort = async () => {
+  const listener = createServer()
+  await new Promise((resolve, reject) => { listener.once('error', reject); listener.listen(0, '127.0.0.1', resolve) })
+  const port = listener.address().port
+  await new Promise((resolve, reject) => listener.close(error => error ? reject(error) : resolve()))
+  return port
+}
+const apiPort = await freePort(),
+  webPort = await freePort(),
   base = `http://127.0.0.1:${webPort}/robots`
 const proc = spawn(join(root, 'server/node_modules/.bin/tsx'), ['server/src/index.ts'], {
   cwd: root,
@@ -56,6 +63,7 @@ const wait = async (fn, label, ms = 20000) => {
   }
   throw new Error(`Timed out: ${label}`)
 }
+const sockets = new Set()
 const proxy = createServer((req, res) => {
   if (!req.url.startsWith('/robots')) {
     res.writeHead(404)
@@ -93,6 +101,7 @@ const proxy = createServer((req, res) => {
   res.setHeader('content-type', mime[extname(target)] ?? 'application/octet-stream')
   res.end(readFileSync(target))
 })
+proxy.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)) })
 proxy.on('upgrade', (req, socket, head) => {
   const upstream = connect(apiPort, '127.0.0.1', () => {
     upstream.write(
@@ -104,6 +113,7 @@ proxy.on('upgrade', (req, socket, head) => {
     socket.pipe(upstream)
     upstream.pipe(socket)
   })
+  sockets.add(upstream); upstream.once('close', () => sockets.delete(upstream))
   upstream.on('error', () => socket.destroy())
   socket.on('error', () => upstream.destroy())
   socket.on('close', () => upstream.destroy())
@@ -118,7 +128,7 @@ try {
  const generate=spawn(python,['integrations/vision/tests/make_video.py',movie],{cwd:root,stdio:'inherit'})
  assert.equal((await once(generate,'exit'))[0],0)
  const configuration=join(data,'adapter.json')
- writeFileSync(configuration,JSON.stringify({id:'ui-edge',name:'Test edge adapter',serverUrl:`http://127.0.0.1:${apiPort}`,sources:[{id:'camera',label:'Test camera',view:'fixed',url:movie,loop:true}]}))
+ writeFileSync(configuration,JSON.stringify({id:'ui-edge',name:'Test edge adapter',serverUrl:`http://127.0.0.1:${apiPort}`,sources:[{id:'camera',label:'Test camera',view:'fixed',channelId:'cam:perimeter-cam',url:movie,loop:true}]}))
  worker=spawn(python,['integrations/vision/worker.py'],{cwd:root,env:{...process.env,PB_ADAPTER_CONFIG:configuration,PB_SITE_KEY:'pbk_dev_plant07',PB_VISION_DATA:join(data,'vision')},stdio:['ignore','pipe','pipe']})
  worker.stdout.on('data',b=>{serverLog+=b});worker.stderr.on('data',b=>{serverLog+=b})
  browser=await ({chromium,firefox,webkit})[engine].launch({...(engine==='chromium'?{channel:'chrome'}:{}),headless:true})
@@ -132,8 +142,8 @@ try {
  await page.locator('form button[type="submit"]').click();await page.waitForURL(u=>['/robots','/robots/'].includes(u.pathname))
  const api=async(method,path,body)=>{const r=await context.request.fetch(`${base}/api/sites/plant-07${path}`,{method,...(body?{data:body}:{})});assert.ok(r.ok(),await r.text());return r.json()}
  await wait(async()=>(await api('GET','/vision')).adapters.length===1,'real vision adapter online')
- await page.getByRole('link',{name:'Live',exact:true}).click();await page.getByRole('tab',{name:'Vision inspection',exact:true}).click()
- await page.getByRole('button',{name:'Add monitoring',exact:true}).click()
+ await page.getByRole('link',{name:'Events',exact:true}).click();await page.getByRole('tab',{name:'Monitoring rules',exact:true}).click()
+ await page.getByRole('button',{name:'New rule',exact:true}).click()
  let dialog=page.getByRole('dialog')
  await dialog.getByLabel('Name',{exact:true}).fill('Gate occupancy')
  await dialog.getByRole('combobox',{name:'Preset',exact:true}).click()
@@ -145,10 +155,10 @@ try {
  const point=dialog.getByRole('slider',{name:'Region point 1',exact:true});await point.focus();await page.keyboard.press('ArrowRight');assert.equal(await point.getAttribute('aria-valuenow'),'1')
  await page.screenshot({path:join(out,'01-detector-preview.png'),fullPage:true})
  await dialog.getByRole('switch',{name:'Enable after saving',exact:true}).click()
- await dialog.getByRole('button',{name:'Save',exact:true}).click();await dialog.waitFor({state:'hidden'})
+ await dialog.getByRole('button',{name:'Save rule',exact:true}).click();await dialog.waitFor({state:'hidden'})
  await wait(async()=>(await api('GET','/vision')).results.some(r=>!r.jobId&&r.config.name==='Gate occupancy'&&r.value>=1),'real occupancy archived',60000)
  checks.push('All eleven presets available; real pretrained detection preview, keyboard ROI, enable and persisted result')
- await page.getByRole('button',{name:'Add monitoring',exact:true}).click();dialog=page.getByRole('dialog')
+ await page.getByRole('button',{name:'New rule',exact:true}).click();dialog=page.getByRole('dialog')
  await dialog.getByLabel('Name',{exact:true}).fill('Temperature display')
  await dialog.getByRole('combobox',{name:'Preset',exact:true}).click();await page.getByRole('option',{name:'Display OCR',exact:true}).click()
  await dialog.getByRole('switch',{name:'Read one numeric value',exact:true}).click()
@@ -158,7 +168,7 @@ try {
  await dialog.getByRole('button',{name:'Run preview',exact:true}).click()
  await wait(async()=>(await dialog.innerText()).includes('Preview complete'),'real OCR preview',60000)
  assert.ok((await dialog.innerText()).includes('85.2'))
- await dialog.getByRole('switch',{name:'Enable after saving',exact:true}).click();await dialog.getByRole('button',{name:'Save',exact:true}).click();await dialog.waitFor({state:'hidden'})
+ await dialog.getByRole('switch',{name:'Enable after saving',exact:true}).click();await dialog.getByRole('button',{name:'Save rule',exact:true}).click();await dialog.waitFor({state:'hidden'})
  await wait(async()=>(await api('GET','/vision')).results.some(r=>!r.jobId&&r.config.name==='Temperature display'&&r.status==='alert'&&r.value===85.2),'OCR alert',60000)
  const overview=await api('GET','/vision')
  const baseline=overview.configs.find(c=>c.name==='Gate occupancy')
@@ -168,37 +178,67 @@ try {
  const all=(await api('GET','/vision')).results
  for(const preset of ['intrusion','crowding','absence','loitering','post_occupancy','hazard_dwell','ocr'])assert.ok(all.some(r=>r.config.name===`Simulation ${preset}`&&r.status==='alert'),preset)
  checks.push('All eleven presets execute through shared real inference, rules, outbox and Server; expected occupancy/dwell/OCR alarms observed')
- await page.getByRole('textbox',{name:'Search observations',exact:true}).fill('Temperature display')
- await page.getByRole('button',{name:'Review',exact:true}).first().click();dialog=page.getByRole('dialog')
+ await page.getByRole('row').filter({has:page.getByText('Temperature display',{exact:true})}).getByRole('button',{name:'Details',exact:true}).click()
+ await page.getByRole('button',{name:'Review observation',exact:true}).first().click();dialog=page.getByRole('dialog',{name:'Observation details',exact:true})
  await dialog.locator('img').waitFor();assert.ok(await dialog.locator('img').evaluate(i=>i.complete&&i.naturalWidth>0))
  await dialog.getByRole('switch',{name:'Show annotations',exact:true}).click();assert.equal(await dialog.locator('svg[viewBox="0 0 1000 1000"]').count(),0)
  const download=page.waitForEvent('download');await dialog.getByRole('link',{name:'Download original',exact:true}).click();assert.ok((await download).suggestedFilename().endsWith('.jpg'))
  await page.screenshot({path:join(out,'02-ocr-evidence.png'),fullPage:true});await dialog.getByRole('button',{name:'Close',exact:true}).click()
+ await page.getByRole('dialog',{name:'Rule details',exact:true}).getByRole('button',{name:'Close',exact:true}).click()
  checks.push('Real PP-OCRv5 preview and numeric threshold alarm, evidence decoding, original/overlay and download')
+ const triggerResult=all.find(r=>r.config.name==='Temperature display'&&r.status==='alert'&&r.eventId&&!r.jobId)
+ assert.ok(triggerResult,'Formal OCR has a linked event')
+ const event=(await api('GET',`/events/${triggerResult.eventId}`)).event
+ assert.equal(event.trigger.ruleId,triggerResult.config.id)
+ assert.equal(event.trigger.value,85.2)
+ assert.equal(event.trigger.channelId,'cam:perimeter-cam')
+ await page.goto(`${base}/events?ev=${encodeURIComponent(event.id)}`)
+ dialog=page.getByRole('dialog',{name:event.label,exact:true});await dialog.waitFor()
+ assert.ok((await dialog.innerText()).includes('85.2'))
+ await dialog.getByRole('button',{name:/^View frozen version/}).click()
+ const frozen=page.getByRole('dialog',{name:'Trigger rule version',exact:true})
+ await frozen.getByText('Temperature display',{exact:true}).waitFor()
+ await frozen.getByRole('button',{name:'Close',exact:true}).click()
+ await dialog.getByRole('button',{name:'Review observation',exact:true}).click()
+ const observed=page.getByRole('dialog',{name:'Observation details',exact:true})
+ assert.ok((await observed.innerText()).includes('85.2'))
+ await observed.getByRole('button',{name:'Close',exact:true}).click()
+ await dialog.getByRole('link',{name:'View video',exact:true}).click()
+ await page.waitForURL(u=>u.pathname==='/robots/live')
+ assert.equal(await page.getByRole('tab',{name:'Vision inspection',exact:true}).count(),0)
+ await page.getByRole('link',{name:'Add rule',exact:true}).click()
+ await page.waitForURL(u=>u.pathname==='/robots/events'&&u.searchParams.get('channel')==='cam:perimeter-cam')
+ dialog=page.getByRole('dialog',{name:'New rule',exact:true});await dialog.waitFor()
+ await dialog.getByRole('combobox',{name:'Video source',exact:true}).waitFor()
+ assert.ok((await dialog.innerText()).includes('Test camera'))
+ await dialog.getByRole('button',{name:'Close',exact:true}).click()
+ await page.getByRole('button',{name:'Show all rules',exact:true}).click()
+ checks.push('Formal OCR event traces frozen rule, exact observation and explicit channel; video opens the shared rule editor and has no separate vision tab')
+
  await page.getByRole('switch',{name:'Enable Temperature display',exact:true}).click()
  await wait(async()=>!(await api('GET','/vision')).configs.find(c=>c.name==='Temperature display').enabled,'disable monitoring')
- await page.reload();await page.getByRole('tab',{name:'Vision inspection',exact:true}).click()
+ await page.reload();await page.getByRole('tab',{name:'Monitoring rules',exact:true}).click()
  assert.equal(await page.getByRole('switch',{name:'Enable Temperature display',exact:true}).getAttribute('aria-checked'),'false')
  await page.setViewportSize({width:390,height:844});await page.screenshot({path:join(out,'03-mobile.png'),fullPage:true})
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'no page overflow on mobile')
  // Persisted language is a user setting, and a reload verifies the actual Chinese UI.
  await page.evaluate(()=>localStorage.setItem('aegis-lang',JSON.stringify({state:{lang:'zh'},version:0})))
- await page.reload();await page.getByRole('tab',{name:'视觉巡检',exact:true}).click();await page.getByRole('heading',{name:'视觉巡检',exact:true}).waitFor();await page.screenshot({path:join(out,'04-chinese-mobile.png'),fullPage:true});checks.push('Chinese labels and mobile rendering')
+ await page.reload();await page.getByRole('tab',{name:'监测规则',exact:true}).click();await page.getByRole('heading',{name:'监测规则',exact:true}).waitFor();await page.screenshot({path:join(out,'04-chinese-mobile.png'),fullPage:true});checks.push('Chinese labels and mobile rendering')
  const viewer=await browser.newContext();const vp=await viewer.newPage();vp.on('pageerror',e=>errors.push(e.message));await vp.goto(`${base}/login`)
  await vp.locator('#login-user').fill('viewer');await vp.locator('#login-pass').fill('plantbot');await vp.locator('form button[type="submit"]').click()
- await vp.waitForURL(u=>['/robots','/robots/'].includes(u.pathname));await vp.getByRole('link',{name:'Live',exact:true}).click();await vp.getByRole('tab',{name:'Vision inspection',exact:true}).click()
- await vp.getByTestId('vision-workspace').waitFor();assert.equal(await vp.getByRole('button',{name:'Add monitoring',exact:true}).count(),0)
+ await vp.waitForURL(u=>['/robots','/robots/'].includes(u.pathname));await vp.getByRole('link',{name:'Events',exact:true}).click();await vp.getByRole('tab',{name:'Monitoring rules',exact:true}).click()
+ await vp.getByTestId('monitoring-rules').waitFor();assert.equal(await vp.getByRole('button',{name:'New rule',exact:true}).count(),0)
  assert.equal(await vp.getByRole('switch',{name:'Enable Gate occupancy',exact:true}).isDisabled(),true)
  await viewer.close();checks.push('Disable persists across reload, mobile layout and viewer permissions')
  for(const lang of ['en','zh'])for(const theme of ['light','dark'])for(const width of [375,768,1440]){
   await page.setViewportSize({width,height:1000})
   await page.evaluate(({lang,theme})=>{localStorage.setItem('aegis-lang',JSON.stringify({state:{lang},version:0}));localStorage.setItem('aegis-theme',JSON.stringify({state:{theme},version:0}))},{lang,theme})
-  await page.reload();await page.getByRole('tab',{name:lang==='zh'?'视觉巡检':'Vision inspection',exact:true}).click();await page.getByTestId('vision-workspace').waitFor()
+  await page.reload();await page.getByRole('tab',{name:lang==='zh'?'监测规则':'Monitoring rules',exact:true}).click();await page.getByTestId('monitoring-rules').waitFor()
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`${lang}/${theme}/${width} overflow`)
-  const a11y=await new AxeBuilder({page}).include('[data-testid="vision-workspace"]').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze()
+  const a11y=await new AxeBuilder({page}).include('[data-testid="monitoring-rules"]').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze()
   assert.deepEqual(a11y.violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.html)})),[],`${lang}/${theme}/${width} accessibility`)
  }
- checks.push('Vision page: English/Chinese, light/dark, 375/768/1440px; zero WCAG A/AA violations')
+ checks.push('Unified monitoring: English/Chinese, light/dark, 375/768/1440px; zero WCAG A/AA violations')
 
  assert.deepEqual(errors,[]);assert.deepEqual(badResponses,[])
  writeFileSync(join(out,'result.json'),JSON.stringify({passed:true,checks,errors,badResponses},null,2));console.log(JSON.stringify({passed:true,checks},null,2))
@@ -206,8 +246,10 @@ try {
  await page?.screenshot({path:join(out,'failure.png'),fullPage:true}).catch(()=>{})
  writeFileSync(join(out,'result.json'),JSON.stringify({passed:false,checks,error:String(error),errors,badResponses,serverLog},null,2));console.error(error);process.exitCode=1
 } finally {
+ for(const context of browser?.contexts()??[])await context.close()
  await browser?.close()
  if(worker?.exitCode===null){const ended=once(worker,'exit');worker.kill('SIGTERM');await ended}
+ for(const socket of sockets)socket.destroy()
  proxy.closeAllConnections();await new Promise(r=>proxy.close(r))
  if(proc.exitCode===null){const closed=once(proc,'close');proc.kill('SIGTERM');await closed}
  rmSync(data,{recursive:true,force:true})

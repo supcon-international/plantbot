@@ -311,3 +311,9 @@ PTZ 的绝对 pan/tilt 使用校准后的度（右/上为正），zoom 为光学
 ## 视觉能力落地（v2.4.0）
 
 视觉推理位于 Adapter 内的独立进程。Server 的 `vision_configs` 保存版本化场站配置，`vision_jobs` 冻结试运行参数，`vision_results` 保留读数/标注/模型版本/原图引用，`vision_episodes` 去重当前告警。固定摄像头直接注册为 Adapter source，不创建虚假机器人。异常沿用既有事件域；设备关联沿用 asset ID。视觉任务不进入机器人运动订单或临时遥操作通道。具体数据和边界见 [vision.md](vision.md)。
+
+### Unified monitoring in Events / 事件中的统一监测（v2.5.0）
+
+事件 → 监测规则聚合 `vision_configs` 与既有传感器规则，继续写入各自现有配置源。模型只在 Adapter 运行；Server 阈值比较仅消费新鲜有效读数。正常观测放在规则详情；异常事件冻结触发时版本、数值、观测与证据引用，配置改名、改版或删除不会重写历史。原图仍受证据保留期限与容量预算约束，不能把历史引用当作永久文件保证。启用状态与实际运行状态分别显示。视频快捷入口只接受明确通道绑定；模拟规则明确标记为演示，随机生成器不能选中真实监测规则。
+
+Events → Monitoring rules aggregates existing vision and sensor configurations without a second store. Vision executes in Adapter; Server evaluates fresh valid metric readings. Normal observations remain in rule details. Anomaly events freeze their triggering revision, value, observation and evidence reference without rewriting history after configuration changes or deletion. Evidence files remain subject to retention and capacity limits. Runtime status is separate from configured enablement. Video shortcuts require explicit channel mappings; random demo generation never selects real monitoring rules.

@@ -103,6 +103,19 @@ WORKDIR /app/robots/integrations
 EXPOSE 8554
 CMD ["node", "scripts/dev-all.mjs"]
 
+# A separate customer-demo Adapter uses the existing standalone runtime and
+# three native simulators from the fixed external build context.
+FROM bench AS demo-adapter
+USER root
+COPY integrations/demo/ /app/robots/integrations/demo/
+COPY integrations/demo/media/ /opt/plantbot-demo/media/
+COPY --chmod=755 docker/adapter-entrypoint.sh /usr/local/bin/plantbot-adapter-entrypoint
+ENV PB_ADAPTER_CONFIG=/config/adapter.json
+ENTRYPOINT ["/usr/local/bin/plantbot-adapter-entrypoint"]
+HEALTHCHECK --interval=5s --timeout=6s --start-period=30s --retries=30 \
+  CMD node /app/robots/integrations/demo/health.mjs
+CMD ["node", "/app/robots/integrations/demo/bench.mjs"]
+
 
 # The platform playback relay only needs the pinned Linux go2rtc binary fetched
 # above. Alpine supplies wget for the healthcheck.

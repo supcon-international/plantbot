@@ -38,6 +38,8 @@ import { registerOperations } from './operations.js'
 import { registerPtz } from './ptz.js'
 import { registerControl } from './control.js'
 import { registerVision } from './vision.js'
+import { validateRuleCreate, validateRulePatch } from './monitoring.js'
+import { db } from './db.js'
 
 const PUB = process.env.PUBLIC_BASE ?? ''
 const DEMO = process.env.PB_DEMO === '1'
@@ -696,6 +698,14 @@ app.get(`${S}/events`, async (req: FastifyRequest, reply) => {
   return { events: w.listEvents(clampInt((req.query as any)?.limit, 120, 1, 500)) }
 })
 
+app.get(`${S}/events/:id`, async (req: FastifyRequest, reply) => {
+  const w = world(req, reply)
+  if (!w) return
+  const row = db.prepare('SELECT data FROM events WHERE site_id=? AND id=?').get(w.id, (req.params as P).id) as { data: string } | undefined
+  if (!row) return reply.code(404).send({ error: 'not found' })
+  return { event: JSON.parse(row.data) }
+})
+
 for (const [action, to] of [['ack', 'acked'], ['resolve', 'resolved'], ['dismiss', 'dismissed']] as const) {
   app.post(`${S}/events/:id/${action}`, { preHandler: requireRole('operator') }, async (req: FastifyRequest, reply) => {
     const w = world(req, reply)
@@ -729,9 +739,12 @@ app.get(`${S}/rules`, async (req: FastifyRequest, reply) => {
 app.post(`${S}/rules`, { preHandler: requireRole('admin') }, async (req: FastifyRequest, reply) => {
   const w = world(req, reply)
   if (!w) return
-  const b = (req.body ?? {}) as any
-  if (!b.name || !b.model || !b.source) return reply.code(400).send({ error: 'name, model, source required' })
-  if (!w.eventTypes.some((t) => t.id === b.model)) return reply.code(400).send({ error: 'unknown detection model / event type' })
+  const b = validateRuleCreate(w, req.body)
+  if (b.kind === 'threshold' && !w.eventTypes.some((t) => t.id === b.model)) {
+    const metric = METRIC_DEFS.find((m) => m.id === b.metric)!
+    const type = w.addEventType({ id: b.model, label: `${metric.label} threshold`, severity: b.severity, category: 'equipment' })
+    if (type) saveEventType(w.id, type)
+  }
   const rule = w.createRule(b)
   broadcast(w.id, { t: 'rules', rules: w.rules })
   return { rule }
@@ -740,7 +753,9 @@ app.post(`${S}/rules`, { preHandler: requireRole('admin') }, async (req: Fastify
 app.patch(`${S}/rules/:id`, { preHandler: requireRole('admin') }, async (req: FastifyRequest, reply) => {
   const w = world(req, reply)
   if (!w) return
-  const r = w.patchRule((req.params as P).id, req.body ?? {})
+  const old = w.rules.find((rule) => rule.id === (req.params as P).id)
+  if (!old) return reply.code(404).send({ error: 'not found' })
+  const r = w.patchRule(old.id, validateRulePatch(old, req.body ?? {}))
   if (!r) return reply.code(404).send({ error: 'not found' })
   broadcast(w.id, { t: 'rules', rules: w.rules })
   return { rule: r }
@@ -1269,6 +1284,10 @@ app.post(`${I}/events`, async (req: FastifyRequest<{ Body: any }>, reply) => {
   if (!w) return
   const b = (req.body ?? {}) as any
   if (!b.type) return reply.code(400).send({ error: 'type required (register it under event-types first)' })
+  if (b.confidence != null && (typeof b.confidence !== 'number' || !Number.isFinite(b.confidence) || b.confidence < 0 || b.confidence > 1))
+    return reply.code(400).send({ error: 'confidence must be null or a number from 0 to 1' })
+  if (['x', 'z'].some((key) => b[key] !== undefined && (typeof b[key] !== 'number' || !Number.isFinite(b[key]))))
+    return reply.code(400).send({ error: 'coordinates must be finite numbers when provided' })
   const robot = b.robotSerial ? w.robotBySerial(b.robotSerial) : undefined
   // ingestEvent broadcasts through World.onEvent — no duplicate fan-out here
   const ev = w.ingestEvent({ ...b, robotId: robot?.id })

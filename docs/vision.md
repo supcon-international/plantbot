@@ -1,4 +1,4 @@
-# Vision inspection
+# Vision monitoring in Events / 事件中的视觉监测
 
 [中文](#中文) · [English](#english)
 
@@ -59,8 +59,8 @@ flowchart LR
 
 1. 按 [release.md](release.md) 启动 Server，建立场站并创建该场站 API key。
 2. 在 Adapter 的 `adapter.json` 中设置 `serverUrl`（包含 `/robots` 等部署前缀）、唯一 `id`、`sources`；密钥放在 `.env.adapter` 的 `PB_SITE_KEY`。`devices` 可为空，因此普通固定摄像头无需假装成机器人。
-3. 启动 Adapter，在 **LIVE → 视觉巡检** 中选择预置能力和视频源。先试运行获取原图，拖动区域顶点/计数线，或用键盘方向键调整。设置阈值、持续时间、班次与设备关联，保存后启用。
-4. 在观测记录中查看配置版本、模型版本、读数、原图及标注。试运行最多观察 40 秒，60 秒过期，不生成正式事件。超过试运行窗口的时长条件需要正式运行验证。
+3. 启动 Adapter，在 **事件 → 监测规则** 中选择预置能力和视频源。先试运行获取原图，拖动区域顶点/计数线，或用键盘方向键调整。设置阈值、持续时间、班次与设备关联，保存后启用。
+4. 在规则详情的观测记录中查看配置版本、模型版本、读数、原图及标注；正常观测不挤占事件列表。异常事件保留触发时的配置快照和观测 ID，改名、改版或删除配置不会重写历史。视频页只按明确的通道绑定打开同一编辑器，不推测视频源。试运行最多观察 40 秒，60 秒过期，不生成正式事件。超过试运行窗口的时长条件需要正式运行验证。
 
 配置名称不决定逻辑，`preset` 和参数才决定逻辑。区域边界包含在区域内。越线仅计算穿过线段的轨迹，线附近有防抖区；计数是本次连续观测以来的累计值，重连、视角变化和规则修改后重置。违停以图像宽高归一化后约 2.5% 的位置变化作为重置条件，需要用现场机位验证容差。班次使用 UTC，支持跨午夜；开始与结束时间相同表示全天。
 
@@ -100,7 +100,7 @@ Vision is an optional capability of **Plantbot Adapter**. Server stores versione
 
 The eleven presets cover people counting, boundary crossing, restricted-area intrusion, crowd gathering, absence from post, personnel loitering, post occupancy, vehicle counting, illegal parking, display OCR and hazard-zone dwell. Ten presets share RT-DETRv2 R18vd detection and ByteTrack tracking; OCR uses RapidOCR with PP-OCRv5 mobile. CPU inference uses ONNX Runtime. Pinned model files and dependency versions are included in the Adapter package; runtime does not download models.
 
-Configure `serverUrl`, a unique adapter `id`, video `sources` and optional robot `devices` in `adapter.json`; keep `PB_SITE_KEY` in `.env.adapter`. Sources remain local to the Adapter. In **LIVE → Vision inspection**, choose a preset, run a preview, adjust the normalized region or counting line, configure thresholds and an optional UTC schedule, then enable monitoring. Evidence review supports original images, detection overlays and download. Asset association links observations to equipment without moving protocol credentials into Server.
+Configure `serverUrl`, a unique adapter `id`, video `sources` and optional robot `devices` in `adapter.json`; keep `PB_SITE_KEY` in `.env.adapter`. Sources remain local to the Adapter. In **Events → Monitoring rules**, choose a preset, run a preview, adjust the normalized region or counting line, configure thresholds and an optional UTC schedule, then enable monitoring. Evidence review supports original images, detection overlays and download. Asset association links observations to equipment without moving protocol credentials into Server.
 
 Continuous rules require fixed views. Large camera motion, unusable frames, disconnection and excessive observation gaps reset tracking and duration state. Mobile sources support OCR only and require a driver-produced `stationaryFile` with `stationary: true` and `observedAt` in Unix milliseconds, no more than two seconds old. Image motion checks supplement this requirement; they do not guarantee camera pose. PTZ patrols do not automatically invoke OCR.
 

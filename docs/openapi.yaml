@@ -722,6 +722,26 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
 
   schemas:
+    EventTrigger:
+      type: object
+      description: Immutable trigger facts; absent on legacy or external events without a verifiable rule observation.
+      required: [ruleId, ruleType, revision, configSnapshot, value, condition, confidence, capturedAt]
+      properties:
+        ruleId: { type: string }
+        ruleType: { type: string, enum: [vision, threshold] }
+        revision: { type: integer, minimum: 1 }
+        configSnapshot: { type: object, additionalProperties: true, description: Original VisionConfig or DetectionRule frozen when the event was triggered }
+        resultId: { type: string, description: Vision result id; fetch through the protected vision/results route }
+        observationId: { type: string, description: Adapter observation epoch }
+        adapterId: { type: string }
+        sourceId: { type: string }
+        value: { type: number, nullable: true }
+        unit: { type: string }
+        condition: { type: string }
+        confidence: { type: number, nullable: true, minimum: 0, maximum: 1, description: Null when the producer did not report aggregate confidence; annotation scores are not event confidence }
+        channelId: { type: string, description: Explicit logical source association only; never inferred from adapter identity }
+        capturedAt: { type: number, description: Observation time in Unix milliseconds }
+        receivedAt: { type: number, description: Server receive time in Unix milliseconds }
     VisionConfig:
       type: object
       required:
@@ -889,6 +909,16 @@ components:
           items:
             $ref: '#/components/schemas/VisionSource'
           maxItems: 32
+        capabilities:
+          type: object
+          description: Optional for older workers; when present, configs and previews must use an advertised preset.
+          required: [presets]
+          properties:
+            presets:
+              type: array
+              uniqueItems: true
+              items: { type: string }
+              maxItems: 11
         models:
           type: object
           properties:
@@ -949,6 +979,12 @@ components:
           - alert
           - unknown
           - failed
+        confidence:
+          type: number
+          nullable: true
+          minimum: 0
+          maximum: 1
+          description: Optional aggregate confidence. Omitted or null remains unknown; never inferred from annotations.
         value:
           type: number
           nullable: true
@@ -998,6 +1034,10 @@ components:
       - $ref: '#/components/schemas/VisionResultInput'
       - type: object
         properties:
+          sourceId: { type: string }
+          channelId: { type: string, description: Explicit adapter source association frozen at capture }
+          triggeredEvent: { type: boolean, description: True only for the observation that created an event }
+          evidenceExpired: { type: boolean, description: Media expired by seven-day retention or capacity; triggering observation metadata remains for the event retention period }
           config:
             $ref: '#/components/schemas/VisionConfig'
           receivedAt:
@@ -1370,7 +1410,7 @@ components:
         x: { type: number }
         z: { type: number }
         snapshotUrl: { type: string }
-        confidence: { type: number, minimum: 0, maximum: 1 }
+        confidence: { type: number, nullable: true, minimum: 0, maximum: 1, description: Omitted or null means unknown }
         category: { type: string, enum: [security, fire, env, equipment, robot-fault] }
         runId: { type: string, description: bind to a mission run }
         evidence:
@@ -1397,14 +1437,15 @@ components:
         severity: { type: string, enum: [critical, high, info, low] }
         category: { type: string }
         lifecycle: { type: string, enum: [new, acked, resolved, dismissed] }
-        x: { type: number }
-        z: { type: number }
+        x: { type: number, nullable: true, description: Null when no real position was reported }
+        z: { type: number, nullable: true, description: Null when no real position was reported }
         zone: { type: string }
         sourceName: { type: string }
         robotId: { type: string }
         snapshot: { type: string, description: hosted evidence JPEG URL }
-        confidence: { type: number }
+        confidence: { type: number, nullable: true, minimum: 0, maximum: 1 }
         runId: { type: string }
+        trigger: { $ref: '#/components/schemas/EventTrigger' }
 
     Reading:
       type: object

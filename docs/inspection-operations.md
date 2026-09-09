@@ -46,6 +46,6 @@
 
 Manual robot input uses an exclusive expiring control session, separate from durable orders. Spot supports native velocity and discovered Spot CAM position control; F2 supports vendor directional driving and camera reset; X30 robotserver does not expose these manual interfaces. See [manual-control.md](manual-control.md) for the operator workflow, `teleop`/`ptz.manual` factsheet fields, `pumpControl`, stop confirmation and deployment limits.
 
-## 视觉巡检（v2.4.0）
+## 事件与监测规则（v2.5.0）
 
-LIVE → 视觉巡检提供 11 项预训练预置能力、区域/计数线配置、UTC 班次、试运行和原图复核。模型在 Adapter 执行，事件与设备关联由 Server 保存。配置变更有 revision，测试不产生正式告警，失败与未知不代表正常。云台巡检不自动执行 OCR；移动相机仅在可信停稳反馈有效时允许 OCR。完整范围、模型与验收见 [vision.md](vision.md)。
+EVENTS → 监测规则统一管理视觉与真实传感器阈值，并提供 11 项视觉预置能力、区域/计数线配置、UTC 班次、试运行和原图复核。模型在 Adapter 执行，事件与设备关联由 Server 保存。正常观测在规则详情，异常事件保留触发时的配置版本、读数和证据引用。试运行不产生正式告警，失败与未知不代表正常。LIVE 仅按明确通道绑定提供同一规则的快捷入口。云台巡检不自动执行 OCR；移动相机仅在可信停稳反馈有效时允许 OCR。完整范围、模型与验收见 [vision.md](vision.md)。

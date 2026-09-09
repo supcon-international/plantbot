@@ -154,7 +154,7 @@ interface AppState {
   readings: Record<string, Reading[]>
   events: DetectionEvent[]
   clock: number
-  setLifecycle: (id: string, to: EventLifecycle) => void
+  setLifecycle: (id: string, to: EventLifecycle) => Promise<void>
   ack: (id: string) => void
 }
 

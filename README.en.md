@@ -12,7 +12,7 @@ Plantbot is a multi-site inspection robot management platform for managing mixed
 - **Inspection tasks:** task templates, automatic or assigned robot dispatch, schedules, calendars, execution records and report exports.
 - **Video and PTZ:** live video, recording search and playback, clip downloads, camera control, presets and scheduled patrols.
 - **Robot teleoperation:** exclusive control, hold-to-move and release-to-stop input, keyboard controls and confirmation before interrupting a task.
-- **Vision inspection:** eleven presets for people, boundaries, restricted areas, crowds, post occupancy, dwell, vehicles and display OCR, with configurable regions, previews and evidence review.
+- **Events and monitoring rules:** unified vision and sensor threshold configuration; eleven vision presets for people, boundaries, restricted areas, crowds, post occupancy, dwell, vehicles and display OCR, with configurable regions, previews and evidence review.
 - **Equipment and issues:** equipment records, industrial tag registers, sensor readings, alarm evidence and defect resolution history.
 - **Administration and integration:** site permissions, users and organizations, audit logs, OIDC single sign-on, HTTP APIs, a TypeScript SDK and Node-RED nodes.
 
@@ -20,18 +20,20 @@ The interface follows the [Tier0 product design guidelines](docs/ui-design-audit
 
 ## Quick start
 
-[Download v2.4.0](https://github.com/supcon-international/plantbot/releases/tag/v2.4.0) as separate **Server** and **Adapter** packages. Server runs the web application, API and video relay. Adapter connects robots and cameras and runs vision models near the devices. The prebuilt Linux x86-64 packages require Docker Engine and Docker Compose 2.17+; no source build is needed.
+[Download v2.5.0](https://github.com/supcon-international/plantbot/releases/tag/v2.5.0) as separate **Server** and **Adapter** packages. Server runs the web application, API and video relay. Adapter connects robots and cameras and runs vision models near the devices. The prebuilt Linux x86-64 packages require Docker Engine and Docker Compose 2.17+; no source build is needed.
 
 ```bash
-sha256sum -c plantbot-server-v2.4.0-linux-amd64.tar.gz.sha256
-tar -xzf plantbot-server-v2.4.0-linux-amd64.tar.gz
-cd plantbot-server-v2.4.0-linux-amd64
+sha256sum -c plantbot-server-v2.5.0-linux-amd64.tar.gz.sha256
+tar -xzf plantbot-server-v2.5.0-linux-amd64.tar.gz
+cd plantbot-server-v2.5.0-linux-amd64
 bash start.sh
 ```
 
 Open [http://127.0.0.1:18080/robots/](http://127.0.0.1:18080/robots/) and sign in using the initial password in `.env.server`. Create a site and issue its API key. Configure the Adapter package with `serverUrl`, device addresses and `PB_SITE_KEY`, then run its `start.sh`. Pretrained models are included.
 
-Fresh installations start with an empty platform. See the [deployment guide](docs/release.md) for installation, separate hosts and upgrades, and [vision inspection](docs/vision.md) for monitoring configuration.
+Fresh installations start with an empty platform. See the [deployment guide](docs/release.md) for installation, separate hosts and upgrades, and [vision monitoring](docs/vision.md) for monitoring configuration.
+
+For a complete demonstration, download the same-version **Adapter Demo** package, extract it and run `bash start.sh`. It includes Server, three native-protocol robot simulators, real adapters, models and labelled sample videos. Open `http://127.0.0.1:18080/robots/?site=demo-lab`. Actual inference produces instrument threshold, occupancy and intrusion results; Server random alarms are disabled. See [Demo package](docs/demo.md) for the walkthrough, persistent restarts and external Server mode.
 
 ## Local development
 

@@ -233,8 +233,12 @@ const inspect = async (name, p = page) => {
     const visible = (e) => e.getBoundingClientRect().width > 0 && e.getBoundingClientRect().height > 0 && getComputedStyle(e).visibility !== 'hidden'
     const name = (e) => (e.getAttribute('aria-label') || e.getAttribute('title') || (e.getAttribute('aria-labelledby') || '').split(' ').map((id) => document.getElementById(id)?.textContent || '').join(' ') || e.labels?.[0]?.textContent || e.innerText || '').trim()
     const main = document.querySelector('main')
-    const controls = [...document.querySelectorAll('button,a[href],input:not([type=hidden]),select,textarea,[role=combobox]')].filter(visible)
-    const describe = (e) => ({ tag: e.tagName, name: name(e), className: String(e.className).slice(0, 150), width: Math.round(e.getBoundingClientRect().width) })
+    // Radix Switch adds a noninteractive, aria-hidden checkbox inside forms to
+    // bubble native form events. Audit the visible named switch, while keeping
+    // invisible but focusable/interactable inputs in the checks.
+    const formProxy = (e) => e.tagName === 'INPUT' && e.getAttribute('aria-hidden') === 'true' && e.tabIndex < 0 && getComputedStyle(e).opacity === '0' && getComputedStyle(e).pointerEvents === 'none'
+    const controls = [...document.querySelectorAll('button,a[href],input:not([type=hidden]),select,textarea,[role=combobox]')].filter(e => visible(e) && !formProxy(e))
+    const describe = (e) => ({ tag: e.tagName, name: name(e), className: String(e.className).slice(0, 150), width: Math.round(e.getBoundingClientRect().width), html: e.outerHTML.slice(0, 800) })
     const clippedControls = controls.filter((e) => {
       const r = e.getBoundingClientRect()
       if (r.right <= innerWidth + 1 && r.left >= -1) return false
@@ -750,61 +754,61 @@ try {
     context = await browser.newContext({ storageState: storage, viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' })
     page = await context.newPage(); recordPage(page)
     await verifyBuilderPointerCancellation()
-    // Events uses radio toggles, so the generic role=tab traversal does not
-    // exercise Rules or mount its modal. Cover the real action explicitly.
-    await navigate('/events')
-    await page.getByRole('radio', { name: /^Rules$|^规则$/i }).click()
-    const newRuleButton = page.getByRole('button', { name: /^New rule$|^新建规则$/i })
+    // Exercise real metric rule creation/editing and dictionary updates while the
+    // dialog is mounted; the previous simulated-model form could crash React.
+    await navigate('/events?view=rules')
+    await page.getByRole('tab', { name: 'Monitoring rules', exact: true }).click()
+    const newRuleButton = page.getByRole('button', { name: 'New rule', exact: true })
     const ruleIds = []
     const customType = { id: `qa-ui-rule-${engine}`, label: `QA rule type ${engine}`, severity: 'info', category: 'equipment' }
     let customTypeCreated = false
     try {
-      for (const kind of ['builtin', 'custom']) {
-        await newRuleButton.click()
-        const ruleDialog = page.getByRole('dialog', { name: /^Define detection rule$|^定义检测规则$/i })
-        await ruleDialog.waitFor()
-        const ruleName = ruleDialog.getByRole('textbox', { name: /^Rule name$|^规则名称$/i })
-        const submitRule = ruleDialog.getByRole('button', { name: /^Activate rule$|^启用规则$/i })
-        assert.equal(await ruleName.inputValue(), '', 'Opening New rule starts a fresh draft')
-        assert.ok(await submitRule.isDisabled(), 'An incomplete rule cannot be activated')
-        if (kind === 'custom') {
-          // Update the dictionary while the modal is mounted: this catches both
-          // unstable snapshot selectors and fixes that accidentally freeze it.
-          await api('POST', '/sites/plant-07/event-types', customType)
-          customTypeCreated = true
-        }
-        const name = `QA ${engine} ${kind} detection rule`
-        await ruleName.fill(name)
-        await ruleDialog.getByRole('combobox', { name: /^Detection model$|^检测模型$/i }).click()
-        await page.getByRole('option', { name: kind === 'custom' ? customType.label : /^Gauge OCR$|^仪表识别$/i, exact: true }).click()
-        await ruleDialog.getByRole('combobox', { name: /^Video source$|^视频源$/i }).click()
-        await page.getByRole('option', { name: /QA Inspection 01/ }).click()
-        assert.ok(await submitRule.isEnabled(), 'A named rule with a source can be activated')
-        await inspect(`interaction-new-rule-${kind}`)
-        await auditAccessibility(`interaction-new-rule-${kind}`)
-        const createdResponse = page.waitForResponse((r) => new URL(r.url()).pathname === '/robots/api/sites/plant-07/rules' && r.request().method() === 'POST')
-        await submitRule.click()
-        const response = await createdResponse
-        assert.ok(response.ok(), `New ${kind} rule saved: ${await response.text()}`)
-        const { rule } = await response.json()
-        assert.ok(rule?.id, 'Rule creation returns its persisted identity')
-        ruleIds.push(rule.id)
-        assert.equal(rule.name, name)
-        assert.equal(rule.model, kind === 'custom' ? customType.id : 'gauge')
-        assert.equal(rule.enabled, true)
-        assert.match(rule.sourceName, /QA Inspection 01/)
-        await ruleDialog.waitFor({ state: 'hidden' })
-        await page.locator('main').getByText(name, { exact: true }).waitFor()
-        await newRuleButton.click()
-        await ruleDialog.waitFor()
-        assert.equal(await ruleName.inputValue(), '', 'New rule can reopen after saving without retaining the prior draft')
-        assert.ok(await submitRule.isDisabled())
-        await page.keyboard.press('Escape')
-        await ruleDialog.waitFor({ state: 'hidden' })
-      }
-      checks.push('Events Rules opens a stable named dialog, updates custom types live, saves builtin/custom rules and reopens a fresh draft')
+      await newRuleButton.click()
+      const ruleDialog = page.getByRole('dialog', { name: 'New rule', exact: true })
+      await ruleDialog.waitFor()
+      await ruleDialog.getByRole('combobox', { name: 'Rule type', exact: true }).click()
+      await page.getByRole('option', { name: 'Metric threshold', exact: true }).click()
+      const ruleName = ruleDialog.getByRole('textbox', { name: 'Name', exact: true })
+      const submitRule = ruleDialog.getByRole('button', { name: 'Save rule', exact: true })
+      assert.equal(await ruleName.inputValue(), '', 'Opening New rule starts a fresh draft')
+      assert.ok(await submitRule.isDisabled(), 'An incomplete rule cannot be saved')
+      await api('POST', '/sites/plant-07/event-types', customType)
+      customTypeCreated = true
+      const name = `QA ${engine} real metric rule`
+      await ruleName.fill(name)
+      await ruleDialog.getByRole('combobox', { name: 'Robot', exact: true }).click()
+      await page.getByRole('option', { name: /QA Inspection 01/ }).click()
+      await ruleDialog.getByRole('combobox', { name: 'Metric', exact: true }).click()
+      await page.getByRole('option', { name: /^ambient/ }).click()
+      await ruleDialog.getByRole('spinbutton', { name: /^Threshold/ }).fill('80')
+      await ruleDialog.getByRole('switch', { name: 'Enable after saving', exact: true }).click()
+      await inspect('interaction-new-metric-rule')
+      await auditAccessibility('interaction-new-metric-rule')
+      const createdResponse = page.waitForResponse(r => new URL(r.url()).pathname === '/robots/api/sites/plant-07/rules' && r.request().method() === 'POST')
+      await submitRule.click()
+      const response = await createdResponse
+      assert.ok(response.ok(), `New metric rule saved: ${await response.text()}`)
+      const { rule } = await response.json()
+      assert.ok(rule?.id); ruleIds.push(rule.id)
+      assert.equal(rule.name, name); assert.equal(rule.kind, 'threshold')
+      assert.equal(rule.metric, 'amb.temp.c'); assert.equal(rule.bound, 80)
+      assert.equal(rule.enabled, true); assert.equal(rule.robotId, 'ext-ui-design')
+      await ruleDialog.waitFor({ state: 'hidden' })
+      await page.getByRole('button', { name: `Edit ${name}`, exact: true }).click()
+      const editDialog = page.getByRole('dialog', { name: 'Edit rule', exact: true })
+      await editDialog.getByRole('spinbutton', { name: /^Threshold/ }).fill('82')
+      const editedResponse = page.waitForResponse(r => new URL(r.url()).pathname.endsWith(`/rules/${rule.id}`) && r.request().method() === 'PATCH')
+      await editDialog.getByRole('button', { name: 'Save rule', exact: true }).click()
+      assert.ok((await editedResponse).ok(), 'Metric threshold edit persists')
+      await editDialog.waitFor({ state: 'hidden' })
+      await newRuleButton.click(); await ruleDialog.waitFor()
+      await ruleDialog.getByRole('combobox', { name: 'Rule type', exact: true }).click()
+      await page.getByRole('option', { name: 'Metric threshold', exact: true }).click()
+      assert.equal(await ruleName.inputValue(), '')
+      assert.ok(await submitRule.isDisabled())
+      await page.keyboard.press('Escape'); await ruleDialog.waitFor({ state: 'hidden' })
+      checks.push('Unified monitoring creates and edits a real metric rule, survives dictionary updates and reopens a fresh draft')
     } finally {
-      // Only remove data created by this case, including when an assertion fails.
       for (const id of ruleIds) await api('DELETE', `/sites/plant-07/rules/${id}`)
       if (customTypeCreated) await api('DELETE', `/sites/plant-07/event-types/${customType.id}`)
     }
@@ -1014,6 +1018,7 @@ try {
     console.error('Isolated UI runner teardown exceeded 25 seconds')
     process.exit(1)
   }, 25000)
+  for (const c of browser?.contexts() ?? []) await closeContext(c)
   await browser?.close()
   closeSockets()
   await new Promise((done) => proxy.close(done))

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Build two offline deployment packages from committed sources only.
+// Build Server, Adapter and Adapter Demo offline packages from committed sources only.
 import { createHash } from 'node:crypto'
 import {
   createReadStream,
@@ -7,6 +7,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from 'node:fs'
@@ -44,10 +45,16 @@ try {
   mkdirSync(source)
   run('git', ['archive', '--format=tar', `--output=${join(work, 'source.tar')}`, revision])
   run('tar', ['-xf', join(work, 'source.tar'), '-C', source])
+  const demoPack = JSON.parse(readFileSync(join(source, 'integrations/demo/pack.json'), 'utf8'))
+  const simulator = resolve(process.env.PLANTBOT_SIM_DIR ?? join(root, '../plantbotsimulator'))
+  const simulatorSource = join(work, 'simulator')
+  mkdirSync(simulatorSource)
+  run('git', ['archive', '--format=tar', `--output=${join(work, 'simulator.tar')}`, demoPack.simulator.revision], simulator)
+  run('tar', ['-xf', join(work, 'simulator.tar'), '-C', simulatorSource])
   const images = {}
-  for (const service of ['api', 'relay', 'gateway', 'adapter', 'vision']) {
+  for (const service of ['api', 'relay', 'gateway', 'adapter', 'vision', 'demo-adapter', 'vision-demo']) {
     const tag = `plantbot/${service}:${version}-${platform.split('/')[1]}`
-    const file = ['adapter', 'vision'].includes(service)
+    const file = ['adapter', 'vision', 'vision-demo'].includes(service)
       ? 'docker/adapter.Dockerfile'
       : 'docker/demo.Dockerfile'
     run(
@@ -59,6 +66,7 @@ try {
         platform,
         '--file',
         file,
+        ...(service === 'demo-adapter' ? ['--build-context', `simulator=${simulatorSource}`] : []),
         ...(process.env.PB_NPM_REGISTRY
           ? ['--build-arg', `PB_NPM_REGISTRY=${process.env.PB_NPM_REGISTRY}`]
           : []),
@@ -72,6 +80,7 @@ try {
         `org.opencontainers.image.revision=${revision}`,
         '--label',
         'org.opencontainers.image.source=https://github.com/supcon-international/plantbot',
+        ...(service === 'demo-adapter' ? ['--label', `io.plantbot.simulator.revision=${demoPack.simulator.revision}`] : []),
         '--load',
         '.',
       ],
@@ -81,31 +90,31 @@ try {
     if (`${image.Os}/${image.Architecture}` !== platform) throw new Error(`Wrong architecture: ${tag}`)
     images[service] = { tag, id: image.Id }
   }
-  for (const kind of ['server', 'adapter']) {
+  for (const kind of ['server', 'adapter', 'adapter-demo']) {
     const name = `plantbot-${kind}-v${version}-${platform.replace('/', '-')}`,
       bundle = join(work, name)
     mkdirSync(bundle)
     const compose = YAML.parse(readFileSync(join(source, `docker/release/compose.${kind}.yaml`), 'utf8'))
     const selected = {}
     for (const [service, config] of Object.entries(compose.services)) {
-      config.image = images[service].tag
+      const imageName = kind === 'adapter-demo' && service === 'vision' ? 'vision-demo' : service === 'demo-seed' ? 'demo-adapter' : service
+      config.image = images[imageName].tag
       config.platform = platform
       config.pull_policy = 'never'
-      selected[service] = images[service]
+      selected[imageName] = images[imageName]
     }
     writeFileSync(join(bundle, 'compose.yaml'), YAML.stringify(compose))
     writeFileSync(
       join(bundle, 'start.sh'),
-      readFileSync(join(source, `docker/release/start-${kind}.sh`), 'utf8').replaceAll(
-        'plantbot/api:VERSION',
-        images.api.tag,
-      ),
+      readFileSync(join(source, `docker/release/start-${kind}.sh`), 'utf8')
+        .replaceAll('plantbot/api:VERSION', images.api.tag)
+        .replaceAll('plantbot/demo-adapter:VERSION', images['demo-adapter'].tag),
       { mode: 0o755 },
     )
-    cpSync(join(source, 'docs/release.md'), join(bundle, 'README.md'))
+    cpSync(join(source, kind === 'adapter-demo' ? 'docs/demo.md' : 'docs/release.md'), join(bundle, 'README.md'))
     cpSync(join(source, 'CHANGELOG.md'), join(bundle, 'CHANGELOG.md'))
     const files = ['images.tar', 'compose.yaml', 'start.sh', 'README.md', 'CHANGELOG.md', 'release.json']
-    if (kind === 'adapter') {
+    if (kind === 'adapter' || kind === 'adapter-demo') {
       for (const [src, dest] of [
         ['integrations/adapter.example.json', 'adapter.example.json'],
         ['docs/vision.md', 'VISION.md'],
@@ -116,12 +125,21 @@ try {
         files.push(dest)
       }
       cpSync(join(source, 'integrations/vision/licenses'), join(bundle, 'licenses'), { recursive: true })
-      const { readdirSync } = await import('node:fs')
       for (const file of readdirSync(join(bundle, 'licenses'))) files.push(`licenses/${file}`)
+    }
+    if (kind === 'adapter-demo') {
+      cpSync(join(source, 'docker/release/demo.env.example'), join(bundle, '.env.demo.example'))
+      cpSync(join(source, 'integrations/demo/pack.json'), join(bundle, 'demo.pack.json'))
+      cpSync(join(source, 'integrations/demo/media'), join(bundle, 'media'), { recursive: true })
+      cpSync(join(source, 'integrations/demo/THIRD_PARTY.md'), join(bundle, 'DEMO_SOURCES.md'))
+      files.push('.env.demo.example', 'demo.pack.json', 'DEMO_SOURCES.md')
+      for (const file of readdirSync(join(bundle, 'media'))) files.push(`media/${file}`)
     }
     writeFileSync(
       join(bundle, 'release.json'),
-      JSON.stringify({ version, revision, component: kind, platform, images: selected }, null, 2) + '\n',
+      JSON.stringify({ version, revision, component: kind, platform, images: selected,
+        ...(kind === 'adapter-demo' ? { demoPack: demoPack.id, simulator: demoPack.simulator,
+          media: JSON.parse(readFileSync(join(source, 'integrations/demo/media/manifest.json'), 'utf8')) } : {}) }, null, 2) + '\n',
     )
     run('docker', [
       'image',

@@ -95,7 +95,7 @@ Administrators maintain equipment and tags. A tag can bind to a metric from a re
 
 Open Fleet → robot → Teleoperation for manual driving, and Live → PTZ inspection for camera controls. See [manual-control.md](manual-control.md) for ownership, stopping behavior, supported hardware and adapter configuration.
 
-## Vision inspection
+## Events and monitoring rules
 
-Open Live → Vision inspection to view Adapter sources, choose one of eleven presets, preview the scene and configure regions, lines, thresholds and UTC schedules. Enabled rules produce observations with original images, annotations, readings and configuration versions; anomalies enter the existing event history. Continuous rules require a fixed view. Mobile OCR requires device-confirmed stationary feedback. See [release.md](release.md) and [vision.md](vision.md) for the separate Server and Adapter packages.
+Open Events → Monitoring rules to view Adapter sources, choose one of eleven presets, preview the scene and configure regions, lines, thresholds and UTC schedules. Vision and real sensor thresholds share the monitoring rules workspace. Normal observations remain in rule details; anomalies enter Events with the triggering configuration revision, observation and evidence. Renaming or deleting a rule does not rewrite history. Explicitly linked video channels open the same rule editor. Continuous rules require a fixed view. Mobile OCR requires device-confirmed stationary feedback. See [release.md](release.md) and [vision.md](vision.md) for the separate Server and Adapter packages.
 

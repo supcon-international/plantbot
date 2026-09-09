@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const [serverArchive, adapterArchive] = process.argv.slice(2).map((p) => resolve(p))
+const [serverArchive, adapterArchive, demoArchive] = process.argv.slice(2).map((p) => resolve(p))
 if (!serverArchive || !adapterArchive) throw new Error('Pass the Server and Adapter .tar.gz archives')
 const work = mkdtempSync(join(tmpdir(), 'pb-release-qa-')),
   suffix = Date.now(),
@@ -289,6 +289,14 @@ try {
   assert.ok(restored.results.some((r) => r.id === observed.id))
   assert.equal(restored.configs[0].id, rule.id)
   checks.push('Server restart preserves configuration/history and Adapter reconnects automatically')
+  if (demoArchive) {
+    await run(process.execPath, ['scripts/test-demo-package.mjs', demoArchive], root)
+    const demo = JSON.parse(readFileSync(join(root, 'demos/demo-package-qa/result.json'), 'utf8'))
+    assert.equal(demo.passed, true)
+    assert.equal(demo.revision, manifest.revision)
+    assert.equal(demo.version, manifest.version)
+    checks.push('Matching offline Adapter Demo package passed native fleet, actual vision transitions, evidence and idempotent bootstrap tests')
+  }
   writeFileSync(
     join(out, 'result.json'),
     JSON.stringify({ passed: true, version: manifest.version, revision: manifest.revision, checks }, null, 2),

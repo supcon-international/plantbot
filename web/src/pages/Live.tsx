@@ -1,5 +1,5 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useSearchParams } from 'react-router'
 import { ChevronLeft, ChevronRight, Grid as Grid2X2, CenterToFit as Focus, Edit as Pencil, Add as Plus, Connect as Radio, TrashCan as Trash2, Close as X } from '@carbon/icons-react'
 import { toast } from 'sonner'
 import { useApp, useCan, useSite, api } from '../lib/store'
@@ -16,7 +16,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { utcClock } from '../lib/format'
 import type { Channel, StreamSession } from '../lib/types'
 
-const VisionInspection = lazy(() => import('../components/VisionInspection').then(m => ({ default: m.VisionInspection })))
+import { useMonitoringData } from '../components/MonitoringRules'
 
 interface Feed {
   channelId: string
@@ -212,12 +212,10 @@ export function Live() {
       <div className="mx-auto w-full max-w-[1400px] px-3 md:px-4"><TabsList aria-label={zh ? '视频功能' : 'Video workspace'}>
         <TabsTrigger value="live">{zh ? '实时视频' : 'Live video'}</TabsTrigger>
         <TabsTrigger value="ptz">{zh ? '云台巡检' : 'PTZ inspection'}</TabsTrigger>
-        <TabsTrigger value="vision">{zh ? '视觉巡检' : 'Vision inspection'}</TabsTrigger>
         <TabsTrigger value="archive">{zh ? '录像回放' : 'Recordings'}</TabsTrigger>
       </TabsList></div>
       <TabsContent value="live"><LiveFeeds /></TabsContent>
       <TabsContent value="ptz" className="mx-auto w-full max-w-[1400px] p-3 md:p-4"><PtzInspection key={siteId} /></TabsContent>
-      <TabsContent value="vision" className="mx-auto w-full max-w-[1400px] p-3 md:p-4"><Suspense fallback={<div className="skeleton h-48" />}><VisionInspection key={siteId} /></Suspense></TabsContent>
       <TabsContent value="archive" className="mx-auto w-full max-w-[1400px] p-3 md:p-4"><RecordingArchive key={siteId} /></TabsContent>
     </Tabs>
   </div>
@@ -356,6 +354,7 @@ function LiveFeeds() {
       </div>
       {adding && <CameraModal onClose={() => setAdding(false)} />}
       {editing && <CameraModal edit={editing} onClose={() => setEditing(null)} />}
+      {mode === 'focus' && feed && <CameraRuleLinks key={`${siteId}:${feed.channelId}`} channelId={feed.channelId} />}
 
       <div className={mode === 'focus' ? '' : 'grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3'}>
         {displayedFeeds.map((item, index) => {
@@ -414,6 +413,17 @@ function LiveFeeds() {
       )}
     </div>
   )
+}
+
+function CameraRuleLinks({ channelId }: { channelId: string }) {
+  const zh = useLang(s => s.lang) === 'zh', admin = useCan('admin')
+  const { data, loaded } = useMonitoringData()
+  const rules = data.rules.filter(rule => rule.channelId === channelId)
+  const target = `/events?view=rules&channel=${encodeURIComponent(channelId)}`
+  return <div className="flex flex-wrap items-center gap-2 text-sm">
+    <Button asChild variant="outline" size="sm"><Link to={target}>{zh ? '相关规则' : 'Related rules'}{loaded ? ` · ${rules.length}` : ''}</Link></Button>
+    {admin && <Button asChild variant="outline" size="sm"><Link to={`${target}&new=1`}><Plus size={14} />{zh ? '添加规则' : 'Add rule'}</Link></Button>}
+  </div>
 }
 
 /** create/edit a fixed RTSP camera — the server mutates the site geometry

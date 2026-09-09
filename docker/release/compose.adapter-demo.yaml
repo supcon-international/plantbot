@@ -1,0 +1,81 @@
+name: plantbot-demo
+x-logging: &logging
+  driver: json-file
+  options: {max-size: "10m", max-file: "3"}
+services:
+  api:
+    image: plantbot/api:VERSION
+    profiles: [server]
+    init: true
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      API_HOST: 0.0.0.0
+      API_PORT: "8787"
+      PUBLIC_BASE: /robots
+      PB_DEMO: "0"
+      PB_PUBLIC_VIEW: "0"
+      MEDIA_RELAY: http://relay:1984
+      SESSION_SECRET: ${SESSION_SECRET:-unused-external-server}
+      PB_ADMIN_PASSWORD: ${PB_ADMIN_PASSWORD:?Set .env.demo}
+      PB_OPERATOR_PASSWORD: ${PB_OPERATOR_PASSWORD:-unused-external-server}
+      PB_VIEWER_PASSWORD: ${PB_VIEWER_PASSWORD:-unused-external-server}
+    volumes: ["plantbot-data:/app/robots/server/data"]
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8787/api/health').then(r=>r.json()).then(x=>{if(!x.ok||x.demo)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    depends_on:
+      relay: {condition: service_healthy}
+    stop_grace_period: 15s
+  relay:
+    image: plantbot/relay:VERSION
+    profiles: [server]
+    restart: unless-stopped
+    logging: *logging
+  gateway:
+    image: plantbot/gateway:VERSION
+    profiles: [server]
+    restart: unless-stopped
+    logging: *logging
+    ports: ["${PLANTBOT_BIND:-127.0.0.1}:${PLANTBOT_PORT:-18080}:8080"]
+    depends_on:
+      api: {condition: service_healthy}
+      relay: {condition: service_healthy}
+  demo-adapter:
+    image: plantbot/demo-adapter:VERSION
+    init: true
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      PB_ADAPTER_CONFIG: /config/adapter.json
+    volumes: ["demo-config:/config:ro"]
+    ports: ["${PB_DEMO_RTSP_BIND:-127.0.0.1}:${PB_DEMO_RTSP_PORT:-18554}:8554"]
+    stop_grace_period: 10s
+  vision:
+    image: plantbot/vision-demo:VERSION
+    init: true
+    restart: unless-stopped
+    logging: *logging
+    cpus: ${PB_VISION_CPUS:-2}
+    mem_limit: ${PB_VISION_MEMORY:-2g}
+    environment:
+      PB_VISION_THREADS: ${PB_VISION_THREADS:-2}
+    volumes: ["demo-config:/config:ro", "vision-data:/data"]
+    stop_grace_period: 10s
+  demo-seed:
+    image: plantbot/demo-adapter:VERSION
+    profiles: [tools]
+    user: "0"
+    entrypoint: [node, /app/robots/integrations/demo/seed.mjs]
+    environment:
+      PB_DEMO_SERVER_URL: ${PB_DEMO_SERVER_URL:-http://api:8787}
+      PB_DEMO_RTSP_BASE: ${PB_DEMO_RTSP_BASE:-rtsp://demo-adapter:8554}
+      PB_DEMO_ADMIN_USER: ${PB_DEMO_ADMIN_USER:-admin}
+      PB_ADMIN_PASSWORD: ${PB_ADMIN_PASSWORD:?Set .env.demo}
+    volumes: ["demo-config:/config"]
+volumes:
+  plantbot-data:
+  demo-config:
+  vision-data:

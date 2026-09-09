@@ -526,7 +526,11 @@ export function loadSeqs(siteId: string) {
       `SELECT COALESCE(MAX(CAST(substr(id, ?) AS INTEGER)), 0) AS m FROM ${table} WHERE site_id=?`,
     ).get(prefixLen + 1, siteId) as { m: number }).m
   return {
-    rule: max('rules', 3), // RL-
+    // Deleted rules remain referenced by immutable event snapshots. Never reuse
+    // their ids on restart merely because the editable rule row was removed.
+    rule: Math.max(max('rules', 3), (db.prepare(
+      "SELECT COALESCE(MAX(CAST(substr(json_extract(data,'$.ruleId'),4) AS INTEGER)),0) AS m FROM events WHERE site_id=? AND json_extract(data,'$.ruleId') GLOB 'RL-[0-9]*'",
+    ).get(siteId) as { m: number }).m),
     ev: max('events', 3), // EV-
     mission: max('missions', 2), // M-
     order: max('orders', 3), // OR-

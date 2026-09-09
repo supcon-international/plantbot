@@ -140,7 +140,7 @@ class Worker:
                 if time.time()-self.progress > 60:
                     log.error('Inference watchdog expired; restarting the vision process')
                     os._exit(1)
-                body = dict(adapterId=self.config['id'], runtimeId=self.runtime, name=self.config.get('name', self.config['id']), sources=[s.public() for s in self.sources.values()], models=dict(detector=DETECTOR_VERSION, ocr=OCR_VERSION))
+                body = dict(adapterId=self.config['id'], runtimeId=self.runtime, name=self.config.get('name', self.config['id']), sources=[s.public() for s in self.sources.values()], models=dict(detector=DETECTOR_VERSION, ocr=OCR_VERSION), capabilities=dict(presets=list(PRESETS)))
                 r = requests.post(self.url+'/heartbeat', json=body, headers=self.headers, timeout=5)
                 r.raise_for_status()
                 value = r.json()

@@ -1050,7 +1050,7 @@ paths:
     get: { tags: [events], summary: Detectors (rules), operationId: listRules, responses: { "200": { description: rules } } }
     post:
       tags: [events]
-      summary: Create a detector (admin) — CV rule or metric threshold
+      summary: Create a metric threshold (admin); explicit sim requires PB_DEMO=1
       operationId: createRule
       requestBody:
         required: true
@@ -1060,7 +1060,9 @@ paths:
               type: object
               properties:
                 name: { type: string }
-                model: { type: string, description: event-type id }
+                kind: { type: string, enum: [threshold, sim], description: Required; legacy CV creation is rejected. Use vision/configs for real visual monitoring. }
+                enabled: { type: boolean, default: true }
+                model: { type: string, description: Sim only; threshold derives threshold- plus the metric id with dots replaced by hyphens }
                 source: { type: string, description: stream key }
                 zone: { type: string }
                 threshold: { type: number }
@@ -1074,7 +1076,7 @@ paths:
     parameters: [{ $ref: "#/components/parameters/siteId" }, { $ref: "#/components/parameters/id" }]
     patch:
       tags: [events]
-      summary: Patch a detector (enable/threshold/severity/bound)
+      summary: Patch allowed detector fields (name/enabled/threshold/severity/bound/op); increments revision
       operationId: patchRule
       requestBody: { content: { application/json: { schema: { type: object, additionalProperties: true } } } }
       responses: { "200": { description: updated }, "403": { $ref: "#/components/responses/Forbidden" }, "404": { $ref: "#/components/responses/NotFound" } }
@@ -3046,6 +3048,9 @@ paths:
   /api/sites/{siteId}/vision:
     parameters:
     - $ref: '#/components/parameters/siteId'
+    - { name: assetId, in: query, schema: { type: string } }
+    - { name: configId, in: query, schema: { type: string } }
+    - { name: resultId, in: query, schema: { type: string } }
     get:
       tags:
       - vision
@@ -3192,6 +3197,94 @@ paths:
         '404':
           description: Missing, cross-site or expired evidence
 
+  /api/sites/{siteId}/monitoring-rules:
+    parameters: [{ $ref: '#/components/parameters/siteId' }]
+    get:
+      tags: [events, vision]
+      summary: Unified monitoring index (viewer); reads existing visual configs and threshold rules without duplicate storage
+      operationId: listMonitoringRules
+      responses:
+        '200':
+          description: Rules, metric definitions with eventType, and real vision presets
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rules:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        type: { type: string, enum: [vision, threshold, sim, external] }
+                        name: { type: string }
+                        enabled: { type: boolean, description: Configuration intent, independent of runtime health }
+                        severity: { type: string, enum: [info, low, high, critical] }
+                        sourceName: { type: string }
+                        channelId: { type: string }
+                        legacy: { type: boolean, description: Legacy CV rule has no executing producer }
+                        config: { type: object, additionalProperties: true, description: Original VisionConfig or DetectionRule }
+                        runtime:
+                          type: object
+                          properties:
+                            status: { type: string, enum: [disabled, offline, unavailable, idle, active, unknown] }
+                            message: { type: string }
+                            lastObservedAt: { type: number }
+                  metrics:
+                    type: array
+                    items:
+                      allOf:
+                      - { $ref: '#/components/schemas/MetricDef' }
+                      - type: object
+                        properties:
+                          eventType: { type: string }
+                  presets: { type: array, items: { type: object, additionalProperties: true } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/sites/{siteId}/events/{id}:
+    parameters: [{ $ref: '#/components/parameters/siteId' }, { $ref: '#/components/parameters/id' }]
+    get:
+      tags: [events]
+      summary: Read a persisted event by id beyond the in-memory history window (viewer)
+      operationId: getEvent
+      responses:
+        '200':
+          description: Event including immutable trigger provenance when available
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  event: { $ref: '#/components/schemas/Event' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/sites/{siteId}/vision/configs/{id}/revisions/{revision}:
+    parameters:
+    - { $ref: '#/components/parameters/siteId' }
+    - { $ref: '#/components/parameters/id' }
+    - { name: revision, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    get:
+      tags: [vision]
+      summary: Read an immutable saved configuration revision, including after rename or deletion (viewer)
+      responses:
+        '200':
+          description: Original configuration; legacy history is only backfilled from actual saved observations
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VisionConfig' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/sites/{siteId}/vision/results/{id}:
+    parameters: [{ $ref: '#/components/parameters/siteId' }, { $ref: '#/components/parameters/id' }]
+    get:
+      tags: [vision]
+      summary: Read a stored observation, including after configuration deletion (viewer)
+      responses:
+        '200':
+          description: Triggering metadata remains with the event; media can expire independently
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VisionResult' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
 components:
   securitySchemes:
     cookieAuth:
@@ -3234,6 +3327,26 @@ components:
               connector: { $ref: "#/components/schemas/Connector" }
 
   schemas:
+    EventTrigger:
+      type: object
+      description: Immutable trigger facts; absent on legacy or external events without a verifiable rule observation.
+      required: [ruleId, ruleType, revision, configSnapshot, value, condition, confidence, capturedAt]
+      properties:
+        ruleId: { type: string }
+        ruleType: { type: string, enum: [vision, threshold] }
+        revision: { type: integer, minimum: 1 }
+        configSnapshot: { type: object, additionalProperties: true, description: Original VisionConfig or DetectionRule frozen when the event was triggered }
+        resultId: { type: string, description: Vision result id; fetch through the protected vision/results route }
+        observationId: { type: string, description: Adapter observation epoch }
+        adapterId: { type: string }
+        sourceId: { type: string }
+        value: { type: number, nullable: true }
+        unit: { type: string }
+        condition: { type: string }
+        confidence: { type: number, nullable: true, minimum: 0, maximum: 1, description: Null when the producer did not report aggregate confidence; annotation scores are not event confidence }
+        channelId: { type: string, description: Explicit logical source association only; never inferred from adapter identity }
+        capturedAt: { type: number, description: Observation time in Unix milliseconds }
+        receivedAt: { type: number, description: Server receive time in Unix milliseconds }
     VisionConfig:
       type: object
       required:
@@ -3401,6 +3514,16 @@ components:
           items:
             $ref: '#/components/schemas/VisionSource'
           maxItems: 32
+        capabilities:
+          type: object
+          description: Optional for older workers; when present, configs and previews must use an advertised preset.
+          required: [presets]
+          properties:
+            presets:
+              type: array
+              uniqueItems: true
+              items: { type: string }
+              maxItems: 11
         models:
           type: object
           properties:
@@ -3461,6 +3584,12 @@ components:
           - alert
           - unknown
           - failed
+        confidence:
+          type: number
+          nullable: true
+          minimum: 0
+          maximum: 1
+          description: Optional aggregate confidence. Omitted or null remains unknown; never inferred from annotations.
         value:
           type: number
           nullable: true
@@ -3510,6 +3639,10 @@ components:
       - $ref: '#/components/schemas/VisionResultInput'
       - type: object
         properties:
+          sourceId: { type: string }
+          channelId: { type: string, description: Explicit adapter source association frozen at capture }
+          triggeredEvent: { type: boolean, description: True only for the observation that created an event }
+          evidenceExpired: { type: boolean, description: Media expired by seven-day retention or capacity; triggering observation metadata remains for the event retention period }
           config:
             $ref: '#/components/schemas/VisionConfig'
           receivedAt:
@@ -3774,8 +3907,11 @@ components:
         severity: { type: string, enum: [critical, high, info, low] }
         category: { type: string, enum: [security, fire, env, equipment, robot-fault] }
         lifecycle: { type: string, enum: [new, acked, resolved, dismissed] }
-        x: { type: number }
-        z: { type: number }
+        x: { type: number, nullable: true, description: Null when no real position was reported }
+        z: { type: number, nullable: true, description: Null when no real position was reported }
+        confidence: { type: number, nullable: true, minimum: 0, maximum: 1 }
+        trigger: { $ref: '#/components/schemas/EventTrigger' }
+
     Channel:
       type: object
       additionalProperties: true

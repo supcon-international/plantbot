@@ -308,6 +308,6 @@ sudo systemctl restart plantbot   # 服务端变更时（任务/事件/规则等
   nginx 对 `/robots/` location 加 `add_header Content-Security-Policy "frame-ancestors 'self' https://宿主域";`
   (不设则任何站点都能嵌)。SSO 建议由宿主在顶层窗口完成(IdP 普遍拒绝被 iframe),iframe 内即已带会话。
 
-## v2.4.0 分包部署
+## v2.5.0 分包部署
 
-预构建 Release 分为 Server 和 Adapter。部署、凭证、卷名与 v2.3.1 演示实例迁移统一见 [release.md](release.md)。视觉模型随 Adapter 交付，Server 不需要 Python 或模型运行库。多个实例必须使用独立 Adapter ID 与数据卷；一个 SQLite 数据卷不能由两个 Server 同时写入。
+预构建 Release 提供 Server、Adapter 和独立 Adapter Demo 三包。生产两包不包含模拟器；Demo 包默认启动完整演示环境，用原生协议模拟器经真实 Adapter 接入，实际推理示例视频，关闭 Server 随机事件。部署、凭证、卷名与旧版迁移统一见 [release.md](release.md)，演示见 [demo.md](demo.md)。视觉模型随 Adapter 交付，Server 不需要 Python 或模型运行库。多个实例必须使用独立 Adapter ID 与数据卷；一个 SQLite 数据卷不能由两个 Server 同时写入。

@@ -37,3 +37,9 @@ ENTRYPOINT ["/usr/local/bin/plantbot-adapter-entrypoint"]
 HEALTHCHECK --interval=15s --timeout=3s --start-period=90s --retries=3 \
   CMD python -c "import time,pathlib; assert time.time()-float(pathlib.Path('/data/health').read_text()) < 30"
 CMD ["python", "integrations/vision/worker.py"]
+
+# Demo adds only labelled, checksum-locked input media. Inference and model
+# verification are exactly the production vision runtime above.
+FROM vision AS vision-demo
+COPY integrations/demo/media/ /opt/plantbot-demo/media/
+COPY integrations/demo/pack.json /opt/plantbot-demo/pack.json

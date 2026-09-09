@@ -10,7 +10,7 @@ import {
 import { toast } from 'sonner'
 import { apiFetch, useCan, useSite } from '../lib/store'
 import { useLang } from '../lib/i18n'
-import { EmptyNote, Modal, Panel, PanelHead } from './ui'
+import { EmptyNote, Modal } from './ui'
 import { useConfirm } from './ConfirmDialog'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
@@ -19,72 +19,17 @@ import { Badge } from './ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table'
 
-type Point = [number, number]
-type Config = {
-  id?: string
-  revision?: number
-  name: string
-  preset: string
-  adapterId: string
-  sourceId: string
-  enabled: boolean
-  region: Point[]
-  line: Point[]
-  direction: string
-  threshold: number
-  durationS: number
-  confidence: number
-  intervalS: number
-  severity: string
-  schedule: { days: number[]; start: string; end: string } | null
-  assetId: string
-  numeric: boolean
-  unit: string
-  min: number | null
-  max: number | null
-}
-type Preset = {
-  id: string
-  en: string
-  zh: string
-  engine: string
-  rule: string
-}
-type Result = {
-  id: string
-  config: Config
-  adapterId: string
-  capturedAt: number
-  status: string
-  value: number | null
-  text: string
-  note: string
-  evidence: string
-  model: string
-  late: boolean
-  jobId?: string
-  annotations: { label: string; box: number[]; score: number }[]
-}
-type Adapter = {
-  id: string
-  name: string
-  online: boolean
-  sources: {
-    id: string
-    label: string
-    view: string
-    status: string
-    note: string
-  }[]
-  models: { detector: string; ocr: string }
-}
-type Data = {
-  presets: Preset[]
-  configs: Config[]
-  adapters: Adapter[]
-  results: Result[]
-  jobs: { id: string; status: string; resultId?: string }[]
-}
+import {
+  monitoringRequest,
+  confidenceText,
+  type Point,
+  type VisionConfig as Config,
+  type VisionPreset as Preset,
+  type VisionAdapter as Adapter,
+  type VisionResult as Result,
+  type VisionData as Data,
+} from '../lib/monitoring'
+
 const empty: Data = {
   presets: [],
   configs: [],
@@ -122,7 +67,7 @@ const makeConfig = (p: Preset, a?: Adapter): Config => ({
   min: null,
   max: null,
 })
-function Field({ label, children }: { label: string; children: ReactNode }) {
+export function RuleField({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="flex min-w-0 flex-col gap-1.5 text-sm text-ink-2">
       {label}
@@ -130,20 +75,22 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
     </label>
   )
 }
-function Choice({
+export function RuleChoice({
   label,
   value,
   options,
   onChange,
+  disabled = false,
 }: {
   label: string
   value: string
   options: { value: string; label: string }[]
   onChange: (v: string) => void
+  disabled?: boolean
 }) {
   return (
-    <Field label={label}>
-      <Select value={value || '_'} onValueChange={(v) => onChange(v === '_' ? '' : v)}>
+    <RuleField label={label}>
+      <Select disabled={disabled} value={value || '_'} onValueChange={(v) => onChange(v === '_' ? '' : v)}>
         <SelectTrigger aria-label={label} className="w-full">
           <SelectValue />
         </SelectTrigger>
@@ -155,11 +102,11 @@ function Choice({
           ))}
         </SelectContent>
       </Select>
-    </Field>
+    </RuleField>
   )
 }
 
-function Evidence({
+export function VisionEvidence({
   result,
   children,
   overlay = true,
@@ -168,16 +115,32 @@ function Evidence({
   children?: ReactNode
   overlay?: boolean
 }) {
+  const zh = useLang((s) => s.lang) === 'zh'
+  const [broken, setBroken] = useState('')
+  const imageAvailable = !!result?.evidence && !result.evidenceExpired && broken !== result.evidence
   return (
     <div className="relative overflow-hidden border border-line bg-bg-2">
-      {result?.evidence ? (
-        <img src={result.evidence} alt={result.config.name} className="block w-full" />
+      {imageAvailable && result ? (
+        <img
+          src={result.evidence}
+          alt={result.config.name}
+          onError={() => setBroken(result.evidence)}
+          className="block w-full"
+        />
       ) : (
         <div className="aspect-video flex items-center justify-center p-5 text-center text-sm text-ink-3">
-          {children ? '' : '—'}
+          {children
+            ? ''
+            : result?.evidenceExpired
+              ? zh
+                ? '原图已过保留期'
+                : 'Original image has expired'
+              : zh
+                ? '暂无可用原图'
+                : 'No original image available'}
         </div>
       )}
-      {result?.evidence && overlay && (
+      {imageAvailable && result && overlay && (
         <svg
           viewBox="0 0 1000 1000"
           preserveAspectRatio="none"
@@ -204,7 +167,7 @@ function Evidence({
                 strokeWidth="3"
                 paintOrder="stroke"
               >
-                {a.label} {Math.round(a.score * 100)}%
+                {a.label} {confidenceText(a.score, zh)}
               </text>
             </g>
           ))}
@@ -278,7 +241,7 @@ function Geometry({
           </Button>
         </div>
       </div>
-      <Evidence result={result} overlay={false}>
+      <VisionEvidence result={result} overlay={false}>
         <svg
           viewBox="0 0 1000 1000"
           preserveAspectRatio="none"
@@ -386,7 +349,7 @@ function Geometry({
               </span>
             )
           })}
-      </Evidence>
+      </VisionEvidence>
       <p className="text-xs text-ink-3">
         {zh
           ? '先试运行获取画面，再拖动顶点；键盘方向键每次移动 1%。'
@@ -396,83 +359,87 @@ function Geometry({
   )
 }
 
-export function VisionInspection() {
-  const zh = useLang((s) => s.lang) === 'zh',
-    site = useSite((s) => s.siteId),
+export function VisionRuleForm({
+  initial,
+  channelId,
+  onSaved,
+  onClose,
+}: {
+  initial?: Config
+  channelId?: string
+  onSaved: () => void
+  onClose: () => void
+}) {
+  const zh = useLang((s) => s.lang) === 'zh'
+  const site = useSite((s) => s.siteId),
     admin = useCan('admin'),
     operator = useCan('operator')
-  const confirm = useConfirm(),
-    [data, setData] = useState<Data>(empty),
-    [error, setError] = useState(''),
-    [draft, setDraft] = useState<Config | null>(null),
+  const [data, setData] = useState<Data>(empty),
+    [draft, setDraft] = useState<Config | null>(initial ? structuredClone(initial) : null)
+  const [error, setError] = useState(''),
+    [loaded, setLoaded] = useState(false),
     [busy, setBusy] = useState(false),
-    [jobId, setJobId] = useState(''),
-    [selected, setSelected] = useState<Result | null>(null),
-    [overlay, setOverlay] = useState(true),
-    [filter, setFilter] = useState(''),
-    [assets, setAssets] = useState<{ id: string; name: string }[]>([])
-  const endpoint = `/api/sites/${encodeURIComponent(site)}/vision`
+    [jobId, setJobId] = useState('')
+  const [assets, setAssets] = useState<{ id: string; name: string }[]>([])
   const request = useCallback(
-    async (path = '', method = 'GET', body?: unknown) => {
-      const res = await apiFetch(endpoint + path, {
-        method,
-        ...(body
-          ? {
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify(body),
-            }
-          : {}),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.message || json.error || `HTTP ${res.status}`)
-      return json
-    },
-    [endpoint],
+    (path = '', method = 'GET', body?: unknown) =>
+      monitoringRequest<any>(site, `/vision${path}`, method, body),
+    [site],
   )
   const refresh = useCallback(async () => {
-    try {
-      setData(await request())
-      setError('')
-    } catch (e) {
-      setError((e as Error).message)
-    }
+    const next = await request()
+    setData(next)
+    setLoaded(true)
+    setError('')
   }, [request])
   useEffect(() => {
-    let current = true
+    let current = true,
+      timer: ReturnType<typeof setTimeout>
     const read = async () => {
       try {
-        const d = await request()
+        const next = await request()
         if (current) {
-          setData(d)
+          setData(next)
+          setLoaded(true)
           setError('')
         }
       } catch (e) {
-        if (current) setError((e as Error).message)
+        if (current) {
+          setError((e as Error).message)
+          setLoaded(true)
+        }
       }
+      if (current) timer = setTimeout(read, 2500)
     }
     void read()
-    const timer = setInterval(read, 2500)
-    void apiFetch(`/api/sites/${encodeURIComponent(site)}/assets`)
-      .then((r) => r.json())
+    void monitoringRequest<{ assets?: { id: string; name: string }[] }>(site, '/assets')
       .then((d) => {
-        if (current) setAssets(d.assets ?? d.items ?? [])
+        if (current) setAssets(d.assets ?? [])
       })
       .catch(() => {})
     return () => {
       current = false
-      clearInterval(timer)
+      clearTimeout(timer)
     }
   }, [request, site])
-  const status = (s: string) =>
-    ({
-      normal: zh ? '正常' : 'Normal',
-      alert: zh ? '告警' : 'Alert',
-      unknown: zh ? '待观测' : 'Unknown',
-      failed: zh ? '失败' : 'Failed',
-      expired: zh ? '已超时' : 'Expired',
-      queued: zh ? '试运行中' : 'Preview running',
-      done: zh ? '试运行完成' : 'Preview complete',
-    })[s] ?? s
+  useEffect(() => {
+    if (draft || !data.presets.length) return
+    const linkedAdapter = channelId
+      ? data.adapters.find((a) => a.sources.some((s) => s.channelId === channelId))
+      : data.adapters.find((a) => a.sources.length)
+    const linkedSource = channelId
+      ? linkedAdapter?.sources.find((s) => s.channelId === channelId)
+      : linkedAdapter?.sources[0]
+    const firstPreset = data.presets.find(
+      (p) =>
+        (!linkedAdapter?.capabilities || linkedAdapter.capabilities.presets.includes(p.id)) &&
+        (linkedSource?.view !== 'mobile' || p.engine === 'ocr'),
+    )
+    const next = makeConfig(firstPreset ?? data.presets[0], linkedAdapter)
+    if (!firstPreset) next.preset = ''
+    if (channelId) next.sourceId = linkedAdapter?.sources.find((s) => s.channelId === channelId)?.id ?? ''
+    setDraft(next)
+  }, [data, draft, channelId])
   const mutate = async (fn: () => Promise<unknown>) => {
     setBusy(true)
     try {
@@ -488,6 +455,13 @@ export function VisionInspection() {
     preview = data.results.find((r) => r.id === currentJob?.resultId)
   const adapter = data.adapters.find((a) => a.id === draft?.adapterId),
     preset = data.presets.find((p) => p.id === draft?.preset)
+  const source = adapter?.sources.find((s) => s.id === draft?.sourceId)
+  const availablePresets = data.presets.filter(
+    (p) =>
+      (!adapter?.capabilities || adapter.capabilities.presets.includes(p.id)) &&
+      (source?.view !== 'mobile' || p.engine === 'ocr'),
+  )
+  const presetAvailable = availablePresets.some((p) => p.id === draft?.preset)
   const change = (key: keyof Config, value: unknown) => {
     if (draft) setDraft({ ...draft, [key]: value })
   }
@@ -498,694 +472,509 @@ export function VisionInspection() {
       setJobId(job.id)
     })
   const close = () => {
-    if (!busy) {
-      setDraft(null)
-      setJobId('')
-    }
+    if (!busy) onClose()
   }
+  const status = (s: string) => observationStatus(s, zh)
   return (
-    <div className="space-y-4" data-testid="vision-workspace">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-medium">{zh ? '视觉巡检' : 'Vision inspection'}</h2>
-          <p className="mt-1 max-w-2xl text-sm text-ink-3">
+    <div className="space-y-4" data-testid="vision-rule-form">
+      <p className="text-sm text-ink-3">
+        {zh
+          ? '选择已连接的视频源和真实预置能力，设置区域后试运行。试运行不创建事件。'
+          : 'Choose a connected source and supported preset, set the region, then preview. Previews do not create events.'}
+      </p>
+      {channelId &&
+        !data.adapters.some((a) => a.sources.some((s) => s.channelId === channelId)) &&
+        loaded && (
+          <p className="rounded-md border border-line p-3 text-sm text-ink-2">
             {zh
-              ? '选择预置能力，设置检测区域，试运行后启用。连续监测需要固定视角。'
-              : 'Choose a preset, define the region and preview before enabling. Continuous monitoring requires a fixed view.'}
+              ? '该摄像头未关联视觉 Adapter 视频源。请明确选择已注册源；平台不会自动绑定其他画面。'
+              : 'This camera has no linked vision adapter source. Select a registered source explicitly; another view will not be linked automatically.'}
           </p>
-        </div>
-        {admin && (
-          <Button
-            variant="signal"
-            disabled={!data.adapters.some((a) => a.sources.length) || !data.presets.length}
-            onClick={() => {
-              setJobId('')
-              setDraft(
-                makeConfig(
-                  data.presets[0],
-                  data.adapters.find((a) => a.sources.length),
-                ),
-              )
-            }}
-          >
-            <Plus size={16} />
-            {zh ? '添加监测' : 'Add monitoring'}
-          </Button>
         )}
-      </div>
       {error && (
-        <div role="alert" className="border border-line p-3 text-sm">
+        <div role="alert" className="text-sm text-crit">
           {error}
-          <Button variant="ghost" onClick={refresh}>
-            <RefreshCw size={14} />
+          <Button variant="ghost" onClick={() => void refresh().catch((e) => setError(e.message))}>
             {zh ? '重试' : 'Retry'}
           </Button>
         </div>
       )}
-      {!data.adapters.length ? (
-        <EmptyNote>
-          {zh
-            ? '尚未连接视觉 Adapter。在 Adapter 的配置文件中添加视频源并启动，连接后即可配置监测。'
-            : 'No vision adapter is connected. Add video sources to your adapter configuration and start it to begin.'}
-        </EmptyNote>
-      ) : (
-        <div className="grid gap-3 md:grid-cols-2">
-          {data.adapters.map((a) => (
-            <Panel key={a.id} className="p-3">
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-medium">{a.name}</span>
-                <Badge>{a.online ? (zh ? '在线' : 'Online') : zh ? '离线' : 'Offline'}</Badge>
-              </div>
-              <p className="mt-1 text-xs text-ink-3">
-                {a.sources.length} {zh ? '个视频源' : 'sources'} · {a.models.detector} · {a.models.ocr}
-              </p>
-              {a.sources.map((s) => (
-                <div key={s.id} className="mt-2 flex justify-between gap-3 text-sm">
-                  <span>{s.label}</span>
-                  <span className="text-ink-3" title={s.note}>
-                    {!a.online
-                      ? zh
-                        ? '离线'
-                        : 'Offline'
-                      : s.status === 'ready'
-                        ? zh
-                          ? '画面稳定'
-                          : 'Stable view'
-                        : s.status === 'paused'
-                          ? zh
-                            ? '等待稳定画面'
-                            : 'Waiting for stable view'
-                          : zh
-                            ? '等待视频'
-                            : 'Waiting for video'}
-                  </span>
-                </div>
-              ))}
-            </Panel>
-          ))}
+      {!loaded && (
+        <div role="status" className="text-sm text-ink-3">
+          {zh ? '加载视频源…' : 'Loading video sources…'}
         </div>
       )}
-      <Panel>
-        <PanelHead label={zh ? '监测配置' : 'Monitoring'} />
-        {!data.configs.length ? (
-          <EmptyNote>
-            {zh
-              ? '暂无监测配置。添加监测后可先试运行，确认画面和阈值再启用。'
-              : 'No monitoring is configured. Add a rule and preview the scene and thresholds before enabling it.'}
-          </EmptyNote>
-        ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{zh ? '名称 / 预置能力' : 'Name / preset'}</TableHead>
-                  <TableHead>{zh ? '视频源' : 'Source'}</TableHead>
-                  <TableHead>{zh ? '最新结果' : 'Latest result'}</TableHead>
-                  <TableHead>{zh ? '启用' : 'Enabled'}</TableHead>
-                  <TableHead className="text-right">{zh ? '操作' : 'Actions'}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.configs.map((c) => {
-                  const a = data.adapters.find((a) => a.id === c.adapterId),
-                    p = data.presets.find((p) => p.id === c.preset),
-                    r = data.results.find(
-                      (r) => !r.jobId && r.config.id === c.id && r.config.revision === c.revision,
-                    )
-                  return (
-                    <TableRow key={c.id}>
-                      <TableCell>
-                        <div>{c.name}</div>
-                        <div className="text-xs text-ink-3">{zh ? p?.zh : p?.en}</div>
-                      </TableCell>
-                      <TableCell>
-                        {a?.sources.find((s) => s.id === c.sourceId)?.label ?? c.sourceId}
-                      </TableCell>
-                      <TableCell>
-                        {!c.enabled ? (
-                          zh ? (
-                            '已停用'
-                          ) : (
-                            'Disabled'
-                          )
-                        ) : !a?.online ? (
-                          zh ? (
-                            'Adapter 离线'
-                          ) : (
-                            'Adapter offline'
-                          )
-                        ) : r ? (
-                          <Button variant="ghost" size="sm" onClick={() => setSelected(r)}>
-                            {status(r.status)}
-                            {r.value !== null ? ` · ${r.value} ${c.unit}` : ''}
-                          </Button>
-                        ) : zh ? (
-                          '等待结果'
-                        ) : (
-                          'Awaiting result'
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Switch
-                          checked={c.enabled}
-                          aria-label={`${zh ? '启用' : 'Enable'} ${c.name}`}
-                          disabled={!admin || busy}
-                          onCheckedChange={(v) =>
-                            mutate(() =>
-                              request(`/configs/${c.id}`, 'PUT', {
-                                ...c,
-                                enabled: v,
-                              }),
-                            )
-                          }
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex justify-end gap-1">
-                          {operator && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              aria-label={`${zh ? '配置' : 'Configure'} ${c.name}`}
-                              onClick={() => {
-                                setJobId('')
-                                setDraft(structuredClone(c))
-                              }}
-                            >
-                              <Pencil size={15} />
-                            </Button>
-                          )}
-                          {admin && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              disabled={busy}
-                              aria-label={`${zh ? '删除' : 'Delete'} ${c.name}`}
-                              onClick={async () => {
-                                if (
-                                  await confirm({
-                                    title: zh ? '删除监测？' : 'Delete monitoring?',
-                                    message: zh
-                                      ? '历史结果和证据将保留至保留期结束。'
-                                      : 'Historical results and evidence remain until retention expires.',
-                                    destructive: true,
-                                  })
-                                )
-                                  void mutate(() => request(`/configs/${c.id}`, 'DELETE'))
-                              }}
-                            >
-                              <Trash2 size={15} />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </Panel>
-      <Panel>
-        <PanelHead
-          label={zh ? '观测记录' : 'Observations'}
-          right={
-            <Input
-              aria-label={zh ? '搜索观测' : 'Search observations'}
-              placeholder={zh ? '搜索名称或结果' : 'Search name or result'}
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              className="max-w-56"
-            />
-          }
-        />
-        <p className="px-4 pb-2 text-xs text-ink-3">
+      {loaded && !data.adapters.some((a) => a.sources.length) && (
+        <EmptyNote>
           {zh
-            ? '最近 200 条，保留 7 天。试运行不产生正式告警；延迟结果仅归档。'
-            : 'Latest 200 observations, retained for 7 days. Previews do not raise alarms; delayed results are archived only.'}
-        </p>
-        {!data.results.length ? (
-          <EmptyNote>{zh ? '暂无观测结果。' : 'No observations yet.'}</EmptyNote>
-        ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{zh ? '采集时间' : 'Captured'}</TableHead>
-                  <TableHead>{zh ? '监测' : 'Monitoring'}</TableHead>
-                  <TableHead>{zh ? '结果' : 'Result'}</TableHead>
-                  <TableHead>{zh ? '读数' : 'Reading'}</TableHead>
-                  <TableHead>{zh ? '证据' : 'Evidence'}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.results
-                  .filter((r) =>
-                    `${r.config.name} ${r.text} ${r.status}`.toLowerCase().includes(filter.toLowerCase()),
-                  )
-                  .map((r) => (
-                    <TableRow key={r.id}>
-                      <TableCell className="mono whitespace-nowrap">
-                        {new Date(r.capturedAt).toLocaleString()}
-                      </TableCell>
-                      <TableCell>
-                        {r.config.name}
-                        {r.jobId && (
-                          <span className="ml-2 text-xs text-ink-3">{zh ? '试运行' : 'Preview'}</span>
-                        )}
-                        {r.late && <span className="ml-2 text-xs text-ink-3">{zh ? '延迟' : 'Delayed'}</span>}
-                      </TableCell>
-                      <TableCell>
-                        <Badge>{status(r.status)}</Badge>
-                      </TableCell>
-                      <TableCell className="max-w-48 truncate mono">
-                        {r.value !== null ? `${r.value} ${r.config.unit}` : r.text || '—'}
-                      </TableCell>
-                      <TableCell>
-                        <Button variant="outline" size="sm" onClick={() => setSelected(r)}>
-                          {zh ? '查看' : 'Review'}
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </Panel>
+            ? '尚无已注册视觉视频源。先在集成层连接视觉 Adapter，再配置视觉规则。'
+            : 'No vision source is registered. Connect a vision adapter before configuring a visual rule.'}
+        </EmptyNote>
+      )}
       {draft && (
-        <Modal wide title={zh ? '监测配置' : 'Configure monitoring'} onClose={close}>
-          <form
-            className="max-h-[85dvh] overflow-y-auto space-y-4 p-1"
-            onSubmit={(e) => {
-              e.preventDefault()
-              if (admin)
-                void mutate(async () => {
-                  await request(
-                    draft.id ? `/configs/${draft.id}` : '/configs',
-                    draft.id ? 'PUT' : 'POST',
-                    draft,
-                  )
-                  setDraft(null)
-                  setJobId('')
-                })
-            }}
-          >
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-medium">{zh ? '监测配置' : 'Configure monitoring'}</h3>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label={zh ? '关闭' : 'Close'}
-                disabled={busy}
-                onClick={close}
-              >
-                <X size={16} />
-              </Button>
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label={zh ? '名称' : 'Name'}>
-                <Input
-                  required
-                  maxLength={120}
-                  value={draft.name}
-                  onChange={(e) => change('name', e.target.value)}
-                />
-              </Field>
-              <Choice
-                label={zh ? '预置能力' : 'Preset'}
-                value={draft.preset}
-                options={data.presets.map((p) => ({
-                  value: p.id,
-                  label: zh ? p.zh : p.en,
-                }))}
-                onChange={(v) => {
-                  const p = data.presets.find((p) => p.id === v)!
-                  const defaults = makeConfig(p, adapter)
-                  setDraft({
-                    ...draft,
-                    preset: v,
-                    durationS: defaults.durationS,
-                    threshold: defaults.threshold,
-                  })
-                  setJobId('')
-                }}
+        <form
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (admin)
+              void mutate(async () => {
+                await request(
+                  draft.id ? `/configs/${draft.id}` : '/configs',
+                  draft.id ? 'PUT' : 'POST',
+                  draft,
+                )
+                onSaved()
+              })
+          }}
+        >
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <RuleField label={zh ? '名称' : 'Name'}>
+              <Input
+                required
+                maxLength={120}
+                value={draft.name}
+                onChange={(e) => change('name', e.target.value)}
               />
-              <Choice
-                label="Adapter"
-                value={draft.adapterId}
-                options={data.adapters.map((a) => ({
+            </RuleField>
+            <RuleChoice
+              label={zh ? '预置能力' : 'Preset'}
+              value={draft.preset}
+              options={availablePresets.map((p) => ({
+                value: p.id,
+                label: zh ? p.zh : p.en,
+              }))}
+              onChange={(v) => {
+                const p = data.presets.find((p) => p.id === v)!
+                const defaults = makeConfig(p, adapter)
+                setDraft({
+                  ...draft,
+                  preset: v,
+                  durationS: defaults.durationS,
+                  threshold: defaults.threshold,
+                })
+                setJobId('')
+              }}
+            />
+            <RuleChoice
+              label="Adapter"
+              value={draft.adapterId}
+              options={[
+                { value: '', label: zh ? '选择 Adapter' : 'Select adapter' },
+                ...data.adapters.map((a) => ({
                   value: a.id,
                   label: a.name,
-                }))}
-                onChange={(v) => {
-                  setDraft({
-                    ...draft,
-                    adapterId: v,
-                    sourceId: data.adapters.find((a) => a.id === v)?.sources[0]?.id ?? '',
-                  })
-                  setJobId('')
-                }}
-              />
-              <Choice
-                label={zh ? '视频源' : 'Video source'}
-                value={draft.sourceId}
-                options={(adapter?.sources ?? []).map((s) => ({
+                })),
+              ]}
+              onChange={(v) => {
+                setDraft({
+                  ...draft,
+                  adapterId: v,
+                  sourceId: data.adapters.find((a) => a.id === v)?.sources[0]?.id ?? '',
+                })
+                setJobId('')
+              }}
+            />
+            <RuleChoice
+              label={zh ? '视频源' : 'Video source'}
+              value={draft.sourceId}
+              options={[
+                { value: '', label: zh ? '选择视频源' : 'Select video source' },
+                ...(adapter?.sources ?? []).map((s) => ({
                   value: s.id,
                   label: `${s.label}${s.view === 'mobile' ? (zh ? '（移动视角，仅 OCR）' : ' (mobile, OCR only)') : ''}`,
-                }))}
-                onChange={(v) => {
-                  change('sourceId', v)
-                  setJobId('')
-                }}
-              />
-            </div>
-            <Geometry config={draft} set={setDraft} result={preview} zh={zh} />
-            <div className="grid grid-cols-2 gap-3">
-              {['above', 'below'].includes(preset?.rule ?? '') && (
-                <Field
-                  label={
-                    preset?.rule === 'below'
-                      ? zh
-                        ? '人数少于'
-                        : 'Occupancy below'
-                      : zh
-                        ? '人数超过'
-                        : 'Occupancy above'
-                  }
-                >
-                  <Input
-                    type="number"
-                    min={0}
-                    max={10000}
-                    value={draft.threshold}
-                    onChange={(e) => change('threshold', e.target.valueAsNumber)}
-                  />
-                </Field>
-              )}
-              {preset?.rule !== 'ocr' && preset?.rule !== 'count' && preset?.rule !== 'cross' && (
-                <Field label={zh ? '持续时间（秒）' : 'Duration (seconds)'}>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={86400}
-                    value={draft.durationS}
-                    onChange={(e) => change('durationS', e.target.valueAsNumber)}
-                  />
-                </Field>
-              )}
-              {preset?.rule === 'cross' && (
-                <Choice
-                  label={zh ? '计数方向' : 'Crossing direction'}
-                  value={draft.direction}
-                  options={[
-                    { value: 'both', label: zh ? '双向' : 'Both' },
-                    {
-                      value: 'forward',
-                      label: 'A → B',
-                    },
-                    {
-                      value: 'reverse',
-                      label: 'B → A',
-                    },
-                  ]}
-                  onChange={(v) => change('direction', v)}
-                />
-              )}
-              <Field label={zh ? '置信度下限' : 'Minimum confidence'}>
+                })),
+              ]}
+              onChange={(v) => {
+                change('sourceId', v)
+                setJobId('')
+              }}
+            />
+          </div>
+          {!presetAvailable && (
+            <p role="status" className="text-sm text-ink-2">
+              {zh
+                ? '请选择该来源支持的预置能力；移动视角仅支持 OCR。'
+                : 'Choose a preset supported by this source; mobile views support OCR only.'}
+            </p>
+          )}
+          <Geometry config={draft} set={setDraft} result={preview} zh={zh} />
+          <div className="grid grid-cols-2 gap-3">
+            {['above', 'below'].includes(preset?.rule ?? '') && (
+              <RuleField
+                label={
+                  preset?.rule === 'below'
+                    ? zh
+                      ? '人数少于'
+                      : 'Occupancy below'
+                    : zh
+                      ? '人数超过'
+                      : 'Occupancy above'
+                }
+              >
                 <Input
                   type="number"
-                  min={0.1}
-                  max={0.99}
-                  step={0.05}
-                  value={draft.confidence}
-                  onChange={(e) => change('confidence', e.target.valueAsNumber)}
+                  min={0}
+                  max={10000}
+                  value={draft.threshold}
+                  onChange={(e) => change('threshold', e.target.valueAsNumber)}
                 />
-              </Field>
-              <Field label={zh ? '归档间隔（秒）' : 'Archive interval (seconds)'}>
-                <Input
-                  type="number"
-                  min={1}
-                  max={3600}
-                  value={draft.intervalS}
-                  onChange={(e) => change('intervalS', e.target.valueAsNumber)}
-                />
-              </Field>
-              <Choice
-                label={zh ? '告警等级' : 'Alarm severity'}
-                value={draft.severity}
-                options={['info', 'low', 'high', 'critical'].map((value) => ({
-                  value,
-                  label: zh
-                    ? ({ info: '信息', low: '低', high: '高', critical: '紧急' } as Record<string, string>)[value]
-                    : value,
-                }))}
-                onChange={(v) => change('severity', v)}
-              />
-              <Choice
-                label={zh ? '关联设备' : 'Associated asset'}
-                value={draft.assetId}
-                options={[
-                  { value: '', label: zh ? '无' : 'None' },
-                  ...assets.map((a) => ({ value: a.id, label: a.name })),
-                ]}
-                onChange={(v) => change('assetId', v)}
-              />
-            </div>
-            {preset?.engine === 'ocr' && (
-              <div className="space-y-3 border border-line p-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">{zh ? '读取单个数值' : 'Read one numeric value'}</span>
-                  <Switch
-                    aria-label={zh ? '读取单个数值' : 'Read one numeric value'}
-                    checked={draft.numeric}
-                    onCheckedChange={(v) => change('numeric', v)}
-                  />
-                </div>
-                {draft.numeric && (
-                  <div className="grid grid-cols-3 gap-3">
-                    <Field label={zh ? '单位' : 'Unit'}>
-                      <Input
-                        maxLength={24}
-                        value={draft.unit}
-                        onChange={(e) => change('unit', e.target.value)}
-                      />
-                    </Field>
-                    {(['min', 'max'] as const).map((key) => (
-                      <Field
-                        key={key}
-                        label={
-                          key === 'min'
-                            ? zh
-                              ? '下限（可选）'
-                              : 'Min (optional)'
-                            : zh
-                              ? '上限（可选）'
-                              : 'Max (optional)'
-                        }
-                      >
-                        <Input
-                          type="number"
-                          step="any"
-                          value={draft[key] ?? ''}
-                          onChange={(e) => change(key, e.target.value === '' ? null : e.target.valueAsNumber)}
-                        />
-                      </Field>
-                    ))}
-                  </div>
-                )}
-                <p className="text-xs text-ink-3">
-                  {zh
-                    ? '将区域收紧至单个显示值。多值、低置信度或无法识别的读数会记为待观测。'
-                    : 'Crop to one display value. Ambiguous, low-confidence or unreadable text is recorded as unknown.'}
-                </p>
-              </div>
+              </RuleField>
             )}
+            {preset?.rule !== 'ocr' && preset?.rule !== 'count' && preset?.rule !== 'cross' && (
+              <RuleField label={zh ? '持续时间（秒）' : 'Duration (seconds)'}>
+                <Input
+                  type="number"
+                  min={0}
+                  max={86400}
+                  value={draft.durationS}
+                  onChange={(e) => change('durationS', e.target.valueAsNumber)}
+                />
+              </RuleField>
+            )}
+            {preset?.rule === 'cross' && (
+              <RuleChoice
+                label={zh ? '计数方向' : 'Crossing direction'}
+                value={draft.direction}
+                options={[
+                  { value: 'both', label: zh ? '双向' : 'Both' },
+                  {
+                    value: 'forward',
+                    label: 'A → B',
+                  },
+                  {
+                    value: 'reverse',
+                    label: 'B → A',
+                  },
+                ]}
+                onChange={(v) => change('direction', v)}
+              />
+            )}
+            <RuleField label={zh ? '置信度下限' : 'Minimum confidence'}>
+              <Input
+                type="number"
+                min={0.1}
+                max={0.99}
+                step={0.05}
+                value={draft.confidence}
+                onChange={(e) => change('confidence', e.target.valueAsNumber)}
+              />
+            </RuleField>
+            <RuleField label={zh ? '归档间隔（秒）' : 'Archive interval (seconds)'}>
+              <Input
+                type="number"
+                min={1}
+                max={3600}
+                value={draft.intervalS}
+                onChange={(e) => change('intervalS', e.target.valueAsNumber)}
+              />
+            </RuleField>
+            <RuleChoice
+              label={zh ? '告警等级' : 'Alarm severity'}
+              value={draft.severity}
+              options={['info', 'low', 'high', 'critical'].map((value) => ({
+                value,
+                label: zh
+                  ? (
+                      {
+                        info: '信息',
+                        low: '低',
+                        high: '高',
+                        critical: '紧急',
+                      } as Record<string, string>
+                    )[value]
+                  : value,
+              }))}
+              onChange={(v) => change('severity', v)}
+            />
+            <RuleChoice
+              label={zh ? '关联设备' : 'Associated asset'}
+              value={draft.assetId}
+              options={[
+                { value: '', label: zh ? '无' : 'None' },
+                ...assets.map((a) => ({ value: a.id, label: a.name })),
+              ]}
+              onChange={(v) => change('assetId', v)}
+            />
+          </div>
+          {preset?.engine === 'ocr' && (
             <div className="space-y-3 border border-line p-3">
-              <div className="flex items-center justify-between text-sm">
-                <span>{zh ? '按时段监测（UTC）' : 'Scheduled monitoring (UTC)'}</span>
+              <div className="flex items-center justify-between">
+                <span className="text-sm">{zh ? '读取单个数值' : 'Read one numeric value'}</span>
                 <Switch
-                  aria-label={zh ? '按时段监测' : 'Scheduled monitoring'}
-                  checked={!!draft.schedule}
-                  onCheckedChange={(v) =>
-                    change(
-                      'schedule',
-                      v
-                        ? {
-                            days: [1, 2, 3, 4, 5],
-                            start: '09:00',
-                            end: '17:00',
-                          }
-                        : null,
-                    )
-                  }
+                  aria-label={zh ? '读取单个数值' : 'Read one numeric value'}
+                  checked={draft.numeric}
+                  onCheckedChange={(v) => change('numeric', v)}
                 />
               </div>
-              {draft.schedule && (
-                <>
-                  <div className="flex flex-wrap gap-1">
-                    {(zh
-                      ? ['日', '一', '二', '三', '四', '五', '六']
-                      : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-                    ).map((d, i) => (
-                      <Button
-                        key={i}
-                        type="button"
-                        size="sm"
-                        variant={draft.schedule!.days.includes(i) ? 'utility' : 'outline'}
-                        aria-pressed={draft.schedule!.days.includes(i)}
-                        onClick={() =>
+              {draft.numeric && (
+                <div className="grid grid-cols-3 gap-3">
+                  <RuleField label={zh ? '单位' : 'Unit'}>
+                    <Input
+                      maxLength={24}
+                      value={draft.unit}
+                      onChange={(e) => change('unit', e.target.value)}
+                    />
+                  </RuleField>
+                  {(['min', 'max'] as const).map((key) => (
+                    <RuleField
+                      key={key}
+                      label={
+                        key === 'min'
+                          ? zh
+                            ? '下限（可选）'
+                            : 'Min (optional)'
+                          : zh
+                            ? '上限（可选）'
+                            : 'Max (optional)'
+                      }
+                    >
+                      <Input
+                        type="number"
+                        step="any"
+                        value={draft[key] ?? ''}
+                        onChange={(e) => change(key, e.target.value === '' ? null : e.target.valueAsNumber)}
+                      />
+                    </RuleField>
+                  ))}
+                </div>
+              )}
+              <p className="text-xs text-ink-3">
+                {zh
+                  ? '将区域收紧至单个显示值。多值、低置信度或无法识别的读数会记为待观测。'
+                  : 'Crop to one display value. Ambiguous, low-confidence or unreadable text is recorded as unknown.'}
+              </p>
+            </div>
+          )}
+          <div className="space-y-3 border border-line p-3">
+            <div className="flex items-center justify-between text-sm">
+              <span>{zh ? '按时段监测（UTC）' : 'Scheduled monitoring (UTC)'}</span>
+              <Switch
+                aria-label={zh ? '按时段监测' : 'Scheduled monitoring'}
+                checked={!!draft.schedule}
+                onCheckedChange={(v) =>
+                  change(
+                    'schedule',
+                    v
+                      ? {
+                          days: [1, 2, 3, 4, 5],
+                          start: '09:00',
+                          end: '17:00',
+                        }
+                      : null,
+                  )
+                }
+              />
+            </div>
+            {draft.schedule && (
+              <>
+                <div className="flex flex-wrap gap-1">
+                  {(zh
+                    ? ['日', '一', '二', '三', '四', '五', '六']
+                    : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+                  ).map((d, i) => (
+                    <Button
+                      key={i}
+                      type="button"
+                      size="sm"
+                      variant={draft.schedule!.days.includes(i) ? 'utility' : 'outline'}
+                      aria-pressed={draft.schedule!.days.includes(i)}
+                      onClick={() =>
+                        change('schedule', {
+                          ...draft.schedule,
+                          days: draft.schedule!.days.includes(i)
+                            ? draft.schedule!.days.filter((n) => n !== i)
+                            : [...draft.schedule!.days, i],
+                        })
+                      }
+                    >
+                      {d}
+                    </Button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {(['start', 'end'] as const).map((key) => (
+                    <RuleField
+                      key={key}
+                      label={
+                        key === 'start'
+                          ? zh
+                            ? '开始（UTC）'
+                            : 'Start (UTC)'
+                          : zh
+                            ? '结束（UTC）'
+                            : 'End (UTC)'
+                      }
+                    >
+                      <Input
+                        type="time"
+                        required
+                        value={draft.schedule![key]}
+                        onChange={(e) =>
                           change('schedule', {
                             ...draft.schedule,
-                            days: draft.schedule!.days.includes(i)
-                              ? draft.schedule!.days.filter((n) => n !== i)
-                              : [...draft.schedule!.days, i],
+                            [key]: e.target.value,
                           })
                         }
-                      >
-                        {d}
-                      </Button>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    {(['start', 'end'] as const).map((key) => (
-                      <Field
-                        key={key}
-                        label={
-                          key === 'start'
-                            ? zh
-                              ? '开始（UTC）'
-                              : 'Start (UTC)'
-                            : zh
-                              ? '结束（UTC）'
-                              : 'End (UTC)'
-                        }
-                      >
-                        <Input
-                          type="time"
-                          required
-                          value={draft.schedule![key]}
-                          onChange={(e) =>
-                            change('schedule', {
-                              ...draft.schedule,
-                              [key]: e.target.value,
-                            })
-                          }
-                        />
-                      </Field>
-                    ))}
-                  </div>
-                  <p className="text-xs text-ink-3">
-                    {zh
-                      ? '支持跨午夜；开始和结束相同表示全天。'
-                      : 'Overnight periods are supported; equal start and end means all day.'}
-                  </p>
-                </>
-              )}
-            </div>
-            <div className="border border-line p-3 space-y-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={busy || !adapter?.online || !draft.name.trim() || currentJob?.status === 'queued'}
-                  onClick={test}
-                >
-                  <Play size={14} />
-                  {zh ? '试运行' : 'Run preview'}
-                </Button>
-                <span className="text-sm" role="status">
-                  {currentJob
-                    ? status(currentJob.status)
-                    : zh
-                      ? '试运行最多 40 秒，不产生告警'
-                      : 'Preview runs up to 40 seconds without raising alarms'}
-                </span>
-              </div>
-              {preview && (
-                <p className="text-sm">
-                  {status(preview.status)} · {preview.value ?? (preview.text || '—')}
-                  <br />
-                  <span className="text-xs text-ink-3">{preview.note}</span>
+                      />
+                    </RuleField>
+                  ))}
+                </div>
+                <p className="text-xs text-ink-3">
+                  {zh
+                    ? '支持跨午夜；开始和结束相同表示全天。'
+                    : 'Overnight periods are supported; equal start and end means all day.'}
                 </p>
-              )}
-            </div>
-            <div className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-line bg-bg py-3">
-              <div className="flex items-center gap-2 text-sm">
-                <Switch
-                  aria-label={zh ? '保存后启用' : 'Enable after saving'}
-                  checked={draft.enabled}
-                  disabled={!admin}
-                  onCheckedChange={(v) => change('enabled', v)}
-                />
-                {zh ? '启用监测' : 'Enable monitoring'}
-              </div>
-              <div className="flex gap-2">
-                <Button type="button" variant="outline" disabled={busy} onClick={close}>
-                  {zh ? '取消' : 'Cancel'}
-                </Button>
-                {admin && (
-                  <Button
-                    type="submit"
-                    variant="signal"
-                    disabled={busy || !draft.adapterId || !draft.sourceId}
-                  >
-                    {zh ? '保存' : 'Save'}
-                  </Button>
-                )}
-              </div>
-            </div>
-          </form>
-        </Modal>
-      )}
-      {selected && (
-        <Modal wide title={zh ? '观测详情' : 'Observation details'} onClose={() => setSelected(null)}>
-          <div className="max-h-[85dvh] overflow-y-auto space-y-3">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg">{selected.config.name}</h3>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={zh ? '关闭' : 'Close'}
-                onClick={() => setSelected(null)}
-              >
-                <X size={16} />
-              </Button>
-            </div>
-            <Evidence result={selected} overlay={overlay} />
-            <div className="flex items-center justify-between">
-              <Badge>{status(selected.status)}</Badge>
-              <div className="flex items-center gap-2 text-sm">
-                <Switch
-                  aria-label={zh ? '显示标注' : 'Show annotations'}
-                  checked={overlay}
-                  onCheckedChange={setOverlay}
-                />
-                {zh ? '显示标注' : 'Show annotations'}
-              </div>
-            </div>
-            <p>
-              {selected.value !== null ? `${selected.value} ${selected.config.unit}` : selected.text || '—'}
-            </p>
-            <p className="text-sm text-ink-3">{selected.note}</p>
-            <p className="text-xs mono text-ink-3">
-              {new Date(selected.capturedAt).toLocaleString()} · {selected.model} · rev{' '}
-              {selected.config.revision}
-            </p>
-            {selected.evidence && (
-              <a
-                href={selected.evidence}
-                download={`vision-${selected.id}.jpg`}
-                className="inline-flex text-sm underline"
-              >
-                {zh ? '下载原图' : 'Download original'}
-              </a>
+              </>
             )}
           </div>
-        </Modal>
+          <div className="border border-line p-3 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={
+                  !operator ||
+                  busy ||
+                  !presetAvailable ||
+                  !adapter?.online ||
+                  !draft.sourceId ||
+                  !draft.name.trim() ||
+                  currentJob?.status === 'queued'
+                }
+                onClick={test}
+              >
+                <Play size={14} />
+                {zh ? '试运行' : 'Run preview'}
+              </Button>
+              <span className="text-sm" role="status">
+                {currentJob
+                  ? status(currentJob.status)
+                  : zh
+                    ? '试运行最多 40 秒，不产生告警'
+                    : 'Preview runs up to 40 seconds without raising alarms'}
+              </span>
+            </div>
+            {preview && (
+              <p className="text-sm">
+                {status(preview.status)} · {preview.value ?? (preview.text || '—')}
+                <br />
+                <span className="text-xs text-ink-3">{preview.note}</span>
+              </p>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line bg-surface pt-3">
+            <div className="flex items-center gap-2 text-sm">
+              <Switch
+                aria-label={zh ? '保存后启用' : 'Enable after saving'}
+                checked={draft.enabled}
+                disabled={!admin}
+                onCheckedChange={(v) => change('enabled', v)}
+              />
+              {zh ? '启用规则' : 'Enable rule'}
+            </div>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" disabled={busy} onClick={close}>
+                {zh ? '取消' : 'Cancel'}
+              </Button>
+              {admin && (
+                <Button
+                  type="submit"
+                  variant="signal"
+                  disabled={busy || !presetAvailable || !draft.adapterId || !draft.sourceId}
+                >
+                  {zh ? '保存规则' : 'Save rule'}
+                </Button>
+              )}
+            </div>
+          </div>
+        </form>
       )}
     </div>
+  )
+}
+
+export function observationStatus(value: string, zh: boolean) {
+  return (
+    (
+      {
+        normal: zh ? '正常' : 'Normal',
+        alert: zh ? '触发' : 'Triggered',
+        unknown: zh ? '未知' : 'Unknown',
+        failed: zh ? '失败' : 'Failed',
+        expired: zh ? '已超时' : 'Expired',
+        queued: zh ? '试运行中' : 'Preview running',
+        done: zh ? '试运行完成' : 'Preview complete',
+      } as Record<string, string>
+    )[value] ?? value
+  )
+}
+
+export function VisionObservationDialog({ result, onClose }: { result: Result; onClose: () => void }) {
+  const zh = useLang((s) => s.lang) === 'zh',
+    [overlay, setOverlay] = useState(true)
+  return (
+    <Modal wide title={zh ? '观测详情' : 'Observation details'} onClose={onClose}>
+      <div className="space-y-3 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-lg font-medium">{result.config.name}</h3>
+          <Button variant="ghost" size="icon" aria-label={zh ? '关闭' : 'Close'} onClick={onClose}>
+            <X size={16} />
+          </Button>
+        </div>
+        <VisionEvidence result={result} overlay={overlay} />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Badge>{observationStatus(result.status, zh)}</Badge>
+          <label className="flex items-center gap-2 text-sm">
+            <Switch
+              aria-label={zh ? '显示标注' : 'Show annotations'}
+              checked={overlay}
+              onCheckedChange={setOverlay}
+            />
+            {zh ? '显示标注' : 'Show annotations'}
+          </label>
+        </div>
+        <p className="mono">
+          {result.value !== null ? `${result.value} ${result.config.unit}` : result.text || '—'}
+        </p>
+        <p className="text-sm text-ink-2">{result.note}</p>
+        <dl className="grid gap-3 text-sm sm:grid-cols-2">
+          <div>
+            <dt className="text-ink-3">{zh ? '模型置信度' : 'Model confidence'}</dt>
+            <dd>{confidenceText(result.confidence, zh)}</dd>
+          </div>
+          <div>
+            <dt className="text-ink-3">{zh ? '模型 / 版本' : 'Model / revision'}</dt>
+            <dd className="break-words">
+              {result.model || (zh ? '未知' : 'Unknown')} · {result.config.revision ?? '—'}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-ink-3">{zh ? '采集时间' : 'Captured'}</dt>
+            <dd>{new Date(result.capturedAt).toLocaleString()}</dd>
+          </div>
+          <div>
+            <dt className="text-ink-3">{zh ? '用途' : 'Purpose'}</dt>
+            <dd>
+              {result.jobId
+                ? zh
+                  ? '试运行，不创建事件'
+                  : 'Preview, no event created'
+                : result.late
+                  ? zh
+                    ? '延迟观测，仅归档'
+                    : 'Delayed observation, archived only'
+                  : zh
+                    ? '正式监测'
+                    : 'Monitoring'}
+            </dd>
+          </div>
+        </dl>
+        {result.evidence && (
+          <a href={result.evidence} download={`vision-${result.id}.jpg`} className="text-link">
+            {zh ? '下载原图' : 'Download original'}
+          </a>
+        )}
+      </div>
+    </Modal>
   )
 }

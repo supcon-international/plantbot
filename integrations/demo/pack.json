@@ -1,0 +1,17 @@
+{
+  "format": 1,
+  "id": "plantbot-adapter-demo-v1",
+  "siteId": "demo-lab",
+  "siteName": "Demo · Inspection lab / 巡检演示场站",
+  "operator": "Plantbot Adapter Demo pack v1",
+  "adapterId": "demo-vision",
+  "simulator": {
+    "repository": "https://github.com/supcon-international/plantbotsimulator",
+    "revision": "49ba9419ca245f5e060a597bb75bb9d12be9d919"
+  },
+  "rules": [
+    {"name": "Demo · Display over 80 C / 仪表超限", "preset": "ocr", "sourceId": "demo-display", "numeric": true, "unit": "C", "max": 80, "region": [[0.53,0.1],[1,0.1],[1,0.92],[0.53,0.92]], "severity": "high"},
+    {"name": "Demo · People counting / 人数统计", "preset": "people_count", "sourceId": "demo-area", "region": [[0.28,0.15],[0.72,0.15],[0.72,0.9],[0.28,0.9]], "severity": "info"},
+    {"name": "Demo · Restricted area / 禁区持续有人", "preset": "intrusion", "sourceId": "demo-area", "region": [[0.28,0.15],[0.72,0.15],[0.72,0.9],[0.28,0.9]], "threshold": 0, "durationS": 3, "severity": "high"}
+  ]
+}

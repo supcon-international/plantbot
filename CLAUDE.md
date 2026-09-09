@@ -102,10 +102,10 @@ CLAUDE.md 与 AGENTS.md 保持逐字镜像（仅标题行不同）。
 
 `server/src/control.ts` 管独占会话，`sdk/adapter-sdk-ts/src/control.ts` 管输入有效期与 adapter 停止；手动输入绝不进持久订单。初始停稳、取消停稳都要回执，断线/重启不自动解锁或重放。Spot 原生速度有机器人时钟截止，Spot CAM mech 用小步位置指令；F2 用方向码与厂商速度档位，只有 adapter watchdog；X30 robotserver 不声明这些能力。对应文档 `docs/manual-control.md`，UI 测试 `scripts/test-control-ui.mjs`；修改控制 SDK 时同步 Node-RED 的 `nodes/plantbot-control.js`。
 
-## Adapter 视觉能力与分包（v2.4.0）
+## Adapter 视觉能力与分包（v2.5.0）
 
 Server 保存配置、试运行、结果和证据；模型只在 Adapter 中运行。`integrations/runtime.ts` 监督机器人驱动，`integrations/vision/worker.py` 单独运行 ONNX 推理与 11 项预置规则，不能阻塞临时控制或进入运动订单。独立 Adapter 与托管连接器共用 `integrations/shared/connector-catalog.ts`，不复制厂商字段映射。摄像头在 Adapter 本地配置为 source，不能为固定摄像头伪造机器人。连续规则要求 fixed view；移动 OCR 必须有 2 秒内的真实停稳反馈。
 
-契约：`POST /api/integration/v1/vision/heartbeat`（15 秒租约、每次启动唯一 runtimeId）与 `/vision/results`（X-Vision-Token、幂等 ID、配置 revision）；会话面 `/api/sites/:siteId/vision`。修改接口同步两份 OpenAPI 和镜像 skill。结果未知/失败不等于恢复；超过 60 秒的迟到结果只归档。模型来源/SHA 在 `models.lock.json`，禁止运行时隐式下载。修改模型或规则后运行 Python 测试、`integrations/test/vision.e2e.ts` 与子路径构建后的 `scripts/test-vision-ui.mjs`。
+契约：`POST /api/integration/v1/vision/heartbeat`（15 秒租约、每次启动唯一 runtimeId）与 `/vision/results`（X-Vision-Token、幂等 ID、配置 revision）；会话面 `/api/sites/:siteId/vision`，统一只读索引 `/monitoring-rules` 聚合既有视觉与阈值存储。入口为 EVENTS → 监测规则，LIVE 仅按明确 channelId 提供快捷入口。心跳 capabilities.presets 声明实际支持预置；事件 trigger 冻结当时配置、结果与证据，未知置信度为 null。修改接口同步两份 OpenAPI 和镜像 skill。结果未知/失败不等于恢复；超过 60 秒的迟到结果只归档。模型来源/SHA 在 `models.lock.json`，禁止运行时隐式下载。修改模型或规则后运行 Python 测试、`integrations/test/vision.e2e.ts` 与子路径构建后的 `scripts/test-vision-ui.mjs`。
 
-`release:build` 从已提交代码生成 Server、Adapter 两个独立 Docker 包，不再默认包含 simulator。部署/迁移见 `docs/release.md`；视觉边界见 `docs/vision.md`。
+`release:build` 从已提交代码生成 Server、Adapter、Adapter Demo 三个独立 Docker 包。生产两包不包含 simulator；Demo 包使用独立仓库的原生协议模拟器、真实 Adapter 与真实视频推理，PB_DEMO=0 禁止 Server 随机告警。部署/迁移见 `docs/release.md`；视觉边界见 `docs/vision.md`。

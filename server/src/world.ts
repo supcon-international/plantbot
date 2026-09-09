@@ -114,6 +114,7 @@ export interface Telemetry {
 /** detector = the generalized rule: what produces events, and how they get vetted */
 export interface DetectionRule {
   id: string
+  revision?: number
   name: string
   model: DetectionModel
   /** what kind of producer this is — sim CV, edge CV, cloud CV, metric threshold, external system */
@@ -156,7 +157,9 @@ export interface DetectionEvent {
   sourceName: string
   robotId?: string
   zone: string
-  confidence: number
+  confidence: number | null
+  /** Immutable producer configuration and observation at the time of this event. */
+  trigger?: EventTrigger
   /** legacy mirror of evidence[0].url — kept for older clients */
   snapshot?: string
   evidence: EventEvidence[]
@@ -165,8 +168,26 @@ export interface DetectionEvent {
   acked: boolean
   /** mission run this event was captured in (GoRobot patrolId, made explicit) */
   runId?: string
-  x: number
-  z: number
+  x: number | null
+  z: number | null
+}
+
+export interface EventTrigger {
+  ruleId: string
+  ruleType: 'vision' | 'threshold'
+  revision: number
+  configSnapshot: Record<string, unknown>
+  observationId?: string
+  resultId?: string
+  adapterId?: string
+  sourceId?: string
+  value: number | null
+  unit?: string
+  condition: string
+  confidence: number | null
+  channelId?: string
+  capturedAt: number
+  receivedAt?: number
 }
 
 const DETAILS: Record<string, () => string> = {
@@ -279,6 +300,7 @@ function validPtzCapability(value: PayloadSpec['ptz']): PayloadSpec['ptz'] {
 /** latest adapter-reported state for an external robot */
 export interface ExternalState {
   lastSeen: number
+  position?: { x: number; z: number }
   mode?: string
   errors?: string[]
   /** optional link metrics from the adapter's state report (dBm / ms); absent = unknown */
@@ -560,6 +582,7 @@ export class World {
     ext.rssi = typeof s.rssi === 'number' && Number.isFinite(s.rssi) ? s.rssi : undefined
     ext.latencyMs = typeof s.latencyMs === 'number' && Number.isFinite(s.latencyMs) ? s.latencyMs : undefined
     if (typeof s.x === 'number' && typeof s.z === 'number') {
+      if (Number.isFinite(s.x) && Number.isFinite(s.z)) ext.position = { x: s.x, z: s.z }
       // platform-side odometer: accumulate reported displacement (skip jitter
       // below 2 cm and >5 m teleports — re-localization, not travel)
       const d = Math.hypot(s.x - nav.x, s.z - nav.z)
@@ -746,7 +769,9 @@ export class World {
   ingestReadings(robotId: string, items: { metric: string; value: number; ts?: number; payloadId?: string; quality?: Reading['quality'] }[]): number {
     const accepted: Reading[] = []
     for (const it of items) {
-      if (typeof it.value !== 'number' || !METRIC_DEFS.some((d) => d.id === it.metric)) continue
+      if (!Number.isFinite(it.value) || !METRIC_DEFS.some((d) => d.id === it.metric)) continue
+      if (it.ts !== undefined && (!Number.isFinite(it.ts) || it.ts > Date.now() + 60_000 || it.ts < Date.now() - 7 * 86400_000)) continue
+      if (it.quality !== undefined && !['ok', 'degraded', 'stale'].includes(it.quality)) continue
       const rd: Reading = {
         robotId,
         payloadId: it.payloadId ?? 'adapter',
@@ -770,27 +795,45 @@ export class World {
     for (const rule of this.rules) {
       if (!rule.enabled || rule.kind !== 'threshold' || !rule.metric || !rule.robotId || rule.bound === undefined) continue
       const buf = this.readings.get(`${rule.robotId}|${rule.metric}`)
-      const last = buf?.[buf.length - 1]
-      if (!last) continue
+      const last = buf?.length ? buf.reduce((latest, r) => r.ts >= latest.ts ? r : latest) : undefined
+      // Late/invalid observations never claim a current condition. Offline robots
+      // retain history, but cannot produce a current threshold event.
+      if (!last || (last.quality && last.quality !== 'ok') || now - last.ts > 60_000 || last.ts > now + 1000) continue
+      if (now - (this.externals.get(rule.robotId)?.lastSeen ?? 0) >= EXTERNAL_STALE_MS) continue
       const crossed = rule.op === '<' ? last.value < rule.bound : last.value > rule.bound
       if (!crossed) continue
-      const prev = this.thresholdLastFired.get(rule.id) ?? 0
+      const prev = this.thresholdLastFired.get(rule.id) ?? rule.lastFiredAt ?? 0
       if (now - prev < 180_000) continue
       this.thresholdLastFired.set(rule.id, now)
       const def = METRIC_DEFS.find((d) => d.id === rule.metric)
-      void this.generateEvent(rule, now, {
+      const pos = this.externals.get(rule.robotId)?.position
+      const ev = this.makeEvent({
+        ts: last.ts, type: rule.model, ruleId: rule.id, label: rule.name,
+        severity: rule.severity, category: this.eventTypes.find((t) => t.id === rule.model)?.category ?? 'equipment',
+        source: rule.source, sourceName: rule.sourceName, robotId: rule.robotId, zone: rule.zone,
+        confidence: null, x: pos?.x ?? null, z: pos?.z ?? null,
         detail: `${def?.label ?? rule.metric} ${last.value}${def?.unit ?? ''} — bound ${rule.op ?? '>'} ${rule.bound}${def?.unit ?? ''}`,
         evidence: [{ kind: 'reading', reading: { metric: rule.metric, value: last.value, unit: def?.unit ?? '' } }],
-      }).then((ev) => {
-        if (ev) this.onEvent?.(ev)
+        trigger: {
+          ruleId: rule.id, ruleType: 'threshold', revision: rule.revision ?? 1,
+          configSnapshot: structuredClone(rule) as unknown as Record<string, unknown>,
+          value: last.value, unit: def?.unit ?? '',
+          condition: `${rule.metric} ${rule.op ?? '>'} ${rule.bound}`,
+          confidence: null, capturedAt: last.ts, receivedAt: now,
+          sourceId: `${rule.robotId}/${last.payloadId}/${rule.metric}`,
+        },
       })
+      rule.firedCount++
+      rule.lastFiredAt = now
+      this.persist?.rule(rule)
+      this.onEvent?.(ev)
     }
   }
 
   // ---------- rules ----------
 
   private addRule(r: Omit<DetectionRule, 'id' | 'firedCount'>) {
-    const rule: DetectionRule = { ...r, id: `RL-${String(this.ruleSeq++).padStart(2, '0')}`, firedCount: 0 }
+    const rule: DetectionRule = { ...r, revision: 1, id: `RL-${String(this.ruleSeq++).padStart(2, '0')}`, firedCount: 0 }
     this.rules.push(rule)
     this.persist?.rule(rule)
     return rule
@@ -809,6 +852,7 @@ export class World {
     metric?: string
     op?: '>' | '<'
     bound?: number
+    enabled?: boolean
   }) {
     return this.addRule({
       name: input.name,
@@ -819,7 +863,7 @@ export class World {
       zone: input.zone ?? 'Site-wide',
       threshold: input.threshold ?? 0.6,
       severity: input.severity ?? 'info',
-      enabled: true,
+      enabled: input.enabled ?? true,
       robotId: input.robotId,
       metric: input.metric,
       op: input.op,
@@ -828,10 +872,11 @@ export class World {
     })
   }
 
-  patchRule(id: string, patch: Partial<Pick<DetectionRule, 'enabled' | 'threshold' | 'severity' | 'name' | 'bound'>>) {
+  patchRule(id: string, patch: Partial<Pick<DetectionRule, 'enabled' | 'threshold' | 'severity' | 'name' | 'bound' | 'op'>>) {
     const r = this.rules.find((x) => x.id === id)
     if (!r) return undefined
     Object.assign(r, patch)
+    r.revision = (r.revision ?? 1) + 1
     this.persist?.rule(r)
     return r
   }
@@ -878,7 +923,7 @@ export class World {
   }
 
   private pickRule(): DetectionRule | undefined {
-    const enabled = this.rules.filter((r) => r.enabled)
+    const enabled = this.rules.filter((r) => r.enabled && r.kind === 'sim')
     if (!enabled.length) return undefined
     const total = enabled.reduce((a, r) => a + (WEIGHTS[r.model] ?? 1), 0)
     let x = Math.random() * total
@@ -911,8 +956,10 @@ export class World {
     ts = Date.now(),
     opts?: { detail?: string; evidence?: EventEvidence[]; runId?: string },
   ): Promise<DetectionEvent | null> {
-    const r = rule ?? this.pickRule()
-    if (!r) return null
+    const current = rule ?? this.pickRule()
+    if (!current) return null
+    if (current.kind !== 'sim') return null
+    const r = structuredClone(current)
     const side = Math.random() > 0.5 ? 1 : -1
     const bx = this.site.bounds.x
     const bz = this.site.bounds.z
@@ -924,8 +971,9 @@ export class World {
     }
     const confidence = +(r.threshold + Math.random() * (1 - r.threshold) * 0.9).toFixed(2)
     const typeDef = this.eventTypes.find((t) => t.id === r.model)
-    r.firedCount++
-    r.lastFiredAt = ts
+    current.firedCount++
+    current.lastFiredAt = ts
+    this.persist?.rule(current)
 
     const evidence = opts?.evidence ?? []
     const src = this.frameSource(r.source)
@@ -974,34 +1022,35 @@ export class World {
     sourceName?: string
     snapshotUrl?: string
     evidence?: EventEvidence[]
-    confidence?: number
+    confidence?: number | null
     runId?: string
     ts?: number
-  }): DetectionEvent | null {
+  }, trigger?: EventTrigger): DetectionEvent | null {
     const typeDef = this.eventTypes.find((t) => t.id === input.type)
     if (!typeDef) return null
-    const pos = (input.robotId ? this.robotPosition(input.robotId) : undefined) ?? { x: input.x ?? 0, z: input.z ?? 0 }
+    const pos = input.robotId ? this.externals.get(input.robotId)?.position : undefined
     const evidence = input.evidence ?? []
     if (input.snapshotUrl && !evidence.some((e) => e.url === input.snapshotUrl))
       evidence.unshift({ kind: 'image', url: input.snapshotUrl })
     const ev = this.makeEvent({
       ts: input.ts ?? Date.now(),
       type: typeDef.id,
-      ruleId: 'EXT',
+      ruleId: trigger?.ruleId ?? 'EXT',
       label: input.label ?? typeDef.label,
       detail: input.detail ?? typeDef.detail ?? 'Reported via integration API',
       severity: input.severity ?? typeDef.severity,
       category: input.category ?? typeDef.category ?? MODEL_CATEGORY[typeDef.id] ?? 'equipment',
-      source: 'integration',
+      source: trigger?.sourceId ?? 'integration',
       sourceName: input.sourceName ?? (input.robotId ? this.robots.find((r) => r.id === input.robotId)?.callsign ?? 'adapter' : 'adapter'),
       robotId: input.robotId,
       zone: 'Site-wide',
-      confidence: input.confidence ?? 1,
+      confidence: input.confidence ?? null,
+      trigger,
       snapshot: input.snapshotUrl,
       evidence,
       runId: input.runId,
-      x: +(input.x ?? pos.x).toFixed(2),
-      z: +(input.z ?? pos.z).toFixed(2),
+      x: input.x === undefined && pos?.x === undefined ? null : +(input.x ?? pos!.x).toFixed(2),
+      z: input.z === undefined && pos?.z === undefined ? null : +(input.z ?? pos!.z).toFixed(2),
     })
     this.onEvent?.(ev) // external events are always live — broadcast at the source
     return ev

@@ -250,14 +250,31 @@ export interface DetectionEvent {
   sourceName: string
   robotId?: string
   zone: string
-  confidence: number
+  confidence: number | null
   snapshot?: string
   evidence: EventEvidence[]
   lifecycle: EventLifecycle
   acked: boolean
   runId?: string
-  x: number
-  z: number
+  x: number | null
+  z: number | null
+  trigger?: {
+    ruleId: string
+    ruleType: 'vision' | 'threshold'
+    revision?: number
+    configSnapshot: Record<string, unknown>
+    observationId?: string
+    resultId?: string
+    adapterId?: string
+    sourceId?: string
+    value: number | null
+    unit?: string
+    condition: string
+    confidence: number | null
+    channelId?: string
+    capturedAt: number
+    receivedAt?: number
+  }
 }
 
 export interface DetectionRule {

@@ -882,11 +882,13 @@ export function Map3D({
   // instead of a thicket of overlapping triangles at a hot spot
   const pins = useMemo(() => {
     if (!showEvents) return []
-    const open = events.filter((e) => !e.acked).slice(0, 32)
+    const open = events.filter((e) => !e.acked && typeof e.x === 'number' && Number.isFinite(e.x) && typeof e.z === 'number' && Number.isFinite(e.z)).slice(0, 32)
     const rank: Record<string, number> = { critical: 3, high: 2, info: 1, low: 0 }
     const clusters: { id: string; x: number; z: number; severity: string; count: number }[] = []
     for (const e of open) {
-      const hit = clusters.find((c) => Math.hypot(c.x - e.x, c.z - e.z) < 1.8)
+      if (e.x === null || e.z === null) continue
+      const { x, z } = e
+      const hit = clusters.find((c) => Math.hypot(c.x - x, c.z - z) < 1.8)
       if (hit) {
         hit.count++
         if ((rank[e.severity] ?? 0) > (rank[hit.severity] ?? 0)) {
